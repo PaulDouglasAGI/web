@@ -43,20 +43,21 @@ canvas{display:block;}
 .play-btn:hover{transform:scale(1.05);box-shadow:0 0 60px rgba(0,200,255,0.7);}
 .how-to{margin-top:24px;font-size:0.65rem;letter-spacing:3px;color:#003344;text-align:center;line-height:2.4;}
 /* Skin selector */
-#skin-section{margin-bottom:20px;text-align:center;width:100%;}
+#skin-section{margin-bottom:18px;text-align:center;width:100%;}
 #skin-title{font-size:0.6rem;letter-spacing:4px;color:#004455;margin-bottom:10px;}
-#skin-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 16px;max-width:520px;}
-.skin-chip{width:56px;height:68px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid #001122;border-radius:6px;cursor:pointer;transition:all 0.15s;position:relative;background:rgba(0,5,15,0.6);}
+#skin-row{display:grid;grid-template-columns:repeat(4,84px);grid-template-rows:repeat(2,92px);gap:8px;justify-content:center;padding:0 12px;}
+.skin-chip{width:84px;height:92px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6px;gap:4px;border:1px solid #001122;border-radius:8px;cursor:pointer;transition:all 0.15s;position:relative;background:rgba(0,4,14,0.7);overflow:hidden;}
 .skin-chip.unlocked{border-color:#002233;cursor:pointer;}
-.skin-chip.unlocked:hover{border-color:#00aacc;background:rgba(0,40,60,0.5);}
-.skin-chip.selected{border-color:#00ccff;background:rgba(0,80,120,0.3);box-shadow:0 0 12px rgba(0,200,255,0.3);}
-.skin-chip.locked{opacity:0.35;cursor:default;}
-.skin-dot{width:22px;height:22px;border-radius:50%;border:2px solid;}
-.skin-chip-name{font-size:0.45rem;letter-spacing:2px;color:#006677;}
+.skin-chip.unlocked:hover{border-color:#00aacc;background:rgba(0,30,50,0.7);}
+.skin-chip.selected{border-color:#00ccff;background:rgba(0,60,100,0.4);box-shadow:0 0 14px rgba(0,180,255,0.35);}
+.skin-chip.locked{cursor:default;}
+.skin-canvas{width:52px;height:52px;display:block;}
+.skin-chip-name{font-size:0.5rem;letter-spacing:2px;color:#006677;line-height:1;}
 .skin-chip.selected .skin-chip-name{color:#00ccff;}
 .skin-chip.unlocked:hover .skin-chip-name{color:#00aacc;}
-.skin-lock{font-size:0.55rem;color:#003344;letter-spacing:0;}
-.skin-thresh{font-size:0.4rem;letter-spacing:1px;color:#003344;}
+.skin-locked-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,1,8,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
+.skin-lock-icon{font-size:1.1rem;line-height:1;}
+.skin-thresh-label{font-size:0.38rem;letter-spacing:1px;color:#334;}
 /* Leaderboard view */
 #view-board{display:none;flex-direction:column;align-items:center;width:100%;min-height:0;}
 #lb-title{font-family:'Exo 2',sans-serif;font-size:1rem;font-weight:900;letter-spacing:6px;color:#00ccff;margin-bottom:14px;text-shadow:0 0 20px #0066ff;}
@@ -165,13 +166,13 @@ window.addEventListener('resize', resize);
 // ── Skin definitions ───────────────────────────────────────────────
 const SKINS = [
   {id:0, name:'DEFAULT', threshold:0,    color:'#00ccff', glow:'#0088ff', cockpit:'rgba(0,200,255,0.55)',  exhaust:'#0066ff'},
-  {id:1, name:'EMBER',   threshold:100,  color:'#ff6600', glow:'#ff2200', cockpit:'rgba(255,120,0,0.6)',   exhaust:'#ff4400'},
-  {id:2, name:'VENOM',   threshold:250,  color:'#00ff44', glow:'#00cc22', cockpit:'rgba(0,255,80,0.55)',   exhaust:'#00aa33'},
-  {id:3, name:'GHOST',   threshold:500,  color:'#ccddff', glow:'#8899cc', cockpit:'rgba(200,220,255,0.4)', exhaust:'#9999ff'},
-  {id:4, name:'NOVA',    threshold:1000, color:'#ffdd00', glow:'#ffaa00', cockpit:'rgba(255,220,0,0.55)',  exhaust:'#ffbb00'},
-  {id:5, name:'PHANTOM', threshold:2000, color:'#cc44ff', glow:'#9900cc', cockpit:'rgba(180,0,255,0.55)',  exhaust:'#bb00ff'},
-  {id:6, name:'INFERNO', threshold:3500, color:'#ff0066', glow:'#ff4400', cockpit:'rgba(255,0,100,0.6)',   exhaust:'#ff2200'},
-  {id:7, name:'VOID',    threshold:5000, color:'#ffffff', glow:'#444466', cockpit:'rgba(200,200,255,0.3)', exhaust:'#888899'},
+  {id:1, name:'EMBER',   threshold:10000,  color:'#ff6600', glow:'#ff2200', cockpit:'rgba(255,120,0,0.6)',   exhaust:'#ff4400'},
+  {id:2, name:'VENOM',   threshold:25000,  color:'#00ff44', glow:'#00cc22', cockpit:'rgba(0,255,80,0.55)',   exhaust:'#00aa33'},
+  {id:3, name:'GHOST',   threshold:50000,  color:'#ccddff', glow:'#8899cc', cockpit:'rgba(200,220,255,0.4)', exhaust:'#9999ff'},
+  {id:4, name:'NOVA',    threshold:100000, color:'#ffdd00', glow:'#ffaa00', cockpit:'rgba(255,220,0,0.55)',  exhaust:'#ffbb00'},
+  {id:5, name:'PHANTOM', threshold:200000, color:'#cc44ff', glow:'#9900cc', cockpit:'rgba(180,0,255,0.55)',  exhaust:'#bb00ff'},
+  {id:6, name:'INFERNO', threshold:350000, color:'#ff0066', glow:'#ff4400', cockpit:'rgba(255,0,100,0.6)',   exhaust:'#ff2200'},
+  {id:7, name:'VOID',    threshold:500000, color:'#ffffff', glow:'#444466', cockpit:'rgba(200,200,255,0.3)', exhaust:'#888899'},
 ];
 
 // ── localStorage helpers ───────────────────────────────────────────
@@ -191,6 +192,28 @@ function getActiveSkin(){ return parseInt(localStorage.getItem('wl_skin')||'0');
 function saveActiveSkin(id){ localStorage.setItem('wl_skin',id); }
 
 // ── Skin selector ──────────────────────────────────────────────────
+function drawMiniShip(canvas, skin, isActive){
+  const c = canvas.getContext('2d');
+  c.clearRect(0,0,52,52);
+  let color = skin.color, glow = skin.glow, cockpit = skin.cockpit;
+  if(skin.id===6){ const h=(Date.now()*0.15)%360; color=`hsl(${h},100%,60%)`; glow=`hsl(${h},100%,50%)`; cockpit=`hsla(${h},100%,60%,0.6)`; }
+  c.save(); c.translate(26,30); c.scale(0.55,0.55);
+  const eg=c.createRadialGradient(0,14,0,0,14,30);
+  eg.addColorStop(0,color+'44'); eg.addColorStop(1,'rgba(0,0,0,0)');
+  c.fillStyle=eg; c.beginPath(); c.arc(0,16,28,0,Math.PI*2); c.fill();
+  c.shadowBlur=isActive?18:10; c.shadowColor=glow;
+  c.fillStyle='#050520'; c.beginPath();
+  c.moveTo(0,-24);c.lineTo(13,8);c.lineTo(8,18);c.lineTo(0,13);c.lineTo(-8,18);c.lineTo(-13,8);
+  c.closePath(); c.fill();
+  c.strokeStyle=color; c.lineWidth=1.8; c.stroke();
+  c.fillStyle='#080828';
+  c.beginPath();c.moveTo(13,8);c.lineTo(28,20);c.lineTo(18,24);c.lineTo(8,18);c.closePath();c.fill();c.stroke();
+  c.beginPath();c.moveTo(-13,8);c.lineTo(-28,20);c.lineTo(-18,24);c.lineTo(-8,18);c.closePath();c.fill();c.stroke();
+  c.beginPath();c.ellipse(0,-8,5,8,0,0,Math.PI*2);
+  c.fillStyle=cockpit; c.fill();
+  c.shadowBlur=0; c.restore();
+}
+
 function renderSkinSelector(){
   const unlocked = getUnlocked();
   const active = getActiveSkin();
@@ -201,25 +224,30 @@ function renderSkinSelector(){
     const isActive = s.id === active;
     const chip = document.createElement('div');
     chip.className = 'skin-chip' + (isUnlocked?' unlocked':'locked') + (isActive?' selected':'');
-    const dot = document.createElement('div');
-    dot.className = 'skin-dot';
-    dot.style.backgroundColor = isUnlocked ? s.color+'44' : 'transparent';
-    dot.style.borderColor = isUnlocked ? s.color : '#001122';
-    dot.style.boxShadow = isActive ? `0 0 8px ${s.glow}` : 'none';
+    // Mini canvas preview
+    const cnv = document.createElement('canvas');
+    cnv.className = 'skin-canvas';
+    cnv.width = 52; cnv.height = 52;
+    chip.appendChild(cnv);
+    drawMiniShip(cnv, s, isActive);
+    // Name label
     const nameEl = document.createElement('div');
     nameEl.className = 'skin-chip-name';
     nameEl.textContent = s.name;
-    chip.appendChild(dot);
     chip.appendChild(nameEl);
+    // Lock overlay for locked skins
     if(!isUnlocked){
-      const lock = document.createElement('div');
-      lock.className = 'skin-lock';
-      lock.textContent = '🔒';
+      const overlay = document.createElement('div');
+      overlay.className = 'skin-locked-overlay';
+      const lockIcon = document.createElement('div');
+      lockIcon.className = 'skin-lock-icon';
+      lockIcon.textContent = '🔒';
       const thresh = document.createElement('div');
-      thresh.className = 'skin-thresh';
-      thresh.textContent = s.threshold;
-      chip.appendChild(lock);
-      chip.appendChild(thresh);
+      thresh.className = 'skin-thresh-label';
+      thresh.textContent = s.threshold.toLocaleString();
+      overlay.appendChild(lockIcon);
+      overlay.appendChild(thresh);
+      chip.appendChild(overlay);
     }
     if(isUnlocked){
       chip.addEventListener('click', ()=>{
@@ -561,6 +589,14 @@ function spawnSeeker(){
     size:18, hue:0, nearMissed:false,
     trail:[],
   });
+}
+
+function spawnPickup(secs){
+  const lane=Math.floor(Math.random()*LANES);
+  const roll=Math.random();
+  const warpChance=secs>15?Math.min(0.18,0.05+secs*0.001):0;
+  const type=roll<warpChance?'warp':roll<warpChance+0.3?'shield':'fuel';
+  pickups.push({lane,x:getLaneX(lane),y:-30,type,pulse:0});
 }
 
 // ── Particles ──────────────────────────────────────────────────────
