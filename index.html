@@ -23,6 +23,8 @@ canvas{display:block;}
 #shield-fill{height:100%;width:100%;background:linear-gradient(90deg,#00aaff,#00ffee);border-radius:3px;transition:width 0.15s;}
 #warp-bar{width:180px;height:4px;background:rgba(255,0,255,0.08);border-radius:3px;margin-top:6px;display:none;}
 #warp-fill{height:100%;width:100%;background:linear-gradient(90deg,#ff00ff,#cc44ff);border-radius:3px;}
+#boost-bar{width:180px;height:4px;background:rgba(255,220,0,0.08);border-radius:3px;margin-top:6px;display:none;}
+#boost-fill{height:100%;width:0%;background:linear-gradient(90deg,#ffdd00,#ffaa00);border-radius:3px;transition:width 0.1s;}
 #overlay{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:clamp(24px,5vh,60px) 0 32px;background:linear-gradient(180deg,rgba(0,5,20,0.94) 0%,rgba(0,0,10,0.98) 100%);z-index:30;transition:opacity 0.3s;overflow-y:auto;}
 #overlay.gone{opacity:0;pointer-events:none;}
 .game-title{font-family:'Exo 2',sans-serif;font-weight:900;font-size:clamp(2.4rem,8vw,5rem);letter-spacing:10px;color:#fff;text-shadow:0 0 30px #00eeff,0 0 80px #0066ff,0 0 140px #0033cc;margin-bottom:4px;}
@@ -92,6 +94,7 @@ canvas{display:block;}
   <div id="shield-label">SHIELD</div>
   <div id="shield-bar"><div id="shield-fill"></div></div>
   <div id="warp-bar"><div id="warp-fill"></div></div>
+  <div id="boost-bar" style="display:none"><div id="boost-fill"></div></div>
 </div>
 <div id="overlay">
   <div class="game-title">WARP LANE</div>
@@ -112,7 +115,7 @@ canvas{display:block;}
       <div id="skin-row"></div>
     </div>
     <button class="play-btn" id="play-btn">LAUNCH</button>
-    <div class="how-to">← → ARROW KEYS · A D · TAP ARROWS<br>⚡ FUEL · 🛡 SHIELD · ✦ WARP CLEARS SCREEN</div>
+    <div class="how-to">← → ARROW KEYS · A D · TAP ARROWS<br>SPACE HOLD = BOOST · R = RESTART<br>⚡ FUEL · 🛡 SHIELD · ▶ SPEED · ✦ WARP</div>
   </div>
   <!-- Leaderboard view -->
   <div id="view-board">
@@ -143,6 +146,8 @@ const hsEl = document.getElementById('hs');
 const shieldFill = document.getElementById('shield-fill');
 const warpBar = document.getElementById('warp-bar');
 const warpFill = document.getElementById('warp-fill');
+const boostBar = document.getElementById('boost-bar');
+const boostFill = document.getElementById('boost-fill');
 const statRow = document.getElementById('stat-row');
 const finalScore = document.getElementById('final-score');
 const finalTime = document.getElementById('final-time');
@@ -306,7 +311,11 @@ playBtnLb.addEventListener('click', startGame);
 
 // ── Keys ───────────────────────────────────────────────────────────
 const keys = {};
-window.addEventListener('keydown', e => { keys[e.key] = true; if (!running && (e.key===' '||e.key==='Enter')) startGame(); });
+window.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if(e.key==='r'||e.key==='R') startGame();
+  if(!running && e.key==='Enter') startGame();
+});
 window.addEventListener('keyup', e => keys[e.key] = false);
 document.getElementById('da-l').addEventListener('touchstart',e=>{e.preventDefault();keys['ArrowLeft']=true;},{passive:false});
 document.getElementById('da-l').addEventListener('touchend',  e=>{e.preventDefault();keys['ArrowLeft']=false;},{passive:false});
@@ -338,18 +347,23 @@ let laneW, laneXs;
 let spawnTimer, pickupTimer, lastTime, moveCooldown;
 let flashAlpha, combo, comboTimer;
 let warpActive, warpTimer, warpMaxTime;
-let shake, prevScore;
+let shake, prevScore, eSpeed;
 let idleRunning = true;
 
 function getLaneX(l){ return laneXs[l]; }
 
+let speedBoostTimer = 0;
+const BOOST_PICKUP_DUR = 8000;
+
 function startGame(){
+  running = true; // set immediately to block double-calls
   idleRunning = false;
   nameEntry.style.display='none';
   overlay.classList.add('gone');
-  speed = 4; score = 0; shield = 3; surviveTime = 0;
+  speed = 4; eSpeed = 4; score = 0; shield = 3; surviveTime = 0;
   spawnTimer = 0; pickupTimer = 0; flashAlpha = 0; moveCooldown = 0;
   combo = 1; comboTimer = 0; warpActive = false; warpTimer = 0; warpMaxTime = 2500;
+  speedBoostTimer = 0;
   shake = {timer:0};
   prevScore = 0;
   laneW = W / LANES; laneXs = Array.from({length:LANES},(_,i)=>laneW*i+laneW/2);
@@ -361,7 +375,8 @@ function startGame(){
   }));
   shieldFill.style.width='100%';
   warpBar.style.display='none';
-  running = true; lastTime = performance.now();
+  boostBar.style.display='none';
+  lastTime = performance.now();
   requestAnimationFrame(loop);
 }
 
@@ -377,8 +392,21 @@ function loop(now){
 
   prevScore = score;
   score += dt * 0.22 * combo;
-  speed = 4 + secs * 0.014;
+  speed = 4 + secs * 0.02 + Math.pow(secs / 100, 1.8) * 0.4;
   moveCooldown -= dt;
+
+  // Speed boost
+  if(speedBoostTimer > 0) speedBoostTimer -= dt;
+  const spaceBoost = !!(keys[' '] && ship.alive);
+  const boostMult = (spaceBoost ? 1.4 : 1) * (speedBoostTimer > 0 ? 1.35 : 1);
+  eSpeed = speed * boostMult; // effectiveSpeed for movement only
+  // Update boost bar
+  if(speedBoostTimer > 0){
+    boostBar.style.display = 'block';
+    boostFill.style.width = (speedBoostTimer / BOOST_PICKUP_DUR * 100) + '%';
+  } else if(!spaceBoost) {
+    boostBar.style.display = 'none';
+  }
 
   if(warpActive){
     warpTimer -= dt;
@@ -400,7 +428,7 @@ function loop(now){
   ship.x += (ship.targetX-ship.x)*0.25;
   ship.tilt *= 0.86;
 
-  stars.forEach(s=>{ s.y+=s.spd*speed*0.14; if(s.y>H+2){s.y=-2;s.x=Math.random()*W;} });
+  stars.forEach(s=>{ s.y+=s.spd*eSpeed*0.14; if(s.y>H+2){s.y=-2;s.x=Math.random()*W;} });
 
   spawnTimer += dt;
   const spawnGap = Math.max(900, 3000 - secs*35);
@@ -411,7 +439,7 @@ function loop(now){
 
   // Move obstacles + seeker drift
   obstacles.forEach(o=>{
-    o.y += speed*o.spd;
+    o.y += eSpeed*o.spd;
     o.rot += o.spin;
     if(o.type==='seeker'){
       const targetX = getLaneX(ship.lane);
@@ -423,10 +451,10 @@ function loop(now){
   });
   obstacles = obstacles.filter(o=>o.y<H+100);
 
-  pickups.forEach(p=>{ p.y+=speed*0.65; p.pulse+=0.09; });
+  pickups.forEach(p=>{ p.y+=eSpeed*0.65; p.pulse+=0.09; });
   pickups = pickups.filter(p=>p.y<H+60);
 
-  particles.forEach(p=>{ p.x+=p.vx; p.y+=p.vy+speed*0.28; p.vx*=0.96; p.life-=p.decay; p.r*=0.95; });
+  particles.forEach(p=>{ p.x+=p.vx; p.y+=p.vy+eSpeed*0.28; p.vx*=0.96; p.life-=p.decay; p.r*=0.95; });
   particles = particles.filter(p=>p.life>0&&p.r>0.3);
 
   shockwaves.forEach(sw=>{ sw.r+=5; sw.alpha*=0.88; });
@@ -478,12 +506,17 @@ function loop(now){
           floatText(ship.x,ship.y-40,'WARP!','#ff00ff');
           emitBurst(ship.x,ship.y,'#ff00ff');
           for(let j=0;j<3;j++) emitBurst(ship.x+(Math.random()-0.5)*60,ship.y+(Math.random()-0.5)*40,'#cc00ff');
+        } else if(p.type==='speed'){
+          speedBoostTimer=BOOST_PICKUP_DUR;
+          boostBar.style.display='block';
+          floatText(p.x,p.y,'+BOOST','#ffdd00');
+          emitBurst(p.x,p.y,'#ffdd00');
         } else {
           const bonus=Math.floor(300*combo);
           score+=bonus;
           floatText(p.x,p.y,'+'+bonus,'#00ffcc');
         }
-        emitBurst(p.x,p.y,p.type==='fuel'?'#00ffcc':p.type==='warp'?'#ff00ff':'#0099ff');
+        if(p.type!=='speed') emitBurst(p.x,p.y,p.type==='fuel'?'#00ffcc':p.type==='warp'?'#ff00ff':'#0099ff');
       }
     }
   }
@@ -599,7 +632,12 @@ function spawnPickup(secs){
   const lane=Math.floor(Math.random()*LANES);
   const roll=Math.random();
   const warpChance=secs>15?Math.min(0.18,0.05+secs*0.001):0;
-  const type=roll<warpChance?'warp':roll<warpChance+0.3?'shield':'fuel';
+  const speedChance=0.22;
+  let type;
+  if(roll<warpChance) type='warp';
+  else if(roll<warpChance+speedChance) type='speed';
+  else if(roll<warpChance+speedChance+0.25) type='shield';
+  else type='fuel';
   pickups.push({lane,x:getLaneX(lane),y:-30,type,pulse:0});
 }
 
@@ -689,10 +727,14 @@ function draw(){
     ctx.fillStyle=`rgba(80,0,120,${0.12+Math.sin(Date.now()*0.008)*0.05})`;
     ctx.fillRect(0,0,W,H);
   }
+  if(eSpeed > speed + 0.5){
+    ctx.fillStyle=`rgba(255,200,0,${Math.min(0.06,(eSpeed-speed)*0.012)})`;
+    ctx.fillRect(0,0,W,H);
+  }
 
   // Stars
   stars.forEach(s=>{
-    const streak=speed>7?(speed-7)*s.spd*1.5:0;
+    const streak=eSpeed>7?(eSpeed-7)*s.spd*1.5:0;
     if(streak>1){
       ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(s.x,s.y-streak);
       ctx.strokeStyle=`rgba(160,220,255,${s.a*0.5})`; ctx.lineWidth=s.r; ctx.stroke();
@@ -718,7 +760,7 @@ function draw(){
     ctx.fillStyle=lg; ctx.fillRect(cx2-laneW/2,0,laneW,H);
   }
   const dashLen=36,gapLen=28,total=dashLen+gapLen;
-  const offset=(Date.now()*speed*0.06)%total;
+  const offset=(Date.now()*eSpeed*0.06)%total;
   ctx.strokeStyle='rgba(0,120,200,0.13)'; ctx.lineWidth=1;
   ctx.setLineDash([dashLen,gapLen]); ctx.lineDashOffset=-offset;
   for(let i=0;i<LANES;i++){
@@ -846,7 +888,7 @@ function draw(){
   pickups.forEach(p=>{
     ctx.save(); ctx.translate(p.x,p.y);
     const pulse=Math.sin(p.pulse)*3;
-    const col=p.type==='fuel'?'#00ffcc':p.type==='warp'?'#ff00ff':'#0099ff';
+    const col=p.type==='fuel'?'#00ffcc':p.type==='warp'?'#ff00ff':p.type==='speed'?'#ffdd00':'#0099ff';
     ctx.shadowBlur=20; ctx.shadowColor=col;
     ctx.beginPath(); ctx.arc(0,0,16+pulse*0.4,0,Math.PI*2);
     ctx.strokeStyle=col; ctx.lineWidth=2; ctx.stroke();
@@ -854,7 +896,7 @@ function draw(){
     ctx.fillStyle=col+'33'; ctx.fill();
     ctx.shadowBlur=0; ctx.fillStyle=col;
     ctx.font='bold 14px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(p.type==='fuel'?'⚡':p.type==='warp'?'✦':'🛡',0,1);
+    ctx.fillText(p.type==='fuel'?'⚡':p.type==='warp'?'✦':p.type==='speed'?'▶':' 🛡',0,1);
     ctx.restore();
   });
 
