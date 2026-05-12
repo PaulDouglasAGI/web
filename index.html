@@ -195,11 +195,15 @@ function saveActiveSkin(id){ localStorage.setItem('wl_skin',id); }
 function drawMiniShip(canvas, skin, isActive){
   const c = canvas.getContext('2d');
   c.clearRect(0,0,52,52);
-  let color = skin.color, glow = skin.glow, cockpit = skin.cockpit;
-  if(skin.id===6){ const h=(Date.now()*0.15)%360; color=`hsl(${h},100%,60%)`; glow=`hsl(${h},100%,50%)`; cockpit=`hsla(${h},100%,60%,0.6)`; }
+  let color = skin.color, glow = skin.glow, cockpit = skin.cockpit, colorA = color+'44';
+  if(skin.id===6){
+    const h=(Date.now()*0.15)%360;
+    color=`hsl(${h},100%,60%)`; glow=`hsl(${h},100%,50%)`; cockpit=`hsla(${h},100%,60%,0.6)`;
+    colorA=`hsla(${h},100%,60%,0.27)`;
+  }
   c.save(); c.translate(26,30); c.scale(0.55,0.55);
   const eg=c.createRadialGradient(0,14,0,0,14,30);
-  eg.addColorStop(0,color+'44'); eg.addColorStop(1,'rgba(0,0,0,0)');
+  eg.addColorStop(0,colorA); eg.addColorStop(1,'rgba(0,0,0,0)');
   c.fillStyle=eg; c.beginPath(); c.arc(0,16,28,0,Math.PI*2); c.fill();
   c.shadowBlur=isActive?18:10; c.shadowColor=glow;
   c.fillStyle='#050520'; c.beginPath();
@@ -911,11 +915,11 @@ function drawShip(ctx){
   const skinId = getActiveSkin();
   let skin = SKINS[skinId] || SKINS[0];
   // INFERNO: rainbow shift
-  let color = skin.color, glow = skin.glow, cockpit = skin.cockpit;
+  let color = skin.color, glow = skin.glow, cockpit = skin.cockpit, colorA = color+'88';
   if(skinId===6){
     const hue=(Date.now()*0.15)%360;
     color=`hsl(${hue},100%,60%)`; glow=`hsl(${hue},100%,50%)`;
-    cockpit=`hsla(${hue},100%,60%,0.6)`;
+    cockpit=`hsla(${hue},100%,60%,0.6)`; colorA=`hsla(${hue},100%,60%,0.53)`;
   }
   ctx.save(); ctx.translate(ship.x,ship.y); ctx.rotate(ship.tilt*0.28);
   if(warpActive){
@@ -924,7 +928,7 @@ function drawShip(ctx){
     ctx.fillStyle=wg; ctx.beginPath(); ctx.arc(0,0,50,0,Math.PI*2); ctx.fill();
   }
   const eg=ctx.createRadialGradient(0,14,0,0,14,30);
-  eg.addColorStop(0,`${color}88`); eg.addColorStop(1,'rgba(0,0,0,0)');
+  eg.addColorStop(0,colorA); eg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=eg; ctx.beginPath(); ctx.arc(0,16,28,0,Math.PI*2); ctx.fill();
   ctx.shadowBlur=warpActive?30:24; ctx.shadowColor=warpActive?'#cc00ff':glow;
   ctx.fillStyle='#050520'; ctx.beginPath();
