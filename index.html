@@ -49,17 +49,18 @@ canvas{display:block;}
 #skin-title{font-size:0.6rem;letter-spacing:4px;color:#004455;margin-bottom:10px;}
 #skin-row{display:grid;grid-template-columns:repeat(4,84px);grid-template-rows:repeat(2,92px);gap:8px;justify-content:center;padding:0 12px;}
 .skin-chip{width:84px;height:92px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6px;gap:4px;border:1px solid #001122;border-radius:8px;cursor:pointer;transition:all 0.15s;position:relative;background:rgba(0,4,14,0.7);overflow:hidden;}
-.skin-chip.unlocked{border-color:#002233;cursor:pointer;}
+.skin-chip.unlocked{border-color:#002233;}
 .skin-chip.unlocked:hover{border-color:#00aacc;background:rgba(0,30,50,0.7);}
 .skin-chip.selected{border-color:#00ccff;background:rgba(0,60,100,0.4);box-shadow:0 0 14px rgba(0,180,255,0.35);}
-.skin-chip.locked{cursor:default;}
+.skin-chip.locked{cursor:default;pointer-events:none;border-color:#000d1a;}
 .skin-canvas{width:52px;height:52px;display:block;}
 .skin-chip-name{font-size:0.5rem;letter-spacing:2px;color:#006677;line-height:1;}
 .skin-chip.selected .skin-chip-name{color:#00ccff;}
 .skin-chip.unlocked:hover .skin-chip-name{color:#00aacc;}
-.skin-locked-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,1,8,0.6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
-.skin-lock-icon{font-size:1.1rem;line-height:1;}
-.skin-thresh-label{font-size:0.38rem;letter-spacing:1px;color:#334;}
+.skin-chip.locked .skin-chip-name{color:#223;}
+.skin-locked-overlay{position:absolute;bottom:0;left:0;width:100%;padding:3px 2px 5px;background:rgba(0,0,12,0.88);display:flex;flex-direction:column;align-items:center;gap:1px;border-top:1px solid rgba(30,30,80,0.5);}
+.skin-lock-icon{font-size:0.7rem;line-height:1;}
+.skin-thresh-label{font-size:0.38rem;letter-spacing:1px;color:#446;}
 /* Leaderboard view */
 #view-board{display:none;flex-direction:column;align-items:center;width:100%;min-height:0;}
 #lb-title{font-family:'Exo 2',sans-serif;font-size:1rem;font-weight:900;letter-spacing:6px;color:#00ccff;margin-bottom:14px;text-shadow:0 0 20px #0066ff;}
@@ -197,25 +198,33 @@ function getActiveSkin(){ return parseInt(localStorage.getItem('wl_skin')||'0');
 function saveActiveSkin(id){ localStorage.setItem('wl_skin',id); }
 
 // ── Skin selector ──────────────────────────────────────────────────
-function drawMiniShip(canvas, skin, isActive){
+function drawMiniShip(canvas, skin, isActive, isLocked){
   const c = canvas.getContext('2d');
   c.clearRect(0,0,52,52);
-  let color = skin.color, glow = skin.glow, cockpit = skin.cockpit, colorA = color+'44';
-  if(skin.id===6){
-    const h=(Date.now()*0.15)%360;
-    color=`hsl(${h},100%,60%)`; glow=`hsl(${h},100%,50%)`; cockpit=`hsla(${h},100%,60%,0.6)`;
-    colorA=`hsla(${h},100%,60%,0.27)`;
+  let color, glow, cockpit, colorA;
+  if(isLocked){
+    color='#1c1c30'; glow='transparent'; cockpit='rgba(15,15,28,0.9)'; colorA='rgba(0,0,0,0)';
+  } else {
+    color=skin.color; glow=skin.glow; cockpit=skin.cockpit; colorA=color+'44';
+    if(skin.id===6){
+      const h=(Date.now()*0.15)%360;
+      color=`hsl(${h},100%,60%)`; glow=`hsl(${h},100%,50%)`; cockpit=`hsla(${h},100%,60%,0.6)`;
+      colorA=`hsla(${h},100%,60%,0.27)`;
+    }
   }
   c.save(); c.translate(26,30); c.scale(0.55,0.55);
-  const eg=c.createRadialGradient(0,14,0,0,14,30);
-  eg.addColorStop(0,colorA); eg.addColorStop(1,'rgba(0,0,0,0)');
-  c.fillStyle=eg; c.beginPath(); c.arc(0,16,28,0,Math.PI*2); c.fill();
-  c.shadowBlur=isActive?18:10; c.shadowColor=glow;
-  c.fillStyle='#050520'; c.beginPath();
+  if(!isLocked){
+    const eg=c.createRadialGradient(0,14,0,0,14,30);
+    eg.addColorStop(0,colorA); eg.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=eg; c.beginPath(); c.arc(0,16,28,0,Math.PI*2); c.fill();
+    c.shadowBlur=isActive?18:10; c.shadowColor=glow;
+  }
+  c.fillStyle=isLocked?'#0e0e1e':'#050520';
+  c.beginPath();
   c.moveTo(0,-24);c.lineTo(13,8);c.lineTo(8,18);c.lineTo(0,13);c.lineTo(-8,18);c.lineTo(-13,8);
   c.closePath(); c.fill();
   c.strokeStyle=color; c.lineWidth=1.8; c.stroke();
-  c.fillStyle='#080828';
+  c.fillStyle=isLocked?'#0e0e1e':'#080828';
   c.beginPath();c.moveTo(13,8);c.lineTo(28,20);c.lineTo(18,24);c.lineTo(8,18);c.closePath();c.fill();c.stroke();
   c.beginPath();c.moveTo(-13,8);c.lineTo(-28,20);c.lineTo(-18,24);c.lineTo(-8,18);c.closePath();c.fill();c.stroke();
   c.beginPath();c.ellipse(0,-8,5,8,0,0,Math.PI*2);
@@ -238,24 +247,17 @@ function renderSkinSelector(){
     cnv.className = 'skin-canvas';
     cnv.width = 52; cnv.height = 52;
     chip.appendChild(cnv);
-    drawMiniShip(cnv, s, isActive);
+    drawMiniShip(cnv, s, isActive, !isUnlocked);
     // Name label
     const nameEl = document.createElement('div');
     nameEl.className = 'skin-chip-name';
     nameEl.textContent = s.name;
     chip.appendChild(nameEl);
-    // Lock overlay for locked skins
+    // Bottom-strip lock info for locked skins
     if(!isUnlocked){
       const overlay = document.createElement('div');
       overlay.className = 'skin-locked-overlay';
-      const lockIcon = document.createElement('div');
-      lockIcon.className = 'skin-lock-icon';
-      lockIcon.textContent = '🔒';
-      const thresh = document.createElement('div');
-      thresh.className = 'skin-thresh-label';
-      thresh.textContent = s.threshold.toLocaleString();
-      overlay.appendChild(lockIcon);
-      overlay.appendChild(thresh);
+      overlay.innerHTML = `<span class="skin-lock-icon">🔒</span><span class="skin-thresh-label">${s.threshold.toLocaleString()}</span>`;
       chip.appendChild(overlay);
     }
     if(isUnlocked){
@@ -330,9 +332,9 @@ function submitName(){
   const name = nameInput.value.trim()||'PILOT';
   insertLB(name, pendingLBScore, pendingLBTime);
   nameEntry.style.display='none';
-  renderLB(pendingLBScore);
+  renderSkinSelector();
   viewTabs.style.display='flex';
-  showTab('board');
+  showTab('game'); // land on skins tab, not leaderboard
   pendingLBScore = null;
 }
 nameSubmit.addEventListener('click', submitName);
