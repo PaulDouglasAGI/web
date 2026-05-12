@@ -110,7 +110,7 @@ canvas{display:block;}
       <div class="stat"><div class="stat-val" id="final-time">0s</div><div class="stat-name">TIME</div></div>
       <div class="stat"><div class="stat-val" id="final-hs">0</div><div class="stat-name">BEST</div></div>
     </div>
-    <div id="skin-section" style="display:none">
+    <div id="skin-section">
       <div id="skin-title">SHIP SKIN</div>
       <div id="skin-row"></div>
     </div>
@@ -312,6 +312,7 @@ playBtnLb.addEventListener('click', startGame);
 // ── Keys ───────────────────────────────────────────────────────────
 const keys = {};
 window.addEventListener('keydown', e => {
+  if(e.key===' ') e.preventDefault(); // stop browser space-clicking focused buttons
   keys[e.key] = true;
   if(e.key==='r'||e.key==='R') startGame();
   if(!running && e.key==='Enter') startGame();
@@ -348,6 +349,7 @@ let spawnTimer, pickupTimer, lastTime, moveCooldown;
 let flashAlpha, combo, comboTimer;
 let warpActive, warpTimer, warpMaxTime;
 let shake, prevScore, eSpeed;
+let loopGen = 0;
 let idleRunning = true;
 
 function getLaneX(l){ return laneXs[l]; }
@@ -377,7 +379,12 @@ function startGame(){
   warpBar.style.display='none';
   boostBar.style.display='none';
   lastTime = performance.now();
-  requestAnimationFrame(loop);
+  const gen = ++loopGen;
+  requestAnimationFrame(function frame(now){
+    if(loopGen !== gen) return; // stale loop from a previous startGame call — die
+    loop(now);
+    if(loopGen === gen) requestAnimationFrame(frame);
+  });
 }
 
 const LANES = 5;
@@ -530,7 +537,7 @@ function loop(now){
   } else {
     comboEl.style.display='none'; comboLbl.style.display='none';
   }
-  requestAnimationFrame(loop);
+  // rAF is handled by the frame wrapper in startGame — do NOT call it here
 }
 
 // ── Skin unlock checker ────────────────────────────────────────────
@@ -689,7 +696,6 @@ function gameOver(){
   const s=Math.floor(score);
   if(s>hs){ hs=s; localStorage.setItem('wl_hs',hs); }
   hsEl.textContent=hs;
-  document.getElementById('skin-section').style.display='block';
   renderSkinSelector();
   overlay.classList.remove('gone');
   statRow.style.display='flex';
