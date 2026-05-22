@@ -114,14 +114,14 @@ canvas{display:block;position:fixed;top:0;left:0;width:100%;height:100%;}
 
 // ── 1. CONSTANTS ────────────────────────────────────────────────
 const GRAVITY        = 0.32;
-const JUMP_MIN       = 6;     // velocity on tap (small hop)
-const JUMP_MAX       = 12;    // velocity at full hold
-const JUMP_BOOST_RATE= 0.55;  // boost per frame while held and still rising
+const JUMP_MIN       = 9;     // velocity on tap (decent hop)
+const JUMP_MAX       = 13;    // velocity at full hold
+const JUMP_BOOST_RATE= 0.75;  // boost per frame while held and still rising
 const FLIP_SPEED     = 4.8;   // degrees per frame while key held
 const SAFE_ANGLE     = 40;    // landing tolerance in degrees
 const BASE_SPEED     = 4.2;
-const MAX_SPEED      = 10;
-const SPEED_RAMP     = 0.0025;
+const MAX_SPEED      = 7.5;
+const SPEED_RAMP     = 0.0010;
 const SLOPE          = 0.19;  // px down per px right (screen-space slope)
 const SLOPE_BASE     = 0.36;  // groundAt(0) = H * this
 const PLAYER_X_FRAC  = 0.22;
@@ -135,7 +135,7 @@ const FLIP_BONUS     = 600;
 const WIPEOUT_DUR    = 1200;
 const INVINCIBLE_DUR = 1800;
 const SPAWN_BASE     = 3800;
-const SPAWN_MIN      = 900;
+const SPAWN_MIN      = 1300;
 const PICKUP_INTERVAL= 3400;
 const SCARF_LEN      = 16;    // history points for scarf
 
@@ -183,7 +183,7 @@ const player = {
 };
 
 const keys  = {};
-const touch = {left:false, right:false, center:false, flipHeld:false, swipeStartY:null};
+const touch = {left:false, right:false, center:false, flipHeld:false, jumpHeld:false, swipeStartY:null};
 
 // ── 3. SKY COLOR SYSTEM ─────────────────────────────────────────
 // Two gradient presets, lerped by scroll progress
@@ -749,7 +749,7 @@ function drawHUD(){
 
 // ── 12. GAME LOGIC ─────────────────────────────────────────────────
 function flipKeyActive(){ return keys['f']||keys['F']||touch.flipHeld; }
-function jumpKeyActive(){ return keys[' ']||keys['ArrowUp']||keys['w']||keys['W']; }
+function jumpKeyActive(){ return keys[' ']||keys['ArrowUp']||keys['w']||keys['W']||touch.jumpHeld; }
 function crouchKeyActive(){ return keys['ArrowDown']||keys['s']||keys['S']; }
 
 function updatePhysics(dt){
@@ -864,7 +864,7 @@ function updateObstacles(df){
 
 function updateSpawning(dt){
   spawnTimer+=dt;
-  const interval=Math.max(SPAWN_MIN, SPAWN_BASE-scrollOffset*0.32);
+  const interval=Math.max(SPAWN_MIN, SPAWN_BASE-scrollOffset*0.14);
   if(spawnTimer>=interval){spawnTimer=0;spawnObstacle();}
   pickupTimer+=dt;
   if(pickupTimer>=PICKUP_INTERVAL){pickupTimer=0;spawnPickup();}
@@ -1031,7 +1031,7 @@ canvas.addEventListener('touchmove',e=>{
     if(touch.swipeStartY!==null){
       const delta=touch.swipeStartY-t.clientY;
       if(delta>34&&(player.state==='SKIING'||player.state==='CROUCH')&&gameState==='PLAYING'){
-        player.state='JUMPING';player.vy=-JUMP_MIN;player.rotation=0;player.flipLocked=false;
+        player.state='JUMPING';player.vy=-JUMP_MAX;player.rotation=0;player.flipLocked=false;
         touch.swipeStartY=null;
       }
     }
@@ -1059,9 +1059,13 @@ document.getElementById('mc-right').addEventListener('touchend',e=>{e.stopPropag
 document.getElementById('mc-shoot').addEventListener('touchstart',e=>{e.stopPropagation();shootSnowball();},{passive:true});
 document.getElementById('mc-jump-btn').addEventListener('touchstart',e=>{
   e.stopPropagation();
+  touch.jumpHeld=true;
   if((player.state==='SKIING'||player.state==='CROUCH')&&gameState==='PLAYING'){
     player.state='JUMPING';player.vy=-JUMP_MIN;player.rotation=0;player.flipLocked=false;
   }
+},{passive:true});
+document.getElementById('mc-jump-btn').addEventListener('touchend',e=>{
+  e.stopPropagation(); touch.jumpHeld=false;
 },{passive:true});
 document.getElementById('mc-flip-btn').addEventListener('touchstart',e=>{e.stopPropagation();touch.flipHeld=true;},{passive:true});
 document.getElementById('mc-flip-btn').addEventListener('touchend',e=>{e.stopPropagation();touch.flipHeld=false;},{passive:true});
