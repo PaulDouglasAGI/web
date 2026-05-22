@@ -115,7 +115,7 @@ canvas{display:block;position:fixed;top:0;left:0;width:100%;height:100%;}
 // ── 1. CONSTANTS ────────────────────────────────────────────────
 const GRAVITY        = 0.32;
 const JUMP_MIN       = 9;     // velocity on tap (decent hop)
-const JUMP_MAX       = 13;    // velocity at full hold
+const JUMP_MAX       = 11;    // velocity at full hold (hard cap)
 const JUMP_BOOST_RATE= 0.75;  // boost per frame while held and still rising
 const FLIP_SPEED     = 4.8;   // degrees per frame while key held
 const SAFE_ANGLE     = 40;    // landing tolerance in degrees
@@ -134,8 +134,8 @@ const PROJ_R         = 8;
 const FLIP_BONUS     = 600;
 const WIPEOUT_DUR    = 1200;
 const INVINCIBLE_DUR = 1800;
-const SPAWN_BASE     = 3800;
-const SPAWN_MIN      = 1300;
+const SPAWN_FLOOR_START = 4800; // initial minimum gap between obstacles (ms)
+const SPAWN_FLOOR_MIN   = 2200; // floor on that minimum as speed increases
 const PICKUP_INTERVAL= 3400;
 const SCARF_LEN      = 16;    // history points for scarf
 
@@ -158,6 +158,7 @@ let multiplier= 1;
 let scrollSpeed  = BASE_SPEED;
 let scrollOffset = 0;
 let spawnTimer   = 0;
+let nextSpawnIn  = 0;
 let pickupTimer  = 0;
 let invincibleUntil = 0;
 let loopGen   = 0;
@@ -862,10 +863,16 @@ function updateObstacles(df){
   projectiles=projectiles.filter(p=>p.x<W+20&&p.x>-20&&p.y<H+20);
 }
 
+function nextObstacleGap(){
+  // Both floor and window shrink slowly with distance — always feels random
+  const floor  = Math.max(SPAWN_FLOOR_MIN, SPAWN_FLOOR_START - scrollOffset * 0.08);
+  const window = Math.max(800, 2800 - scrollOffset * 0.05);
+  return floor + Math.random() * window;
+}
+
 function updateSpawning(dt){
   spawnTimer+=dt;
-  const interval=Math.max(SPAWN_MIN, SPAWN_BASE-scrollOffset*0.14);
-  if(spawnTimer>=interval){spawnTimer=0;spawnObstacle();}
+  if(spawnTimer>=nextSpawnIn){ spawnTimer=0; nextSpawnIn=nextObstacleGap(); spawnObstacle(); }
   pickupTimer+=dt;
   if(pickupTimer>=PICKUP_INTERVAL){pickupTimer=0;spawnPickup();}
 }
@@ -985,7 +992,7 @@ function initGame(){
   const gen=++loopGen;
   score=0;multiplier=1;snowballs=0;
   scrollSpeed=BASE_SPEED;scrollOffset=0;
-  spawnTimer=0;pickupTimer=0;invincibleUntil=0;killType='';
+  spawnTimer=0;nextSpawnIn=nextObstacleGap();pickupTimer=0;invincibleUntil=0;killType='';
   obstacles=[];projectiles=[];pickupItems=[];particles=[];wipeoutPcs=[];scarfHistory=[];
   player.x=W*PLAYER_X_FRAC;
   player.y=playerGroundY();
