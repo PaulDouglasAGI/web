@@ -114,7 +114,9 @@ canvas{display:block;position:fixed;top:0;left:0;width:100%;height:100%;}
 
 // ── 1. CONSTANTS ────────────────────────────────────────────────
 const GRAVITY        = 0.32;
-const JUMP_POWER     = 15;
+const JUMP_MIN       = 6;     // velocity on tap (small hop)
+const JUMP_MAX       = 12;    // velocity at full hold
+const JUMP_BOOST_RATE= 0.55;  // boost per frame while held and still rising
 const FLIP_SPEED     = 4.8;   // degrees per frame while key held
 const SAFE_ANGLE     = 40;    // landing tolerance in degrees
 const BASE_SPEED     = 4.2;
@@ -123,6 +125,8 @@ const SPEED_RAMP     = 0.0025;
 const SLOPE          = 0.19;  // px down per px right (screen-space slope)
 const SLOPE_BASE     = 0.36;  // groundAt(0) = H * this
 const PLAYER_X_FRAC  = 0.22;
+const PLAYER_SCALE   = 0.60;  // draw player at this fraction of native size
+const OBS_SCALE      = 0.80;  // draw obstacles at this fraction
 const SNOWBALL_MAX   = 5;
 const PICKUP_R       = 13;
 const PROJ_SPD       = 12;
@@ -130,8 +134,8 @@ const PROJ_R         = 8;
 const FLIP_BONUS     = 600;
 const WIPEOUT_DUR    = 1200;
 const INVINCIBLE_DUR = 1800;
-const SPAWN_BASE     = 2000;
-const SPAWN_MIN      = 550;
+const SPAWN_BASE     = 3800;
+const SPAWN_MIN      = 900;
 const PICKUP_INTERVAL= 3400;
 const SCARF_LEN      = 16;    // history points for scarf
 
@@ -366,9 +370,9 @@ function drawSnow() {
 
 // ── 7. PLAYER DRAW ──────────────────────────────────────────────
 function updateScarf() {
-  // Neck position offset (in world space, relative to player)
-  const nx = player.x - 6;
-  const ny = player.y - 28;
+  // Neck position offset (in world space, adjusted for PLAYER_SCALE)
+  const nx = player.x - 6 * PLAYER_SCALE;
+  const ny = player.y - 28 * PLAYER_SCALE;
   scarfHistory.unshift({x:nx, y:ny});
   if(scarfHistory.length > SCARF_LEN) scarfHistory.pop();
 }
@@ -410,76 +414,72 @@ function drawPlayer() {
   if(player.state==='FLIPPING' || (isAir && player.rotation !== 0)) {
     ctx.rotate(player.rotation * Math.PI / 180);
   } else if(!isAir) {
-    ctx.rotate(0.14); // slight forward lean
+    ctx.rotate(0.14); // slight forward lean on slope
   }
 
+  // Zoom-out scale — applied after rotation so rotation stays in screen space
+  ctx.scale(PLAYER_SCALE, PLAYER_SCALE);
   if(isCrouch) ctx.scale(1, 0.52);
 
   const legL = isCrouch ? 8 : 18;
-
-  // Skis — dark silhouette, slightly angled for depth
   ctx.fillStyle = col;
+
+  // Skis — smooth rounded tip
   ctx.save(); ctx.rotate(-0.08);
-  ctx.fillRect(-18, legL+2, 38, 5);
-  // Ski tip
-  ctx.beginPath(); ctx.arc(20, legL+4, 5, -Math.PI*0.7, Math.PI*0.5); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(-18, legL+2, 40, 5, [2, 7, 7, 2]); ctx.fill();
   ctx.restore();
 
-  // Legs
-  ctx.fillStyle = col;
-  ctx.beginPath();
-  ctx.moveTo(-5, 0); ctx.lineTo(-8, legL); ctx.lineTo(-3, legL); ctx.lineTo(0, 0);
-  ctx.closePath(); ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(4, 0); ctx.lineTo(2, legL); ctx.lineTo(8, legL); ctx.lineTo(8, 0);
-  ctx.closePath(); ctx.fill();
+  // Legs — rounded rectangles
+  ctx.beginPath(); ctx.roundRect(-6, 0, 5, legL, [2,2,3,3]); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(2, 0, 5, legL, [2,2,3,3]); ctx.fill();
 
-  // Body silhouette
-  ctx.fillStyle = col;
-  ctx.beginPath(); ctx.roundRect(-10,-22,20,24,4); ctx.fill();
+  // Body
+  ctx.beginPath(); ctx.roundRect(-10, -22, 20, 24, 7); ctx.fill();
 
   // Head
-  ctx.beginPath(); ctx.arc(0,-30,10,0,Math.PI*2); ctx.fill();
-  // Helmet visor indent (just a slightly lighter notch — subtly)
+  ctx.beginPath(); ctx.arc(0, -30, 10, 0, Math.PI*2); ctx.fill();
+  // Helmet visor indent
   ctx.fillStyle = '#1e2038';
-  ctx.beginPath(); ctx.arc(3,-28,5,-0.3,Math.PI*0.7); ctx.fill();
+  ctx.beginPath(); ctx.arc(3, -28, 5, -0.3, Math.PI*0.7); ctx.fill();
   ctx.fillStyle = col;
 
-  // Arms
+  // Arms — rotated rounded rectangles for smooth silhouette
   if(isAir) {
-    // Arms up — aerodynamic
-    ctx.fillStyle = col;
-    ctx.beginPath(); ctx.moveTo(-10,-16); ctx.lineTo(-22,-30); ctx.lineTo(-18,-30); ctx.lineTo(-6,-16); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(10,-16); ctx.lineTo(22,-30); ctx.lineTo(18,-30); ctx.lineTo(6,-16); ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.translate(-8, -18); ctx.rotate(-0.85);
+    ctx.beginPath(); ctx.roundRect(-3, 0, 6, 13, 3); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.translate(8, -18); ctx.rotate(0.85);
+    ctx.beginPath(); ctx.roundRect(-3, 0, 6, 13, 3); ctx.fill(); ctx.restore();
   } else {
-    // Arms with poles
-    ctx.beginPath(); ctx.moveTo(-10,-14); ctx.lineTo(-20,2); ctx.lineTo(-16,2); ctx.lineTo(-6,-14); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(10,-14); ctx.lineTo(20,2); ctx.lineTo(16,2); ctx.lineTo(6,-14); ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.translate(-9, -14); ctx.rotate(-0.45);
+    ctx.beginPath(); ctx.roundRect(-3, 0, 6, 14, 3); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.translate(9, -14); ctx.rotate(0.45);
+    ctx.beginPath(); ctx.roundRect(-3, 0, 6, 14, 3); ctx.fill(); ctx.restore();
     // Pole shafts
     ctx.strokeStyle = '#1a1e30'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(-18,2); ctx.lineTo(-22,legL+10); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(18,2); ctx.lineTo(22,legL+10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-16, 0); ctx.lineTo(-22, legL+10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(22, legL+10); ctx.stroke();
   }
 
-  ctx.restore();
+  ctx.restore(); // end of scaled player body
 
-  // Landing flash burst
+  // Landing flash burst — world coords, scaled to match smaller figure
   if(player.landingFlash > 0) {
     const a = player.landingFlash / 700;
     ctx.save(); ctx.translate(player.x, player.y);
     ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 2;
+    const innerR = 12 * PLAYER_SCALE, outerR = 26 * PLAYER_SCALE;
     for(let i=0;i<10;i++){
       const ang=(i/10)*Math.PI*2;
       ctx.beginPath();
-      ctx.moveTo(Math.cos(ang)*20,Math.sin(ang)*20);
-      ctx.lineTo(Math.cos(ang)*44,Math.sin(ang)*44);
+      ctx.moveTo(Math.cos(ang)*innerR, Math.sin(ang)*innerR);
+      ctx.lineTo(Math.cos(ang)*outerR, Math.sin(ang)*outerR);
       ctx.stroke();
     }
     ctx.restore();
     player.landingFlash -= 14;
   }
 
-  // Flip indicator (subtle arc)
+  // Flip indicator
   if(player.state==='FLIPPING') drawFlipIndicator();
 
   // Speed lines at high speed
@@ -488,14 +488,13 @@ function drawPlayer() {
     ctx.globalAlpha = 0.12 * (scrollSpeed-7.5)/2.5;
     ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=1.5; ctx.lineCap='round';
     for(let i=0;i<6;i++){
-      const sy=player.y-28+i*12;
+      const sy = player.y - 14*PLAYER_SCALE + i * 7*PLAYER_SCALE;
       const len=16+Math.random()*28;
       ctx.beginPath();ctx.moveTo(player.x-35-len,sy);ctx.lineTo(player.x-35,sy);ctx.stroke();
     }
     ctx.restore();
   }
 
-  // Draw scarf after player (trails behind)
   drawScarf();
 }
 
@@ -505,7 +504,7 @@ function drawFlipIndicator() {
   const isGood = dist <= SAFE_ANGLE;
   const progress = (player.rotation % 360) / 360;
   const ix = Math.max(48, player.x-56);
-  const iy = player.y - 54;
+  const iy = player.y - 36;
   ctx.save(); ctx.translate(ix,iy);
   ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=3;
   ctx.beginPath(); ctx.arc(0,0,16,0,Math.PI*2); ctx.stroke();
@@ -623,6 +622,7 @@ function drawBearObs(ctx, obs) {
 
 function drawObstacle(obs) {
   ctx.save(); ctx.translate(obs.x, obs.y);
+  ctx.scale(OBS_SCALE, OBS_SCALE);
   switch(obs.type){
     case 'pine':     drawPineObs(ctx);         break;
     case 'campfire': drawCampfireObs(ctx);      break;
@@ -765,7 +765,7 @@ function updatePhysics(dt){
 
   // Jump
   if(jumpKeyActive()&&(player.state==='SKIING'||player.state==='CROUCH')){
-    player.state='JUMPING'; player.vy=-JUMP_POWER;
+    player.state='JUMPING'; player.vy=-JUMP_MIN;
     player.rotation=0; player.flipLocked=false;
   }
 
@@ -782,6 +782,9 @@ function updatePhysics(dt){
 
   // Vertical physics
   if(player.state==='JUMPING'||player.state==='FLIPPING'){
+    // Variable jump: holding key while still rising adds velocity up to JUMP_MAX
+    if(jumpKeyActive() && player.vy < 0)
+      player.vy = Math.max(-JUMP_MAX, player.vy - JUMP_BOOST_RATE * df);
     player.vy+=GRAVITY*df;
     player.y+=player.vy*df;
     if(player.y>=gY){ player.y=gY; player.vy=0; handleLanding(); }
@@ -832,11 +835,12 @@ function handleLanding(){
 function initWipeout(){
   if(player.state==='WIPEOUT'||player.state==='DEAD') return;
   player.state='WIPEOUT'; player.wipeoutTimer=WIPEOUT_DUR;
+  const PS = PLAYER_SCALE;
   wipeoutPcs=[
-    {shape:'ski',w:36,h:5,x:player.x+4,y:player.y,vx:3+Math.random()*3,vy:-5-Math.random()*3,rot:0,rotV:0.18,life:1},
-    {shape:'ski',w:36,h:5,x:player.x-4,y:player.y,vx:-3-Math.random()*3,vy:-5-Math.random()*3,rot:0,rotV:-0.16,life:1},
-    {shape:'body',w:18,h:22,x:player.x,y:player.y-20,vx:(Math.random()-0.5)*4,vy:-7-Math.random()*3,rot:0,rotV:(Math.random()-0.5)*0.25,life:1},
-    {shape:'head',r:9,x:player.x,y:player.y-36,vx:(Math.random()-0.5)*5,vy:-9-Math.random()*4,rot:0,rotV:(Math.random()-0.5)*0.3,life:1},
+    {shape:'ski',w:36*PS,h:5*PS,x:player.x+4*PS,y:player.y,vx:3+Math.random()*3,vy:-5-Math.random()*3,rot:0,rotV:0.18,life:1},
+    {shape:'ski',w:36*PS,h:5*PS,x:player.x-4*PS,y:player.y,vx:-3-Math.random()*3,vy:-5-Math.random()*3,rot:0,rotV:-0.16,life:1},
+    {shape:'body',w:18*PS,h:22*PS,x:player.x,y:player.y-20*PS,vx:(Math.random()-0.5)*4,vy:-7-Math.random()*3,rot:0,rotV:(Math.random()-0.5)*0.25,life:1},
+    {shape:'head',r:9*PS,x:player.x,y:player.y-36*PS,vx:(Math.random()-0.5)*5,vy:-9-Math.random()*4,rot:0,rotV:(Math.random()-0.5)*0.3,life:1},
   ];
   emitChunks(player.x,player.y-20,14);
   multiplier=1;
@@ -1027,7 +1031,7 @@ canvas.addEventListener('touchmove',e=>{
     if(touch.swipeStartY!==null){
       const delta=touch.swipeStartY-t.clientY;
       if(delta>34&&(player.state==='SKIING'||player.state==='CROUCH')&&gameState==='PLAYING'){
-        player.state='JUMPING';player.vy=-JUMP_POWER;player.rotation=0;player.flipLocked=false;
+        player.state='JUMPING';player.vy=-JUMP_MIN;player.rotation=0;player.flipLocked=false;
         touch.swipeStartY=null;
       }
     }
@@ -1056,7 +1060,7 @@ document.getElementById('mc-shoot').addEventListener('touchstart',e=>{e.stopProp
 document.getElementById('mc-jump-btn').addEventListener('touchstart',e=>{
   e.stopPropagation();
   if((player.state==='SKIING'||player.state==='CROUCH')&&gameState==='PLAYING'){
-    player.state='JUMPING';player.vy=-JUMP_POWER;player.rotation=0;player.flipLocked=false;
+    player.state='JUMPING';player.vy=-JUMP_MIN;player.rotation=0;player.flipLocked=false;
   }
 },{passive:true});
 document.getElementById('mc-flip-btn').addEventListener('touchstart',e=>{e.stopPropagation();touch.flipHeld=true;},{passive:true});
