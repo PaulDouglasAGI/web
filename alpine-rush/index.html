@@ -114,8 +114,8 @@ canvas{display:block;position:fixed;top:0;left:0;width:100%;height:100%;}
 
 // ── 1. CONSTANTS ────────────────────────────────────────────────
 const GRAVITY        = 0.32;
-const JUMP_MIN       = 9;     // velocity on tap (decent hop)
-const JUMP_MAX       = 11;    // velocity at full hold (hard cap)
+const JUMP_MIN       = 7;     // velocity on tap (quick hop)
+const JUMP_MAX       = 10;    // velocity at full hold (hard cap via time window)
 const JUMP_BOOST_RATE= 0.75;  // boost per frame while held and still rising
 const FLIP_SPEED     = 4.8;   // degrees per frame while key held
 const SAFE_ANGLE     = 40;    // landing tolerance in degrees
@@ -164,6 +164,8 @@ let invincibleUntil = 0;
 let loopGen   = 0;
 let lastTime  = 0;
 let killType  = '';
+let shakeAmt  = 0;
+let distanceM = 0;
 
 let snowballs  = 0;
 let obstacles  = [];
@@ -181,6 +183,7 @@ const player = {
   flipLocked:false,
   landingFlash:0,
   wipeoutTimer:0,
+  jumpBoostMs:0,
 };
 
 const keys  = {};
@@ -212,6 +215,11 @@ function drawSky() {
   });
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
+  // Deep atmospheric band at top
+  const topBand=ctx.createLinearGradient(0,0,0,H*0.13);
+  topBand.addColorStop(0,'rgba(5,3,15,0.55)');
+  topBand.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=topBand; ctx.fillRect(0,0,W,H*0.13);
 }
 
 // ── 4. TERRAIN ──────────────────────────────────────────────────
@@ -385,7 +393,7 @@ function drawScarf() {
     ctx.save();
     ctx.globalAlpha = alpha * 0.9;
     ctx.strokeStyle = '#dd5522';
-    ctx.lineWidth = Math.max(1, 3.5*(1-i/scarfHistory.length));
+    ctx.lineWidth = Math.max(1.5, 5*(1-i/scarfHistory.length));
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(scarfHistory[i].x, scarfHistory[i].y);
@@ -727,11 +735,15 @@ function drawHUD(){
   ctx.shadowBlur=8; ctx.shadowColor='rgba(0,0,0,0.6)';
   ctx.fillStyle='rgba(255,255,255,0.92)';
   ctx.fillText(s, 22, 20);
+  // Distance
+  ctx.font=`600 ${Math.round(fs*0.42)}px "Rajdhani",sans-serif`;
+  ctx.fillStyle='rgba(255,255,255,0.42)';
+  ctx.fillText(Math.floor(distanceM)+'m', 24, 20+fs+6);
   // Multiplier
   if(multiplier>1){
-    ctx.font=`700 ${Math.round(fs*0.55)}px "Exo 2",sans-serif`;
+    ctx.font=`700 ${Math.round(fs*0.52)}px "Exo 2",sans-serif`;
     ctx.fillStyle='rgba(240,160,80,0.9)';
-    ctx.fillText('×'+multiplier, 22, 20+fs+4);
+    ctx.fillText('×'+multiplier, 24, 20+fs+Math.round(fs*0.42)+10);
   }
   ctx.shadowBlur=0;
   // Snowball slots (top-right)
@@ -768,6 +780,7 @@ function updatePhysics(dt){
   if(jumpKeyActive()&&(player.state==='SKIING'||player.state==='CROUCH')){
     player.state='JUMPING'; player.vy=-JUMP_MIN;
     player.rotation=0; player.flipLocked=false;
+    player.jumpBoostMs=300;
   }
 
   // Start flip
@@ -783,9 +796,11 @@ function updatePhysics(dt){
 
   // Vertical physics
   if(player.state==='JUMPING'||player.state==='FLIPPING'){
-    // Variable jump: holding key while still rising adds velocity up to JUMP_MAX
-    if(jumpKeyActive() && player.vy < 0)
+    // Variable jump: boost only fires during the 300ms window after takeoff
+    if(jumpKeyActive() && player.vy < 0 && player.jumpBoostMs > 0) {
       player.vy = Math.max(-JUMP_MAX, player.vy - JUMP_BOOST_RATE * df);
+      player.jumpBoostMs -= dt;
+    }
     player.vy+=GRAVITY*df;
     player.y+=player.vy*df;
     if(player.y>=gY){ player.y=gY; player.vy=0; handleLanding(); }
@@ -836,6 +851,7 @@ function handleLanding(){
 function initWipeout(){
   if(player.state==='WIPEOUT'||player.state==='DEAD') return;
   player.state='WIPEOUT'; player.wipeoutTimer=WIPEOUT_DUR;
+  shakeAmt=9;
   const PS = PLAYER_SCALE;
   wipeoutPcs=[
     {shape:'ski',w:36*PS,h:5*PS,x:player.x+4*PS,y:player.y,vx:3+Math.random()*3,vy:-5-Math.random()*3,rot:0,rotV:0.18,life:1},
@@ -949,8 +965,20 @@ function updateCollisions(){
   }
 }
 
+function drawVignette(){
+  const g=ctx.createRadialGradient(W*0.5,H*0.45,H*0.25,W*0.5,H*0.45,H*0.88);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,'rgba(0,0,0,0.42)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+
 // ── 13. MAIN LOOP ─────────────────────────────────────────────────
 function draw(){
+  ctx.save();
+  if(shakeAmt>0){
+    ctx.translate((Math.random()-0.5)*shakeAmt*2,(Math.random()-0.5)*shakeAmt*2);
+    shakeAmt*=0.85; if(shakeAmt<0.4) shakeAmt=0;
+  }
   drawSky();
   drawMountains();
   drawForest();
@@ -962,12 +990,16 @@ function draw(){
   drawParticles();
   drawPlayer();
   if(gameState==='PLAYING'||gameState==='DEAD') drawHUD();
+  ctx.restore();
+  drawVignette();
 }
 
 function gameLoop(now){
   const dt=Math.min(now-lastTime,50); lastTime=now;
-  if(gameState==='PLAYING'&&player.state!=='DEAD')
+  if(gameState==='PLAYING'&&player.state!=='DEAD'){
     score+=scrollSpeed*0.14*multiplier;
+    distanceM+=scrollSpeed*(dt/16.667)*0.042;
+  }
   updatePhysics(dt);
   updateObstacles(dt/16.667);
   updateSpawning(dt);
@@ -993,12 +1025,13 @@ function initGame(){
   score=0;multiplier=1;snowballs=0;
   scrollSpeed=BASE_SPEED;scrollOffset=0;
   spawnTimer=0;nextSpawnIn=nextObstacleGap();pickupTimer=0;invincibleUntil=0;killType='';
+  shakeAmt=0;distanceM=0;
   obstacles=[];projectiles=[];pickupItems=[];particles=[];wipeoutPcs=[];scarfHistory=[];
   player.x=W*PLAYER_X_FRAC;
   player.y=playerGroundY();
   player.vy=0;player.state='SKIING';
   player.rotation=0;player.flipLocked=false;
-  player.landingFlash=0;player.wipeoutTimer=0;
+  player.landingFlash=0;player.wipeoutTimer=0;player.jumpBoostMs=0;
   gameState='PLAYING';
   document.getElementById('death-screen').style.display='none';
   lastTime=performance.now();
@@ -1039,7 +1072,7 @@ canvas.addEventListener('touchmove',e=>{
       const delta=touch.swipeStartY-t.clientY;
       if(delta>34&&(player.state==='SKIING'||player.state==='CROUCH')&&gameState==='PLAYING'){
         player.state='JUMPING';player.vy=-JUMP_MAX;player.rotation=0;player.flipLocked=false;
-        touch.swipeStartY=null;
+        player.jumpBoostMs=0; touch.swipeStartY=null;
       }
     }
   });
@@ -1069,6 +1102,7 @@ document.getElementById('mc-jump-btn').addEventListener('touchstart',e=>{
   touch.jumpHeld=true;
   if((player.state==='SKIING'||player.state==='CROUCH')&&gameState==='PLAYING'){
     player.state='JUMPING';player.vy=-JUMP_MIN;player.rotation=0;player.flipLocked=false;
+    player.jumpBoostMs=300;
   }
 },{passive:true});
 document.getElementById('mc-jump-btn').addEventListener('touchend',e=>{
