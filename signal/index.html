@@ -121,8 +121,8 @@ const REROUTE_CD     = 20000;
 const SHIELD_CD      = 25000;
 const SHIELD_DUR     = 3000;
 const SIGNAL_RATE    = 3.8;    // %/s base fill rate
-const VAN_ORBIT_R    = 190;
-const VAN_ORBIT_SPD  = 0.52;   // rad/s
+const VAN_ORBIT_R    = 118;
+const VAN_ORBIT_SPD  = 0.44;   // rad/s
 const VAN_RAID_ROTS  = 3;      // full rotations before raid
 const BROADCAST_DUR  = 3000;   // ms
 const LAWYER_DIS_DUR = 30000;
@@ -1151,8 +1151,12 @@ document.getElementById('try-again').addEventListener('click',startGame);
 
 // ── RESIZE ────────────────────────────────────────────────────────
 function resize(){
-  W=canvas.width=window.innerWidth;
-  H=canvas.height=window.innerHeight;
+  const dpr=window.devicePixelRatio||1;
+  W=window.innerWidth;
+  H=window.innerHeight;
+  canvas.width=W*dpr;
+  canvas.height=H*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 window.addEventListener('resize',()=>{
   resize();
