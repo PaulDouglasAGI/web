@@ -99,6 +99,18 @@ body::before{content:'';position:fixed;inset:0;z-index:0;background:radial-gradi
       </div>
     </article>
 
+    <article class="game-card" data-game="signal">
+      <div class="card-preview">
+        <canvas class="preview-canvas" id="preview-signal" width="320" height="180"></canvas>
+      </div>
+      <div class="card-body">
+        <div class="card-tag">SURVIVAL &middot; TOP DOWN</div>
+        <h2 class="card-title">SIGNAL</h2>
+        <p class="card-desc">Broadcast the signal. Survive long enough for the world to hear it.</p>
+        <a class="card-play-btn" href="signal/index.html">PLAY</a>
+      </div>
+    </article>
+
   </div>
 </main>
 
@@ -240,9 +252,123 @@ function initAlpinePreview(){
   frame();
 }
 
+/* ── SIGNAL PREVIEW ────────────────────────────────────────── */
+function initSignalPreview(){
+  const cnv=document.getElementById('preview-signal');
+  if(!cnv)return;
+  const ctx=cnv.getContext('2d');
+  const W=320,H=180;
+  const CX=W/2,CY=H/2+4;
+  const AMB='#f5a623';
+  let t=0;
+  // orbiting threats
+  const threats=[
+    {ang:0,     r:62,spd:0.55,type:'bot',   clr:'#cc2244'},
+    {ang:0.78,  r:68,spd:0.42,type:'van',   clr:'#3366aa'},
+    {ang:1.57,  r:58,spd:0.60,type:'jammer',clr:'#8844bb'},
+    {ang:2.35,  r:72,spd:0.48,type:'bot',   clr:'#cc2244'},
+    {ang:3.14,  r:64,spd:0.52,type:'drone', clr:'#22aacc'},
+    {ang:3.93,  r:60,spd:0.44,type:'van',   clr:'#3366aa'},
+    {ang:4.71,  r:70,spd:0.58,type:'jammer',clr:'#8844bb'},
+    {ang:5.50,  r:66,spd:0.50,type:'bot',   clr:'#cc2244'},
+  ];
+  // pulse rings
+  const rings=[];
+  let ringTimer=0;
+  function spawnRing(){ rings.push({r:14,alpha:0.7}); }
+  spawnRing();
+
+  function drawThreat(x,y,type,clr){
+    ctx.save(); ctx.translate(x,y);
+    ctx.fillStyle=clr;
+    ctx.shadowBlur=6; ctx.shadowColor=clr;
+    if(type==='bot'){
+      ctx.beginPath();ctx.moveTo(0,-6);ctx.lineTo(5,4);ctx.lineTo(-5,4);ctx.closePath();ctx.fill();
+    } else if(type==='van'){
+      ctx.fillRect(-5,-3,10,7);
+    } else if(type==='jammer'){
+      ctx.beginPath();ctx.moveTo(0,-6);ctx.lineTo(5,0);ctx.lineTo(0,6);ctx.lineTo(-5,0);ctx.closePath();ctx.fill();
+    } else if(type==='drone'){
+      ctx.beginPath();ctx.moveTo(0,-5);ctx.lineTo(4,0);ctx.lineTo(0,5);ctx.lineTo(-4,0);ctx.closePath();ctx.fill();
+    }
+    ctx.shadowBlur=0; ctx.restore();
+  }
+
+  function frame(now){
+    t += 0.016;
+    ctx.fillStyle='#050810'; ctx.fillRect(0,0,W,H);
+
+    // scanlines
+    for(let y=0;y<H;y+=3){
+      ctx.fillStyle='rgba(0,0,0,0.08)'; ctx.fillRect(0,y,W,1);
+    }
+
+    // pulse rings
+    ringTimer++;
+    if(ringTimer>80){ ringTimer=0; spawnRing(); }
+    for(let i=rings.length-1;i>=0;i--){
+      const rg=rings[i];
+      rg.r+=0.9; rg.alpha-=0.011;
+      if(rg.alpha<=0){ rings.splice(i,1); continue; }
+      ctx.beginPath(); ctx.arc(CX,CY,rg.r,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(245,166,35,${rg.alpha})`;
+      ctx.lineWidth=1.5; ctx.stroke();
+    }
+
+    // orbiting threats
+    threats.forEach(th=>{
+      th.ang += th.spd * 0.016;
+      const tx=CX+Math.cos(th.ang)*th.r;
+      const ty=CY+Math.sin(th.ang)*th.r;
+      drawThreat(tx,ty,th.type,th.clr);
+    });
+
+    // station base glow
+    const grd=ctx.createRadialGradient(CX,CY,0,CX,CY,28);
+    grd.addColorStop(0,'rgba(245,166,35,0.18)');
+    grd.addColorStop(1,'rgba(245,166,35,0)');
+    ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(CX,CY,28,0,Math.PI*2); ctx.fill();
+
+    // station ring (amber)
+    ctx.beginPath(); ctx.arc(CX,CY,14,0,Math.PI*2);
+    ctx.strokeStyle=AMB; ctx.lineWidth=2;
+    ctx.shadowBlur=10; ctx.shadowColor=AMB; ctx.stroke(); ctx.shadowBlur=0;
+
+    // station body
+    ctx.beginPath(); ctx.arc(CX,CY,9,0,Math.PI*2);
+    ctx.fillStyle='#0a1020'; ctx.fill();
+    ctx.strokeStyle=AMB; ctx.lineWidth=1; ctx.stroke();
+
+    // antenna
+    ctx.strokeStyle=AMB; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(CX,CY-9); ctx.lineTo(CX,CY-22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(CX-5,CY-16); ctx.lineTo(CX,CY-22); ctx.lineTo(CX+5,CY-16); ctx.stroke();
+
+    // signal meter bar
+    const meterW=160, meterH=8, meterX=(W-meterW)/2, meterY=12;
+    const fill=0.5+Math.sin(t*0.9)*0.35;
+    // bg
+    ctx.fillStyle='rgba(245,166,35,0.12)';
+    ctx.beginPath(); ctx.roundRect(meterX,meterY,meterW,meterH,3); ctx.fill();
+    // fill
+    ctx.fillStyle=AMB;
+    ctx.shadowBlur=8; ctx.shadowColor=AMB;
+    ctx.beginPath(); ctx.roundRect(meterX,meterY,meterW*fill,meterH,3); ctx.fill();
+    ctx.shadowBlur=0;
+    // label
+    ctx.fillStyle=AMB; ctx.font='bold 8px "Exo 2",sans-serif';
+    ctx.textAlign='left'; ctx.fillText('SIGNAL',meterX,meterY-3);
+    ctx.textAlign='right'; ctx.fillText(Math.round(fill*100)+'%',meterX+meterW,meterY-3);
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   initWarpPreview();
   initAlpinePreview();
+  initSignalPreview();
 });
 </script>
 </body>
