@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>1ST WORLD SIMULATOR — Illinois 2026</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0a0c0e;
+  --panel:#0f1215;
+  --border:#1e2428;
+  --border2:#252b30;
+  --text:#c8cdd2;
+  --text-dim:#4a5560;
+  --text-bright:#e8edf2;
+  --accent:#3a7bd5;
+  --accent2:#2d5fa3;
+  --warn:#c8832a;
+  --danger:#b03030;
+  --good:#2a7a4a;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden;}
+#app{height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── SCREEN LAYERS ── */
+.screen{display:none;flex-direction:column;height:100%;overflow:hidden;}
+.screen.active{display:flex;}
+
+/* ── CAMPAIGN ── */
+#screen-campaign{background:#080a0c;align-items:center;justify-content:center;padding:40px 20px;overflow-y:auto;}
+.campaign-wrap{max-width:640px;width:100%;}
+.campaign-header{font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--text-dim);margin-bottom:8px;text-transform:uppercase;}
+.campaign-title{font-family:var(--mono);font-size:clamp(18px,3vw,26px);font-weight:600;color:var(--text-bright);margin-bottom:4px;letter-spacing:1px;}
+.campaign-sub{font-family:var(--mono);font-size:11px;color:var(--text-dim);margin-bottom:32px;letter-spacing:1px;}
+.campaign-question{font-size:15px;color:var(--text-bright);margin-bottom:8px;line-height:1.6;}
+.campaign-context{font-size:12px;color:var(--text-dim);margin-bottom:20px;line-height:1.6;font-style:italic;}
+.campaign-choices{display:flex;flex-direction:column;gap:8px;margin-bottom:32px;}
+.campaign-btn{background:transparent;border:1px solid var(--border2);color:var(--text);font-family:var(--sans);font-size:13px;padding:12px 16px;text-align:left;cursor:pointer;transition:all 0.15s;line-height:1.5;}
+.campaign-btn:hover{border-color:var(--accent2);color:var(--text-bright);background:rgba(58,123,213,0.05);}
+.campaign-btn.selected{border-color:var(--accent);color:var(--text-bright);background:rgba(58,123,213,0.08);}
+.campaign-btn.aipac-accept{border-color:#4a5530;}
+.campaign-btn.aipac-accept:hover{border-color:#7a9a40;background:rgba(90,120,40,0.08);color:var(--text-bright);}
+.campaign-btn.aipac-decline{border-color:#4a3030;}
+.campaign-btn.aipac-decline:hover{border-color:#9a5040;background:rgba(120,60,40,0.08);color:var(--text-bright);}
+.campaign-step-indicator{display:flex;gap:6px;margin-bottom:24px;}
+.step-dot{width:6px;height:6px;border-radius:50%;background:var(--border2);}
+.step-dot.done{background:var(--accent2);}
+.step-dot.current{background:var(--accent);}
+.campaign-next-btn{background:var(--accent2);border:none;color:#fff;font-family:var(--mono);font-size:11px;letter-spacing:2px;padding:10px 24px;cursor:pointer;text-transform:uppercase;transition:all 0.15s;}
+.campaign-next-btn:hover{background:var(--accent);}
+.campaign-next-btn:disabled{opacity:0.3;cursor:not-allowed;}
+
+/* ── GAME OVER ── */
+#screen-gameover{background:#080a0c;align-items:center;justify-content:center;padding:40px;}
+.gameover-wrap{max-width:480px;text-align:center;}
+.gameover-label{font-family:var(--mono);font-size:10px;letter-spacing:4px;color:var(--text-dim);margin-bottom:24px;}
+.gameover-msg{font-family:var(--mono);font-size:15px;color:var(--text-bright);line-height:1.8;margin-bottom:40px;}
+
+/* ── MAIN GAME ── */
+#screen-game{flex-direction:row;height:100vh;overflow:hidden;}
+
+/* Left sidebar: stats */
+#sidebar{width:220px;min-width:220px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0;overflow:hidden;}
+.sidebar-header{padding:14px 16px 10px;border-bottom:1px solid var(--border);}
+.region-label{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;}
+.region-name{font-family:var(--mono);font-size:11px;color:var(--text-bright);margin-top:2px;letter-spacing:0.5px;}
+.date-display{font-family:var(--mono);font-size:10px;color:var(--accent);margin-top:6px;letter-spacing:1px;}
+.stats-section{padding:14px 16px;border-bottom:1px solid var(--border);flex:1;}
+.stats-title{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--text-dim);margin-bottom:12px;text-transform:uppercase;}
+.stat-item{margin-bottom:14px;}
+.stat-label{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;margin-bottom:4px;display:flex;justify-content:space-between;}
+.stat-label span{color:var(--text);}
+.stat-bar-wrap{height:4px;background:var(--border2);border-radius:0;}
+.stat-bar{height:100%;border-radius:0;transition:width 0.4s ease,background 0.4s ease;}
+.stat-bar.wellbeing{background:#2a6a4a;}
+.stat-bar.debt{background:#8a3030;}
+.stat-bar.unrest{background:#8a5020;}
+.stat-bar.trust{background:#2a4a7a;}
+.stat-bar.low{background:#6a2020!important;}
+.stat-value{font-family:var(--mono);font-size:11px;color:var(--text-bright);margin-top:3px;}
+.redacted-row{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+.redacted-label{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--border2);text-transform:uppercase;}
+.turn-info{padding:12px 16px;border-top:1px solid var(--border);}
+.turn-label{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;}
+.turn-num{font-family:var(--mono);font-size:13px;color:var(--text-bright);margin-top:2px;}
+
+/* Center: main content */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+#main-header{padding:10px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--panel);}
+.phase-label{font-family:var(--mono);font-size:9px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;}
+.phase-name{font-family:var(--mono);font-size:11px;color:var(--text-bright);}
+.event-counter{font-family:var(--mono);font-size:9px;color:var(--text-dim);}
+#event-area{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px;}
+#event-area::-webkit-scrollbar{width:4px;}
+#event-area::-webkit-scrollbar-track{background:transparent;}
+#event-area::-webkit-scrollbar-thumb{background:var(--border2);}
+
+/* Event card */
+.event-card{background:var(--panel);border:1px solid var(--border);padding:18px 20px;animation:cardIn 0.25s ease;}
+@keyframes cardIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.event-card.resolved{opacity:0.45;pointer-events:none;}
+.event-tag{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;margin-bottom:8px;}
+.event-title{font-family:var(--mono);font-size:13px;color:var(--text-bright);margin-bottom:8px;line-height:1.4;font-weight:500;}
+.event-body{font-size:12px;color:var(--text);line-height:1.7;margin-bottom:16px;}
+.event-choices{display:flex;flex-direction:column;gap:6px;}
+.choice-btn{background:transparent;border:1px solid var(--border2);color:var(--text);font-family:var(--sans);font-size:12px;padding:10px 14px;text-align:left;cursor:pointer;transition:all 0.15s;line-height:1.5;display:flex;align-items:flex-start;gap:8px;}
+.choice-btn:hover{border-color:var(--accent2);color:var(--text-bright);background:rgba(58,123,213,0.04);}
+.choice-btn:disabled{opacity:0.3;cursor:not-allowed;}
+.choice-label{font-family:var(--mono);font-size:9px;color:var(--text-dim);min-width:16px;margin-top:1px;flex-shrink:0;}
+.choice-restricted{font-family:var(--mono);font-size:9px;color:#4a3020;padding:10px 14px;border:1px solid #2a1a10;}
+.outcome-display{background:#0d1008;border:1px solid #1e2a18;padding:10px 14px;font-family:var(--mono);font-size:11px;color:#6a8a5a;line-height:1.6;margin-top:8px;}
+
+/* End turn button */
+#end-turn-wrap{padding:14px 20px;border-top:1px solid var(--border);background:var(--panel);display:flex;align-items:center;justify-content:space-between;}
+#end-turn-btn{background:transparent;border:1px solid var(--border2);color:var(--text-dim);font-family:var(--mono);font-size:10px;letter-spacing:2px;padding:10px 20px;cursor:pointer;text-transform:uppercase;transition:all 0.2s;}
+#end-turn-btn:hover:not(:disabled){border-color:var(--accent);color:var(--text-bright);}
+#end-turn-btn:disabled{opacity:0.3;cursor:not-allowed;}
+.events-remaining{font-family:var(--mono);font-size:9px;color:var(--text-dim);}
+
+/* News ticker */
+#ticker-wrap{height:28px;background:#080a0c;border-top:1px solid var(--border);display:flex;align-items:center;overflow:hidden;flex-shrink:0;}
+.ticker-label{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--text-dim);padding:0 12px;white-space:nowrap;border-right:1px solid var(--border);height:100%;display:flex;align-items:center;}
+.ticker-scroll{flex:1;overflow:hidden;position:relative;height:100%;}
+.ticker-inner{display:flex;align-items:center;height:100%;white-space:nowrap;animation:tickerMove linear infinite;}
+@keyframes tickerMove{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+.ticker-item{font-family:var(--mono);font-size:10px;color:var(--text-dim);padding:0 32px;letter-spacing:0.5px;}
+.ticker-item::before{content:'◆';margin-right:12px;font-size:6px;color:var(--border2);}
+
+/* Right panel: log */
+#log-panel{width:200px;min-width:200px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.log-header{padding:12px 14px 8px;border-bottom:1px solid var(--border);}
+.log-title{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;}
+#log-list{flex:1;overflow-y:auto;padding:10px 14px;}
+#log-list::-webkit-scrollbar{width:3px;}
+#log-list::-webkit-scrollbar-thumb{background:var(--border);}
+.log-entry{font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:10px;line-height:1.5;border-left:2px solid var(--border);padding-left:8px;}
+.log-entry.bad{border-color:#5a2020;color:#7a4a4a;}
+.log-entry.warn{border-color:#5a3a10;color:#7a5a30;}
+.log-entry.good{border-color:#1a4a2a;color:#3a6a4a;}
+.log-entry .log-turn{font-size:8px;color:var(--border2);display:block;margin-bottom:2px;}
+
+/* Delayed effect notification */
+.delayed-notice{background:#0d0f08;border:1px solid #2a3020;padding:12px 16px;font-family:var(--mono);font-size:10px;color:#5a7040;line-height:1.6;margin-bottom:12px;animation:cardIn 0.3s ease;}
+.delayed-notice::before{content:'⚠ DELAYED EFFECT — ';color:#3a5020;}
+
+/* Responsive */
+@media(max-width:900px){
+  #log-panel{display:none;}
+  #sidebar{width:180px;min-width:180px;}
+}
+@media(max-width:640px){
+  #sidebar{width:160px;min-width:160px;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- CAMPAIGN SCREEN -->
+<div id="screen-campaign" class="screen active">
+  <div class="campaign-wrap">
+    <div class="campaign-header">Illinois Regional Authority — 2026 Election Cycle</div>
+    <div class="campaign-title">1ST WORLD SIMULATOR</div>
+    <div class="campaign-sub">You are running for Regional Director. Cook County & Rural Illinois.</div>
+    <div id="campaign-content"></div>
+  </div>
+</div>
+
+<!-- GAME OVER SCREEN -->
+<div id="screen-gameover" class="screen">
+  <div class="gameover-wrap">
+    <div class="gameover-label">ELECTION RESULT</div>
+    <div class="gameover-msg" id="gameover-msg"></div>
+  </div>
+</div>
+
+<!-- MAIN GAME SCREEN -->
+<div id="screen-game" class="screen">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <div class="region-label">Region Report</div>
+      <div class="region-name">Illinois — Region 7</div>
+      <div class="date-display" id="date-display">JAN 2027</div>
+    </div>
+    <div class="stats-section">
+      <div class="stats-title">Regional Indicators</div>
+      <div class="stat-item">
+        <div class="stat-label">Population Wellbeing <span id="stat-wellbeing-val">62</span></div>
+        <div class="stat-bar-wrap"><div class="stat-bar wellbeing" id="bar-wellbeing" style="width:62%"></div></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Regional Debt (B) <span id="stat-debt-val">$4.2B</span></div>
+        <div class="stat-bar-wrap"><div class="stat-bar debt" id="bar-debt" style="width:42%"></div></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Unrest <span id="stat-unrest-val">28</span></div>
+        <div class="stat-bar-wrap"><div class="stat-bar unrest" id="bar-unrest" style="width:28%"></div></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Inst. Trust <span id="stat-trust-val">44</span></div>
+        <div class="stat-bar-wrap"><div class="stat-bar trust" id="bar-trust" style="width:44%"></div></div>
+      </div>
+      <div class="redacted-row">
+        <div class="redacted-label">██████████████ [RESTRICTED]</div>
+        <div class="redacted-label" style="margin-top:4px;">████████████ [RESTRICTED]</div>
+      </div>
+    </div>
+    <div class="turn-info">
+      <div class="turn-label">Tenure</div>
+      <div class="turn-num" id="turn-display">Month 1</div>
+    </div>
+  </div>
+
+  <!-- Main area -->
+  <div id="main">
+    <div id="main-header">
+      <div>
+        <div class="phase-label">Active Events</div>
+        <div class="phase-name" id="phase-name">Awaiting Director Input</div>
+      </div>
+      <div class="event-counter" id="event-counter"></div>
+    </div>
+    <div id="event-area"></div>
+    <div id="end-turn-wrap">
+      <button id="end-turn-btn" disabled>ADVANCE MONTH ›</button>
+      <span class="events-remaining" id="events-remaining"></span>
+    </div>
+    <div id="ticker-wrap">
+      <div class="ticker-label">REGION 7 WIRE</div>
+      <div class="ticker-scroll"><div class="ticker-inner" id="ticker-inner"></div></div>
+    </div>
+  </div>
+
+  <!-- Log panel -->
+  <div id="log-panel">
+    <div class="log-header"><div class="log-title">Decision Log</div></div>
+    <div id="log-list"></div>
+  </div>
+</div>
+
+</div><!-- #app -->
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+let G = {
+  turn: 1,
+  year: 2027,
+  monthIndex: 0,
+  // visible stats 0-100
+  wellbeing: 62,
+  debt: 42,       // 0=no debt, 100=default
+  unrest: 28,
+  trust: 44,
+  // hidden stats 0-100
+  corpInfluence: 15,
+  mediaNarrative: 10, // 0=free, 100=captured
+  // delayed effects queue: [{turns, effect}]
+  delayed: [],
+  // event history
+  log: [],
+  // seen event ids
+  seenEvents: new Set(),
+  // ticker headlines
+  ticker: [],
+  // campaign choices (for reference)
+  campaignChoices: [],
+};
+
+function saveGame(){
+  const s = {...G, seenEvents:[...G.seenEvents]};
+  localStorage.setItem('1ws_save', JSON.stringify(s));
+}
+function loadGame(){
+  try{
+    const raw = localStorage.getItem('1ws_save');
+    if(!raw) return false;
+    const s = JSON.parse(raw);
+    s.seenEvents = new Set(s.seenEvents||[]);
+    G = s;
+    return true;
+  }catch(e){return false;}
+}
+
+// ═══════════════════════════════════════════
+// CAMPAIGN
+// ═══════════════════════════════════════════
+const CAMPAIGN_STEPS = [
+  {
+    q: "Question 1 of 5 — Policy Priorities",
+    question: "What is your top campaign priority?",
+    choices: [
+      "Economic development and job creation",
+      "Infrastructure modernization",
+      "Public safety and community investment",
+      "Government efficiency and accountability"
+    ],
+    note: null
+  },
+  {
+    q: "Question 2 of 5 — Fiscal Approach",
+    question: "How do you plan to address the regional budget deficit?",
+    choices: [
+      "Public-private partnerships",
+      "Targeted spending cuts",
+      "Revenue restructuring",
+      "Federal grant pursuit"
+    ],
+    note: null
+  },
+  {
+    q: "Question 3 of 5 — Development Vision",
+    question: "Which sector should anchor regional economic recovery?",
+    choices: [
+      "Advanced manufacturing",
+      "Healthcare and biotech",
+      "Agricultural innovation",
+      "Technology and logistics"
+    ],
+    note: null
+  },
+  {
+    q: "Question 4 of 5 — Governance Style",
+    question: "How will you approach relationships with corporate stakeholders?",
+    choices: [
+      "Open dialogue, business-friendly environment",
+      "Strict regulatory oversight",
+      "Partnership with accountability requirements",
+      "Prioritize small business and local enterprise"
+    ],
+    note: null
+  },
+  {
+    q: "Question 5 of 5 — Campaign Financing",
+    question: "The American Israel Public Affairs Committee has offered your campaign $340,000. Do you accept?",
+    choices: null, // special
+    note: "Your opponent has already accepted."
+  }
+];
+
+let campaignStep = 0;
+let campaignSelected = null;
+
+function renderCampaign(){
+  const el = document.getElementById('campaign-content');
+  const step = CAMPAIGN_STEPS[campaignStep];
+
+  // step indicators
+  const dots = CAMPAIGN_STEPS.map((_,i)=>{
+    let cls = 'step-dot';
+    if(i < campaignStep) cls += ' done';
+    if(i === campaignStep) cls += ' current';
+    return `<div class="${cls}"></div>`;
+  }).join('');
+
+  if(campaignStep < 4){
+    el.innerHTML = `
+      <div class="campaign-step-indicator">${dots}</div>
+      <div class="campaign-question">${step.question}</div>
+      <div class="campaign-choices" id="camp-choices">
+        ${step.choices.map((c,i)=>`<button class="campaign-btn" data-i="${i}" onclick="selectCampaignChoice(${i})">${c}</button>`).join('')}
+      </div>
+      <button class="campaign-next-btn" id="camp-next" onclick="advanceCampaign()" disabled>CONTINUE</button>
+    `;
+  } else {
+    // AIPAC question
+    el.innerHTML = `
+      <div class="campaign-step-indicator">${dots}</div>
+      <div class="campaign-question">${step.question}</div>
+      ${step.note ? `<div class="campaign-context">${step.note}</div>` : ''}
+      <div class="campaign-choices">
+        <button class="campaign-btn aipac-accept" onclick="aipacChoice('accept')">Accept the $340,000.</button>
+        <button class="campaign-btn aipac-decline" onclick="aipacChoice('decline')">Decline.</button>
+      </div>
+    `;
+  }
+  campaignSelected = null;
+}
+
+function selectCampaignChoice(i){
+  document.querySelectorAll('#camp-choices .campaign-btn').forEach((b,idx)=>{
+    b.classList.toggle('selected', idx===i);
+  });
+  campaignSelected = i;
+  document.getElementById('camp-next').disabled = false;
+}
+
+function advanceCampaign(){
+  if(campaignSelected === null) return;
+  G.campaignChoices.push({step: campaignStep, choice: campaignSelected});
+  campaignStep++;
+  renderCampaign();
+}
+
+function aipacChoice(choice){
+  if(choice === 'accept'){
+    // Win — start game
+    addTicker("Regional Director elected. Transition team formed.");
+    addTicker("New administration pledges responsive governance.");
+    addTicker("Campaign financing disclosures pending review.");
+    // Subtle: first delayed event references the debt
+    G.delayed.push({at: 3, id:'aipac_debt_ref'});
+    showScreen('game');
+    initGame();
+  } else {
+    // Lose
+    const el = document.getElementById('gameover-msg');
+    el.textContent = "You lost by 4 points.\n\nThe winner received $340,000 in outside funding.";
+    showScreen('gameover');
+  }
+}
+
+// ═══════════════════════════════════════════
+// SCREENS
+// ═══════════════════════════════════════════
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+}
+
+// ═══════════════════════════════════════════
+// EVENT DEFINITIONS
+// ═══════════════════════════════════════════
+// Each event:
+// id, tag, title, body(G)=>string, minTurn, maxCorpBlock (if corpInfluence>X choice gets removed),
+// choices: [{label, text, restricted(G)=>bool, outcome(G)=>string, effect(G)=>void}]
+
+const EVENTS = [
+
+// ── HOUSING ──
+{id:'ev_blackstone',tag:'HOUSING / PRIVATE EQUITY',minTurn:1,
+title:'Blackstone Capital Acquires 400 Single-Family Homes',
+body:()=>`A private equity firm has completed the purchase of 400 single-family homes across the region, converting them to rental units. Rents have been raised an average of 40%. Approximately 120 tenant families have already received notices. The firm is publicly traded. It paid no transfer tax.`,
+choices:[
+  {label:'A',text:'Investigate zoning and transfer tax compliance.',
+   effect:g=>{g.trust+=3;g.corpInfluence+=4;},
+   outcome:()=>`Review launched. Legal team estimates 18 months to resolution. Firm retains four lobbying firms registered in Springfield.`},
+  {label:'B',text:'Propose emergency tenant protection ordinance.',
+   effect:g=>{g.wellbeing+=4;g.trust+=5;g.corpInfluence+=8;g.unrest-=3;},
+   outcome:()=>`Ordinance drafted. Real estate lobby announces $2.1M campaign against it. Three council members request meetings with the firm.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'C',text:'Refer to state housing authority. No local action.',
+   effect:g=>{g.trust-=4;g.unrest+=5;g.corpInfluence+=3;},
+   outcome:()=>`State authority acknowledges receipt. No timeline provided. Eviction notices continue.`}
+]},
+
+{id:'ev_airbnb',tag:'HOUSING / SHORT TERM RENTAL',minTurn:2,
+title:'800 Long-Term Units Removed from Housing Stock',
+body:()=>`Short-term rental platforms have converted approximately 800 units across the region from long-term housing to tourist accommodation. Average rent in adjacent units has increased 18% in the past two years. No permits were required. No permits were denied.`,
+choices:[
+  {label:'A',text:'Implement short-term rental licensing and caps.',
+   effect:g=>{g.wellbeing+=3;g.trust+=4;g.mediaNarrative+=4;},
+   outcome:()=>`Licensing framework proposed. Platform companies announce they will not comply and will challenge in federal court citing interstate commerce.`},
+  {label:'B',text:'Tax short-term rentals at commercial rates.',
+   effect:g=>{g.debt-=3;g.corpInfluence+=5;g.trust+=2;},
+   outcome:()=>`Revenue measure passed. Platforms adjust pricing, passing cost to renters. Long-term housing stock unchanged.`},
+  {label:'C',text:'No action. Market will self-correct.',
+   effect:g=>{g.wellbeing-=3;g.trust-=4;g.unrest+=4;g.corpInfluence+=3;},
+   outcome:()=>`Housing vacancy rate hits regional low. Shelter population increases.`}
+]},
+
+{id:'ev_tent_city',tag:'HOUSING / DISPLACEMENT',minTurn:3,
+title:'Encampment Under I-290 Overpass — 140 Residents',
+body:()=>`A tent city has formed under the I-290 overpass near Cicero Avenue. Approximately 140 individuals, 30% of whom are veterans. City council has requested clearance. State DOT has issued a notice. Nearest available shelter has 22 open beds.`,
+choices:[
+  {label:'A',text:'Coordinate shelter and services before any clearance.',
+   effect:g=>{g.wellbeing+=5;g.trust+=4;g.unrest-=2;g.debt+=3;},
+   outcome:()=>`Wraparound services engaged. 34 individuals placed. 106 remain. Encampment persists. Council votes 6-3 to revisit clearance.`},
+  {label:'B',text:'Clear the encampment. Refer residents to existing services.',
+   effect:g=>{g.unrest+=8;g.trust-=6;g.wellbeing-=4;},
+   outcome:()=>`Clearance completed. Belongings destroyed per protocol. 11 individuals hospitalized. Encampment reforms two blocks east within 17 days.`},
+  {label:'C',text:'Delay action. Request federal homelessness funding.',
+   effect:g=>{g.trust-=2;g.debt+=2;},
+   outcome:()=>`Federal application submitted. Review period: 4-7 months. Encampment population grows to 180.`}
+]},
+
+{id:'ev_zoning',tag:'HOUSING / LAND USE',minTurn:4,
+title:'Proposed Zoning Reform: Allow 4-Unit Buildings by Right',
+body:()=>`State housing researchers recommend allowing 4-unit residential buildings by right throughout the region. Estimated to add 3,200 units over 10 years. The real estate development lobby has filed formal opposition. The existing homeowner lobby has filed opposition. Three aldermen have requested campaign donation disclosures be delayed.`,
+choices:[
+  {label:'A',text:'Support and advance the zoning reform.',
+   effect:g=>{g.wellbeing+=5;g.trust+=3;g.corpInfluence+=6;},
+   outcome:()=>`Reform passes on second reading. Eight legal challenges filed. Implementation delayed 14 months pending litigation.`,
+   restricted:g=>g.corpInfluence>72},
+  {label:'B',text:'Support reform in selected zones only.',
+   effect:g=>{g.wellbeing+=2;g.corpInfluence+=3;},
+   outcome:()=>`Limited reform passes. Developers move quickly in selected zones. Gentrification pressure in adjacent neighborhoods begins within 6 months.`},
+  {label:'C',text:'Table pending further community review.',
+   effect:g=>{g.trust-=3;g.unrest+=3;},
+   outcome:()=>`Further review scheduled. Lobbyist filings increase. No vote before end of fiscal year.`}
+]},
+
+{id:'ev_section8',tag:'HOUSING / VOUCHERS',minTurn:5,
+title:'Section 8 Vouchers Available — No Landlords Accepting',
+body:()=>`The region has distributed 340 Section 8 housing vouchers. As of this reporting period, 6 landlords are accepting them. The vouchers expire unused after 120 days. Recipients lose their place on the waiting list if vouchers expire. The waiting list is currently 7 years.`,
+choices:[
+  {label:'A',text:'Mandate landlord participation or require cause for refusal.',
+   effect:g=>{g.wellbeing+=6;g.trust+=4;g.unrest-=3;},
+   outcome:()=>`Mandate drafted. Legal challenge filed by landlord association. Estimated 2 years to resolve. Vouchers continue to expire.`,
+   restricted:g=>g.corpInfluence>60},
+  {label:'B',text:'Offer landlord incentive payments for participation.',
+   effect:g=>{g.wellbeing+=3;g.debt+=4;g.trust+=2;},
+   outcome:()=>`Incentive program launched. Participating landlords increase to 22. 89 vouchers successfully used. 251 expire.`},
+  {label:'C',text:'No new policy. Publish list of participating landlords.',
+   effect:g=>{g.wellbeing-=2;g.trust-=3;},
+   outcome:()=>`List published. 6 landlords. Vouchers expire at expected rate.`}
+]},
+
+// ── CORPORATE EXTRACTION ──
+{id:'ev_amazon',tag:'CORPORATE / ECONOMIC DEVELOPMENT',minTurn:1,
+title:'Amazon Warehouse Siting Proposal — 500 Jobs Offered',
+body:()=>`Amazon has proposed a distribution warehouse for the Cicero industrial corridor. Terms: 500 positions (87% part-time, no benefits eligible), $0 property tax for 15 years via TIF, $4.2M in infrastructure upgrades borne by the region. Estimated annual revenue to Amazon: $340M. Estimated annual cost to region after subsidies: $2.1M.`,
+choices:[
+  {label:'A',text:'Accept with conditions: benefits threshold, local hire.',
+   effect:g=>{g.trust+=3;g.corpInfluence+=6;g.debt+=2;},
+   outcome:()=>`Amazon accepts conditions in writing. Legal counsel notes enforcement mechanisms are advisory only. Groundbreaking scheduled.`,
+   restricted:g=>g.corpInfluence>70},
+  {label:'B',text:'Accept as offered.',
+   effect:g=>{g.wellbeing-=2;g.debt+=4;g.corpInfluence+=10;g.trust+=2;},
+   outcome:()=>`Deal signed. Press release touts 500 jobs. Union organizing attempt begins month 3. Two organizers terminated for cause.`},
+  {label:'C',text:'Decline. Pursue alternative development.',
+   effect:g=>{g.trust+=4;g.wellbeing+=2;g.corpInfluence-=3;},
+   outcome:()=>`Amazon relocates proposal to DuPage County. Local press runs "Region Turns Away 500 Jobs" for 3 weeks straight.`}
+]},
+
+{id:'ev_private_equity_employer',tag:'CORPORATE / PRIVATE EQUITY',minTurn:3,
+title:'PE Firm Acquires Region\'s Largest Private Employer',
+body:()=>`Apex Capital Partners has completed acquisition of Midwest Fabrications LLC, the region's largest private employer at 2,100 workers. The acquisition was leveraged — $380M in new debt placed on the company's books. Standard operating procedure. The company was profitable before acquisition.`,
+choices:[
+  {label:'A',text:'Meet with new ownership. Request worker retention agreement.',
+   effect:g=>{g.trust+=2;g.corpInfluence+=5;},
+   outcome:()=>`Meeting held. Retention agreement described as "not consistent with our operating model." Union asks for intervention. No mechanism exists.`},
+  {label:'B',text:'Commission economic impact study.',
+   effect:g=>{g.trust+=1;g.debt+=1;},
+   outcome:()=>`Study commissioned. Results due in 14 months. Company restructuring begins in month 4.`},
+  {label:'C',text:'No action. Private business decision.',
+   effect:g=>{g.corpInfluence+=6;},
+   outcome:()=>`Acknowledged. Plant closes in 38 months. 2,100 jobs eliminated.`}
+],
+delayed_effect:{at:38, fn:g=>{g.wellbeing-=12;g.unrest+=14;g.trust-=6;},
+  text:'Midwest Fabrications has ceased operations. 2,100 workers laid off. The closure was announced on a Friday afternoon.'}},
+
+{id:'ev_dollar_general',tag:'CORPORATE / RETAIL',minTurn:2,
+title:'Dollar General Opens 3 Locations in Food Desert Areas',
+body:()=>`Dollar General has opened three new locations in neighborhoods classified as food deserts. All three locations are within 800 feet of a locally-owned grocery. Regional economic data suggests local groceries lose approximately 34% of revenue within 24 months of a discount chain opening nearby.`,
+choices:[
+  {label:'A',text:'Offer local grocery retention grants.',
+   effect:g=>{g.wellbeing+=3;g.debt+=3;g.trust+=3;},
+   outcome:()=>`$340,000 in grants distributed. Two of three local groceries survive year one. One closes in month 18.`},
+  {label:'B',text:'Zoning review on future discount retail applications.',
+   effect:g=>{g.trust+=2;g.corpInfluence+=4;},
+   outcome:()=>`Review framework established. Dollar General's attorneys note they qualify as "essential services" under six existing exemptions.`},
+  {label:'C',text:'No action.',
+   effect:g=>{g.wellbeing-=3;g.corpInfluence+=5;},
+   outcome:()=>`Two local groceries close within 20 months. The nearest fresh produce is now 3.4 miles from the affected neighborhoods.`}
+]},
+
+{id:'ev_payday_loan',tag:'CORPORATE / FINANCIAL EXTRACTION',minTurn:5,
+title:'6 Payday Loan Locations Open Following Factory Closure',
+body:()=>`Following last quarter's plant closure, six payday lending storefronts have opened within a 2-mile radius of the former facility. Average APR: 391%. The state usury cap does not apply to this lending category. There is no cap. There was a cap. It was repealed in 2019 following $1.2M in lobbying expenditure.`,
+choices:[
+  {label:'A',text:'Pursue municipal lending cap ordinance.',
+   effect:g=>{g.trust+=4;g.corpInfluence+=7;g.wellbeing+=3;},
+   outcome:()=>`Ordinance drafted. Industry group cites preemption. State AG says local authority is "unclear." Lenders remain open.`,
+   restricted:g=>g.corpInfluence>68},
+  {label:'B',text:'Partner with credit union for emergency loan alternative.',
+   effect:g=>{g.wellbeing+=4;g.debt+=2;g.trust+=3;},
+   outcome:()=>`Credit union program launches. Serves 340 residents in first quarter. Payday lenders serve 2,800.`},
+  {label:'C',text:'No action. Residents have access to alternatives.',
+   effect:g=>{g.wellbeing-=4;g.unrest+=4;g.trust-=3;},
+   outcome:()=>`Average resident debt load increases. Bankruptcy filings up 22% in affected zip codes.`}
+]},
+
+{id:'ev_hospital_pe',tag:'HEALTHCARE / PRIVATE EQUITY',minTurn:4,
+title:'Regional Hospital Acquired by Private Equity',
+body:()=>`Centerview Health Partners has completed acquisition of St. Anthony Regional Medical Center. Acquisition financed with $220M in debt placed on the hospital. Centerview has a 6-year average hold period. The ER serves 48,000 patients annually. It is the only trauma center within 22 miles.`,
+choices:[
+  {label:'A',text:'Require community benefit agreement as condition of licensing.',
+   effect:g=>{g.trust+=4;g.wellbeing+=3;g.corpInfluence+=6;},
+   outcome:()=>`Agreement drafted. Centerview's attorneys contest enforceability. Licensing proceeds. Agreement is not enforced.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'B',text:'Open dialogue with new ownership. No formal requirements.',
+   effect:g=>{g.corpInfluence+=5;},
+   outcome:()=>`Meeting held. Ownership pledges "commitment to community health." Staff-to-patient ratios are cut 18 months later.`},
+  {label:'C',text:'No action. Regulatory approval is a state matter.',
+   effect:g=>{g.corpInfluence+=7;},
+   outcome:()=>`Acquisition completed without regional review. ER closure announced in month 18.`}
+],
+delayed_effect:{at:18,fn:g=>{g.wellbeing-=10;g.unrest+=8;g.trust-=5;},
+  text:'St. Anthony Emergency Room has closed. Centerview Health cites "operational sustainability." Nearest ER is now 22 miles.'}},
+
+{id:'ev_telecom',tag:'CORPORATE / INFRASTRUCTURE',minTurn:6,
+title:'Telecom Monopoly: 50Mbps for $120/Month — No Alternatives',
+body:()=>`Consolidated Telecom LLC holds exclusive franchise rights for broadband in 74% of the region. Current offering: 50Mbps residential service at $120/month. Median household income in rural portions of the region: $38,000/year. No municipal broadband is currently permitted under the franchise agreement signed in 2008.`,
+choices:[
+  {label:'A',text:'Challenge the franchise exclusivity clause.',
+   effect:g=>{g.trust+=5;g.corpInfluence+=8;g.debt+=2;},
+   outcome:()=>`Legal challenge filed. Telecom retains former state AG as counsel. Estimated resolution: 3 years.`,
+   restricted:g=>g.corpInfluence>70},
+  {label:'B',text:'Pursue federal broadband grant for municipal alternative.',
+   effect:g=>{g.trust+=3;g.debt+=3;g.wellbeing+=2;},
+   outcome:()=>`Grant application submitted. $2.8M awarded. Build-out will take 4 years. Franchise agreement will be contested.`},
+  {label:'C',text:'No action.',
+   effect:g=>{g.wellbeing-=3;g.unrest+=3;g.trust-=2;},
+   outcome:()=>`Telecom announces a rate increase effective next quarter.`}
+]},
+
+// ── OPIOIDS ──
+{id:'ev_pharma_reps',tag:'PUBLIC HEALTH / PHARMACEUTICAL',minTurn:2,
+title:'Pharmaceutical Sales Representatives at Regional Medical Offices',
+body:()=>`Epidemiological tracking confirms that Orexin Pharmaceuticals has assigned quota-based sales representatives to 94% of medical practices in the region. The drug in question is an extended-release opioid. Prescriptions in the region are up 34% year over year. Orexin contributed $180,000 to the state medical licensing board foundation.`,
+choices:[
+  {label:'A',text:'Mandate prescriber disclosure and monitoring.',
+   effect:g=>{g.trust+=3;g.wellbeing+=2;g.corpInfluence+=6;},
+   outcome:()=>`Monitoring program established. Prescriptions decline modestly in monitored practices. Sales reps shift focus to practices outside monitoring.`},
+  {label:'B',text:'Refer to state attorney general. No local action.',
+   effect:g=>{g.wellbeing-=2;},
+   outcome:()=>`Referral logged. No action taken by AG office in current review period.`},
+  {label:'C',text:'Commission public education campaign.',
+   effect:g=>{g.trust+=1;g.debt+=1;g.wellbeing-=1;},
+   outcome:()=>`Campaign launched. Awareness metrics improve. Prescription rates unchanged.`}
+]},
+
+{id:'ev_naloxone',tag:'PUBLIC HEALTH / HARM REDUCTION',minTurn:3,
+title:'Naloxone Available — Priced at 800% Markup',
+body:()=>`Naloxone (overdose reversal medication) is available through regional pharmacies. The manufacturer has raised the price 800% over 4 years. A two-dose kit costs $180. Many first responders cannot afford to stock it at current distribution levels. Generic alternatives are available in 14 other countries. They are not available here.`,
+choices:[
+  {label:'A',text:'Fund regional naloxone stockpile from emergency health budget.',
+   effect:g=>{g.wellbeing+=6;g.trust+=4;g.debt+=4;},
+   outcome:()=>`Stockpile funded. 340 doses distributed. Overdose reversals increase. Manufacturer raises price again next quarter.`},
+  {label:'B',text:'Lobby state for bulk purchasing program.',
+   effect:g=>{g.wellbeing+=2;g.trust+=2;},
+   outcome:()=>`Lobbying effort initiated. State budget committee has not scheduled review.`},
+  {label:'C',text:'Issue public statement on pricing. No additional funding.',
+   effect:g=>{g.trust-=2;g.wellbeing-=3;},
+   outcome:()=>`Statement issued. Manufacturer does not respond. Overdose deaths increase 12% in affected areas.`}
+]},
+
+{id:'ev_fentanyl',tag:'PUBLIC HEALTH / OVERDOSE CRISIS',minTurn:6,
+title:'Fentanyl in Regional Supply Chain — Overdose Deaths Triple',
+body:()=>`Toxicology reports confirm fentanyl is now present in the majority of the regional illicit drug supply. Overdose deaths in the past 90 days: 43. Comparative period last year: 14. Regional addiction treatment capacity: 180 beds. Regional addiction treatment need (estimated): 4,200. Wait time for treatment: 4-6 months.`,
+choices:[
+  {label:'A',text:'Emergency expansion of treatment capacity and harm reduction.',
+   effect:g=>{g.wellbeing+=6;g.debt+=6;g.trust+=5;g.unrest-=4;},
+   outcome:()=>`Emergency funding allocated. 40 new treatment slots opened. Harm reduction sites established. Overdose deaths decline 22%.`},
+  {label:'B',text:'Increase law enforcement narcotics operations.',
+   effect:g=>{g.unrest+=6;g.trust-=3;g.wellbeing-=3;},
+   outcome:()=>`Narcotics operations intensified. Arrests increase 180%. Overdose deaths unchanged. Supply disruption lasts 3 weeks.`},
+  {label:'C',text:'Coordinate regional response task force.',
+   effect:g=>{g.trust+=2;g.wellbeing-=2;},
+   outcome:()=>`Task force formed. Meeting scheduled for next month. Deaths continue at current rate.`}
+]},
+
+{id:'ev_opioid_settlement',tag:'CORPORATE / ACCOUNTABILITY',minTurn:7,
+title:'Opioid Lawsuit Settlement Funds — $14.2M to Region',
+body:()=>`The region will receive $14.2M from the national opioid settlement. The settlement agreement specifies funds should be used for addiction treatment, harm reduction, and recovery support. The state budget office has requested the funds be redirected to the general fund to offset a deficit caused by an unrelated tax abatement.`,
+choices:[
+  {label:'A',text:'Insist funds be used as specified for addiction services.',
+   effect:g=>{g.wellbeing+=8;g.trust+=6;g.unrest-=4;},
+   outcome:()=>`Funds directed to treatment expansion. Three new recovery centers open. State budget office does not retaliate directly.`,
+   restricted:g=>g.corpInfluence>75},
+  {label:'B',text:'Allow partial redirection — split between treatment and general fund.',
+   effect:g=>{g.wellbeing+=3;g.trust-=3;g.debt-=2;},
+   outcome:()=>`$7.1M to treatment. $7.1M to general fund. Treatment advocates file public records requests.`},
+  {label:'C',text:'Defer to state on fund allocation.',
+   effect:g=>{g.trust-=6;g.wellbeing-=4;g.unrest+=5;},
+   outcome:()=>`Funds redirected to general fund. Settlement terms technically voided. No legal consequence anticipated.`}
+]},
+
+// ── AGRICULTURE ──
+{id:'ev_seed_contract',tag:'AGRICULTURE / RURAL ILLINOIS',minTurn:2,
+title:'Consolidated Seed Corp Offering Exclusive Contracts',
+body:()=>`AgriMega Inc. is offering annual seed contracts to regional farmers requiring purchase of new seed each growing season. Seed-saving prohibited under contract terms. Farms signing contracts receive subsidized equipment financing. Farms not signing will lose access to the conglomerate-owned grain elevator, which processes 78% of regional harvest.`,
+choices:[
+  {label:'A',text:'Investigate grain elevator monopoly for antitrust.',
+   effect:g=>{g.trust+=4;g.corpInfluence+=7;g.wellbeing+=2;},
+   outcome:()=>`Antitrust referral sent to state AG. No timeline. Contracts continue to be signed under market pressure.`},
+  {label:'B',text:'Support independent co-op elevator development.',
+   effect:g=>{g.wellbeing+=4;g.trust+=3;g.debt+=4;},
+   outcome:()=>`Co-op development funded. Will take 3 years to build. In the interim, farmers sign contracts.`},
+  {label:'C',text:'No action. Agricultural contracts are private.',
+   effect:g=>{g.wellbeing-=3;g.corpInfluence+=5;},
+   outcome:()=>`Seed saving in region declines to near zero within two growing seasons.`}
+]},
+
+{id:'ev_drought',tag:'AGRICULTURE / CLIMATE',minTurn:4,
+title:'Drought Conditions — Regional Crop Insurance Defunded',
+body:()=>`A drought is affecting 60% of the region's farmland. Estimated crop loss: 40% below average. The federal crop insurance program that served this region was defunded in a budget reconciliation two years ago. No replacement mechanism exists. Average farm debt in region: $320,000. Foreclosure filings are already up 18%.`,
+choices:[
+  {label:'A',text:'Emergency bridge loan program for affected farms.',
+   effect:g=>{g.wellbeing+=5;g.trust+=4;g.debt+=6;},
+   outcome:()=>`$8M emergency program established. 142 farms receive assistance. 34 farms foreclose before funds are disbursed.`},
+  {label:'B',text:'Pursue federal disaster declaration.',
+   effect:g=>{g.trust+=2;g.wellbeing-=2;},
+   outcome:()=>`Disaster declaration request submitted. Federal review: 60-90 days. Planting season ends before approval.`},
+  {label:'C',text:'Refer to existing USDA resources.',
+   effect:g=>{g.trust-=4;g.wellbeing-=5;g.unrest+=5;},
+   outcome:()=>`USDA resources are not applicable to this situation. Foreclosures continue. Rural population decline accelerates.`}
+]},
+
+{id:'ev_hog_farm',tag:'AGRICULTURE / RURAL ILLINOIS',minTurn:5,
+title:'Corporate CAFO Application — 12,000 Hog Confinement',
+body:()=>`Pork Alliance LLC has applied to build a 12,000-head confined animal feeding operation near Pontiac. Projected employment: 12 full-time positions. Documented impacts at similar facilities: hydrogen sulfide emissions within 2 miles, manure lagoon leakage into groundwater, property value decline in surrounding area. The applicant has contributed $40,000 to two state legislators on the review committee.`,
+choices:[
+  {label:'A',text:'Deny application based on environmental review.',
+   effect:g=>{g.trust+=4;g.wellbeing+=3;g.corpInfluence+=6;},
+   outcome:()=>`Application denied. Pork Alliance appeals to state level. State overrides local decision within 4 months.`,
+   restricted:g=>g.corpInfluence>72},
+  {label:'B',text:'Approve with enhanced monitoring requirements.',
+   effect:g=>{g.corpInfluence+=5;g.trust-=2;},
+   outcome:()=>`Approved. Monitoring requirements listed as recommendations, not conditions. Facility opens.`},
+  {label:'C',text:'Approve. Prioritize rural employment.',
+   effect:g=>{g.wellbeing-=3;g.corpInfluence+=7;g.trust-=4;},
+   outcome:()=>`Approved. Facility opens. 12 jobs created. Groundwater complaint filed by neighboring farm in month 8.`}
+]},
+
+{id:'ev_farmland',tag:'AGRICULTURE / LAND SOVEREIGNTY',minTurn:6,
+title:'Foreign Sovereign Wealth Fund Purchases 50,000 Acres',
+body:()=>`Gulf Horizon Agricultural Holdings has completed the purchase of 50,000 acres of Illinois farmland — approximately 8% of the region's total agricultural land. Transaction price: $310M. Current law does not restrict foreign ownership of agricultural land. A bill to create such restrictions was tabled in committee last session after $2.4M in lobbying expenditure.`,
+choices:[
+  {label:'A',text:'Formally request state legislature revisit ownership restrictions.',
+   effect:g=>{g.trust+=3;g.wellbeing+=2;},
+   outcome:()=>`Request sent. Committee chair has not scheduled a hearing. Three additional purchase applications are pending.`},
+  {label:'B',text:'Require disclosure and economic impact review for future purchases.',
+   effect:g=>{g.trust+=4;g.corpInfluence+=4;},
+   outcome:()=>`Disclosure requirement enacted locally. Applicability to foreign sovereign entities under legal review.`},
+  {label:'C',text:'No action. Transaction is legal.',
+   effect:g=>{g.wellbeing-=2;g.corpInfluence+=4;},
+   outcome:()=>`Acknowledged. Additional purchase totaling 18,000 acres filed the following month.`}
+]},
+
+{id:'ev_rural_hospital',tag:'HEALTHCARE / RURAL',minTurn:4,
+title:'Rural Hospital Closure — Nearest ER Now 45 Minutes',
+body:()=>`Gibson Community Hospital in Ford County has announced closure. The facility had operated for 94 years. The nearest emergency room will now be 45 minutes by car — longer in winter conditions. Maternal mortality, heart attack survival, and stroke outcome data all correlate significantly with emergency response time. The closure is attributed to reimbursement rate changes and private equity debt load.`,
+choices:[
+  {label:'A',text:'Fund rural emergency stabilization program.',
+   effect:g=>{g.wellbeing+=5;g.debt+=5;g.trust+=5;},
+   outcome:()=>`$3.2M emergency stabilization program keeps hospital operating for 8 months. Closure proceeds when funds exhausted.`},
+  {label:'B',text:'Coordinate telemedicine and ambulance expansion.',
+   effect:g=>{g.wellbeing+=2;g.debt+=3;g.trust+=3;},
+   outcome:()=>`Telemedicine program launched. Ambulance fleet expanded by 3 units. Response time reduced from 45 to 38 minutes. Hospital closes on schedule.`},
+  {label:'C',text:'No intervention. Healthcare market decision.',
+   effect:g=>{g.wellbeing-=6;g.trust-=5;g.unrest+=5;},
+   outcome:()=>`Hospital closes. Rural mortality indicators in affected area deteriorate within two years.`}
+]},
+
+// ── WATER & ENVIRONMENT ──
+{id:'ev_chemical_leak',tag:'ENVIRONMENT / CONTAMINATION',minTurn:3,
+title:'Chemical Plant Releases Chromium-6 Into Regional Aquifer',
+body:()=>`Valley Chemical LLC has disclosed a containment failure resulting in chromium-6 contamination of groundwater serving approximately 34,000 residents. The company is offering a settlement that includes full NDA, a non-admission clause, and $2.4M in remediation. The actual cleanup cost is estimated at $18-40M. Company annual revenue: $1.2B.`,
+choices:[
+  {label:'A',text:'Reject settlement. Pursue full remediation and litigation.',
+   effect:g=>{g.trust+=6;g.wellbeing+=4;g.corpInfluence+=8;},
+   outcome:()=>`Litigation filed. Discovery phase: 18-24 months. Affected residents remain on bottled water advisory.`,
+   restricted:g=>g.corpInfluence>68},
+  {label:'B',text:'Accept settlement. Begin partial remediation.',
+   effect:g=>{g.trust-=4;g.wellbeing-=3;g.debt+=3;},
+   outcome:()=>`Settlement accepted. NDA signed. $2.4M received. Remediation begins. Estimated completion at current funding: 14 years.`},
+  {label:'C',text:'Request EPA intervention.',
+   effect:g=>{g.trust+=2;g.wellbeing-=2;},
+   outcome:()=>`EPA notified. Regional EPA office is understaffed. Site inspection scheduled for month 3.`}
+]},
+
+{id:'ev_lead_pipes',tag:'ENVIRONMENT / INFRASTRUCTURE',minTurn:2,
+title:'Lead Service Lines in 14 Older Neighborhoods',
+body:()=>`An infrastructure audit has confirmed lead service lines in 14 neighborhoods, predominantly in low-income areas built before 1940. Affected residents: approximately 28,000. CDC threshold for lead intervention: 5 mcg/dL. Current regional average in affected areas: 7.2 mcg/dL in children under 6. Replacement cost: $40M. Annual budget surplus: $0.`,
+choices:[
+  {label:'A',text:'Emergency bond measure for full replacement.',
+   effect:g=>{g.wellbeing+=8;g.trust+=6;g.debt+=10;g.unrest-=5;},
+   outcome:()=>`$40M bond measure approved. Replacement begins. Full completion: 4 years. Interim filter distribution underway.`},
+  {label:'B',text:'Phase 1 replacement: highest-risk areas first. Pursue federal grant.',
+   effect:g=>{g.wellbeing+=4;g.trust+=4;g.debt+=5;},
+   outcome:()=>`Phase 1 underway. 6,000 lines replaced in year one. Federal grant application pending. 22,000 residents still on advisory.`},
+  {label:'C',text:'Issue boil/filter advisory. No replacement timeline.',
+   effect:g=>{g.wellbeing-=5;g.trust-=6;g.unrest+=7;},
+   outcome:()=>`Advisory issued. Filter distribution incomplete. 34% of affected households lack functioning filtration.`}
+]},
+
+{id:'ev_water_privatization',tag:'ENVIRONMENT / WATER',minTurn:5,
+title:'AquaCorp Offers to Purchase Municipal Water System',
+body:()=>`AquaCorp Solutions has submitted a formal offer to purchase the regional municipal water system for $280M. Post-acquisition, AquaCorp would set rates based on return-on-equity targets. Average rate increase at comparable AquaCorp acquisitions: 47% over 5 years. Detroit, Flint, and Pittsburgh all privatized elements of their water systems. All have since attempted repurchase.`,
+choices:[
+  {label:'A',text:'Reject. Water remains a public utility.',
+   effect:g=>{g.trust+=5;g.wellbeing+=3;g.corpInfluence+=7;},
+   outcome:()=>`Offer declined. AquaCorp initiates lobbying effort at state level. $1.8M spent in first quarter.`,
+   restricted:g=>g.corpInfluence>75},
+  {label:'B',text:'Accept. Use proceeds to reduce regional debt.',
+   effect:g=>{g.debt-=15;g.wellbeing-=6;g.trust-=8;g.unrest+=8;g.corpInfluence+=12;},
+   outcome:()=>`Sale completed. Rates increase 22% in year one. Rate board has no regional representatives.`},
+  {label:'C',text:'Negotiate a public-private partnership structure.',
+   effect:g=>{g.debt-=4;g.corpInfluence+=8;g.trust-=3;},
+   outcome:()=>`Partnership structure agreed. Rate increases capped at 12% annually. Cap is not contractually enforceable.`}
+]},
+
+{id:'ev_pfas',tag:'ENVIRONMENT / CONTAMINATION',minTurn:7,
+title:'PFAS Contamination Found Near Former Military Installation',
+body:()=>`Sampling at a former military base reveals PFAS ("forever chemical") contamination of groundwater affecting 3 municipal wells. PFAS is linked to cancer, immune disorders, and developmental delays. The military installation was decommissioned in 1991. Responsibility for remediation is contested. Affected population: 18,000.`,
+choices:[
+  {label:'A',text:'File federal claim against DoD for remediation costs.',
+   effect:g=>{g.trust+=4;g.wellbeing+=3;g.debt+=2;},
+   outcome:()=>`Federal claim filed. DoD acknowledges contamination but disputes liability. Litigation timeline: 5-8 years.`},
+  {label:'B',text:'Fund regional filtration system.',
+   effect:g=>{g.wellbeing+=5;g.trust+=4;g.debt+=6;},
+   outcome:()=>`Filtration system installed. Residents have access to clean water within 6 months. Remediation of source contamination not addressed.`},
+  {label:'C',text:'Issue advisory. Await federal response.',
+   effect:g=>{g.wellbeing-=4;g.trust-=5;g.unrest+=5;},
+   outcome:()=>`Advisory issued. Federal response timeline: unknown. Wells remain contaminated.`}
+]},
+
+{id:'ev_epa_defunded',tag:'ENVIRONMENT / REGULATORY',minTurn:5,
+title:'Regional EPA Monitoring Office Budget Cut 60%',
+body:()=>`The regional EPA field office has had its operating budget reduced by 60% in the current federal appropriation. Monitoring inspections will decrease from 340/year to approximately 80. The office covers 48 active industrial sites. Two of those sites have pending violation notices that will now be deprioritized.`,
+choices:[
+  {label:'A',text:'Fund regional environmental monitoring independently.',
+   effect:g=>{g.trust+=4;g.debt+=4;g.wellbeing+=3;g.corpInfluence+=4;},
+   outcome:()=>`Regional monitoring office established. Limited jurisdiction. Cannot issue federal penalties. Serves as documentation and referral.`},
+  {label:'B',text:'Partner with university for volunteer monitoring program.',
+   effect:g=>{g.trust+=3;g.wellbeing+=2;},
+   outcome:()=>`University partnership active. 12 monitoring sites covered. 36 sites uncovered. Data collected but not enforceable.`},
+  {label:'C',text:'No replacement mechanism.',
+   effect:g=>{g.wellbeing-=3;g.corpInfluence+=6;},
+   outcome:()=>`Monitoring gaps documented. No enforcement activity for 11 months. Two facilities self-report violations.`}
+]},
+
+// ── EDUCATION ──
+{id:'ev_school_charter',tag:'EDUCATION / SCHOOL REFORM',minTurn:3,
+title:'D-Rated School Targeted for Charter Operator Takeover',
+body:()=>`Franklin Elementary has received a D rating under the state accountability system. The state is proposing transfer of operations to EduPath Charter Network. EduPath has operated 14 schools nationally. 6 have closed after 3-4 years. 3 have had financial mismanagement findings. 2 are currently operating.`,
+choices:[
+  {label:'A',text:'Reject charter conversion. Develop school improvement plan.',
+   effect:g=>{g.trust+=4;g.wellbeing+=3;g.debt+=3;},
+   outcome:()=>`Improvement plan funded. Reading scores improve 12% in year two. State threatens to revisit conversion if progress stalls.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'B',text:'Accept charter conversion. Monitor performance.',
+   effect:g=>{g.corpInfluence+=5;g.trust-=3;},
+   outcome:()=>`Conversion approved. EduPath begins operations. Unionized staff not retained. Scores unchanged in year one.`},
+  {label:'C',text:'Request extended review period.',
+   effect:g=>{g.trust-=2;},
+   outcome:()=>`Review extended 6 months. State indicates decision will proceed regardless.`}
+]},
+
+{id:'ev_teachers_union',tag:'EDUCATION / LABOR',minTurn:4,
+title:'Teachers Union Contract Expired — District Seeks Pension Cuts',
+body:()=>`The teachers union contract has expired. The district has proposed a new contract eliminating defined-benefit pensions in favor of 401(k)-style accounts. Average teacher salary in region: $48,000. Average pension after 30 years: $38,000/year. The district's pension obligation is underfunded by $340M — a shortfall that accumulated over 22 years of state underpayment.`,
+choices:[
+  {label:'A',text:'Oppose pension cuts. Seek state funding for shortfall.',
+   effect:g=>{g.trust+=5;g.wellbeing+=3;g.unrest-=3;},
+   outcome:()=>`State funding request filed. No response in current session. Teachers vote to strike. Contract extension agreed under prior terms.`,
+   restricted:g=>g.corpInfluence>70},
+  {label:'B',text:'Negotiate hybrid: maintain pensions for current teachers, 401k for new hires.',
+   effect:g=>{g.trust+=2;g.debt+=2;},
+   outcome:()=>`Hybrid agreement reached. Union accepts under duress. New teacher recruitment rates decline over next 3 years.`},
+  {label:'C',text:'Support district position. Accept pension elimination.',
+   effect:g=>{g.unrest+=7;g.trust-=6;g.wellbeing-=3;},
+   outcome:()=>`Teachers strike for 3 weeks. Settlement reverts to prior contract. Morale indicators decline significantly.`}
+]},
+
+{id:'ev_military_recruiter',tag:'EDUCATION / MILITARIZATION',minTurn:5,
+title:'Military Recruiter at High School After Arts Program Cut',
+body:()=>`Following arts program cuts at Jefferson High, a military recruiter has established a regular presence. Jefferson is in a high-poverty district. Average student debt within 4 years of graduation: $41,000. Enlistment bonus offered: $20,000. Recruiter is permitted under No Child Left Behind opt-out provisions the district did not exercise.`,
+choices:[
+  {label:'A',text:'Reinstate arts program. Review recruiter access policy.',
+   effect:g=>{g.wellbeing+=4;g.trust+=3;g.debt+=3;},
+   outcome:()=>`Arts program restored at $180,000/year. Recruiter access policy reviewed and restricted to career fair format.`},
+  {label:'B',text:'No change. Recruiter access is student choice.',
+   effect:g=>{g.unrest+=3;g.wellbeing-=2;},
+   outcome:()=>`Recruiter remains. Enlistment from Jefferson increases 22% year over year.`},
+  {label:'C',text:'Opt out of recruiter access provisions.',
+   effect:g=>{g.trust+=2;g.wellbeing+=2;g.corpInfluence+=3;},
+   outcome:()=>`Opt-out filed. Recruiter transitions to external community events. Arts program remains unfunded.`}
+]},
+
+{id:'ev_for_profit_college',tag:'EDUCATION / PREDATORY',minTurn:6,
+title:'For-Profit College Targets Veterans and Low-Income Students',
+body:()=>`American Career Institute has opened a campus targeting veterans and Pell Grant recipients. Tuition: $28,000/year. Post-graduation employment rate in field of study: 34%. Default rate on federal loans: 52%. The institution is accredited. Federal aid eligibility is governed by the Department of Education. It remains eligible.`,
+choices:[
+  {label:'A',text:'Issue public consumer warning with data.',
+   effect:g=>{g.trust+=3;g.wellbeing+=2;g.mediaNarrative+=3;},
+   outcome:()=>`Warning issued. ACI's PR firm issues rebuttal. Enrollment continues. Veterans account for 38% of enrollees.`},
+  {label:'B',text:'Partner with community college for free alternative pathways.',
+   effect:g=>{g.wellbeing+=4;g.trust+=3;g.debt+=3;},
+   outcome:()=>`Community college partnership funded. 340 students redirected in first year. ACI enrollment unchanged.`},
+  {label:'C',text:'No action. Enrollment is an individual choice.',
+   effect:g=>{g.wellbeing-=3;g.unrest+=3;g.corpInfluence+=3;},
+   outcome:()=>`Enrollment continues. Loan default rates in region increase. No enforcement mechanism available locally.`}
+]},
+
+// ── POLICING & CRIMINAL JUSTICE ──
+{id:'ev_civil_asset',tag:'CRIMINAL JUSTICE / FORFEITURE',minTurn:3,
+title:'Civil Asset Forfeiture — Property Seized Without Conviction',
+body:()=>`Regional law enforcement agencies have seized $1.4M in assets under civil forfeiture in the past fiscal year. 71% of seizures involved no criminal conviction. 34% involved no charges filed. Average asset seized: $1,300. Cost to legally contest seizure: $3,000-$8,000 in attorney fees. Many residents simply don't contest.`,
+choices:[
+  {label:'A',text:'Require criminal conviction before forfeiture.',
+   effect:g=>{g.trust+=6;g.wellbeing+=4;g.unrest-=4;},
+   outcome:()=>`Policy enacted for regional agency. State law still permits forfeiture without conviction. Interagency transfers route assets around restriction.`,
+   restricted:g=>g.corpInfluence>60},
+  {label:'B',text:'Require judicial oversight for all forfeitures.',
+   effect:g=>{g.trust+=3;g.wellbeing+=2;},
+   outcome:()=>`Judicial review requirement enacted. Processing time increases. Forfeiture volume decreases 28%.`},
+  {label:'C',text:'No policy change.',
+   effect:g=>{g.unrest+=5;g.trust-=5;},
+   outcome:()=>`Forfeiture continues. Community trust in law enforcement in affected neighborhoods: 22% favorable.`}
+]},
+
+{id:'ev_police_shooting',tag:'CRIMINAL JUSTICE / USE OF FORCE',minTurn:4,
+title:'Officer Shoots Unarmed Resident — Settlement Paid From School Budget',
+body:()=>`An officer has shot and killed an unarmed 22-year-old resident during a wellness check. A civil settlement has been reached: $2.8M. The settlement will be drawn from the school district's capital improvement fund under state law. The officer has remained on the force under the terms of the union contract. The wellness check was requested by a family member.`,
+choices:[
+  {label:'A',text:'Establish independent use-of-force review board.',
+   effect:g=>{g.trust+=4;g.unrest-=5;g.corpInfluence+=4;},
+   outcome:()=>`Review board established. Police union contests jurisdiction. Board has subpoena power but not disciplinary authority.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'B',text:'Redirect settlement payment to prevent school cuts.',
+   effect:g=>{g.trust+=2;g.debt+=4;g.wellbeing+=2;},
+   outcome:()=>`Emergency fund established to cover settlement. School capital project delayed 2 years. Community response: mixed.`},
+  {label:'C',text:'Release statement. Defer to internal affairs.',
+   effect:g=>{g.unrest+=8;g.trust-=7;},
+   outcome:()=>`Internal affairs clears officer in 90 days. Protest encampment forms outside regional offices.`}
+]},
+
+{id:'ev_private_prison',tag:'CRIMINAL JUSTICE / INCARCERATION',minTurn:5,
+title:'Private Prison Lobby Pushes Mandatory Minimums',
+body:()=>`CoreCivic Solutions has retained three lobbying firms and contributed $280,000 to regional legislators to advance mandatory minimum sentencing legislation for drug offenses. The bills would add an estimated 340 additional beds needed. CoreCivic operates a facility 22 miles from the regional center. Current occupancy: 71%. Required for profitability: 90%.`,
+choices:[
+  {label:'A',text:'Formally oppose the mandatory minimum legislation.',
+   effect:g=>{g.trust+=4;g.wellbeing+=3;g.corpInfluence+=6;},
+   outcome:()=>`Formal opposition registered. Legislation advances through committee regardless. Sponsor received $60,000 from CoreCivic.`,
+   restricted:g=>g.corpInfluence>70},
+  {label:'B',text:'Negotiate: support lighter sentencing reforms instead.',
+   effect:g=>{g.trust+=2;g.wellbeing+=1;},
+   outcome:()=>`Counter-proposal submitted. Compromise bill passes with minimums reduced but still extended. CoreCivic accepts outcome.`},
+  {label:'C',text:'No position. Criminal justice is state jurisdiction.',
+   effect:g=>{g.wellbeing-=3;g.unrest+=3;g.corpInfluence+=5;},
+   outcome:()=>`Mandatory minimums pass. Regional pretrial population increases 14% in 18 months.`}
+]},
+
+{id:'ev_surveillance_cameras',tag:'POLICING / SURVEILLANCE',minTurn:4,
+title:'SureView Systems Offers Free Cameras — In Exchange for Data',
+body:()=>`SureView Analytics has offered to install 800 surveillance cameras throughout the region at no upfront cost. Terms: SureView retains a perpetual license to all footage and derived analytics. Footage may be sold to third parties including federal agencies. SureView is a portfolio company of a venture fund with documented intelligence community ties.`,
+choices:[
+  {label:'A',text:'Decline. Negotiate for regionally-owned camera infrastructure.',
+   effect:g=>{g.trust+=4;g.wellbeing+=2;g.debt+=4;},
+   outcome:()=>`SureView offer declined. Regional RFP issued for publicly-owned camera network. $2.8M cost. Council debate pending.`},
+  {label:'B',text:'Accept with data restriction addendum.',
+   effect:g=>{g.corpInfluence+=6;g.trust-=2;},
+   outcome:()=>`Addendum signed. Legal review determines restrictions are unenforceable under SureView's federal contracts. Cameras installed.`},
+  {label:'C',text:'Accept the offer as presented.',
+   effect:g=>{g.corpInfluence+=8;g.unrest+=4;g.trust-=3;},
+   outcome:()=>`Cameras installed. Data sharing begins. ACLU files suit. SureView's federal contract designation exempts them from local regulation.`}
+]},
+
+// ── MEDIA & INFORMATION ──
+{id:'ev_newspaper_hedge',tag:'MEDIA / LOCAL JOURNALISM',minTurn:2,
+title:'Hedge Fund Acquires Regional Newspaper',
+body:()=>`Alden Capital Group has completed acquisition of the Chicago Southland Courier. Post-acquisition restructuring: newsroom reduced from 42 to 12 staff. Investigative desk eliminated. The paper will continue publishing. Coverage of your administration will continue. The paper endorsed your opponent during the campaign.`,
+choices:[
+  {label:'A',text:'Fund independent local journalism alternatives.',
+   effect:g=>{g.trust+=3;g.mediaNarrative-=5;g.debt+=2;},
+   outcome:()=>`$280,000 in nonprofit journalism grants distributed. Three independent outlets launch. Reach: 12% of former paper's audience.`},
+  {label:'B',text:'Meet with new ownership.',
+   effect:g=>{g.mediaNarrative+=4;g.corpInfluence+=3;},
+   outcome:()=>`Meeting held. Ownership is cordial. Coverage shifts slightly toward favorable framing of business activity.`},
+  {label:'C',text:'No action.',
+   effect:g=>{g.mediaNarrative+=6;g.trust-=2;},
+   outcome:()=>`Coverage continues, reduced in scope. Three city council corruption stories that would have run are never assigned.`}
+]},
+
+{id:'ev_disinfo_water',tag:'MEDIA / DISINFORMATION',minTurn:6,
+title:'Viral Disinformation About Water Crisis',
+body:()=>`A false narrative claiming the water contamination is caused by "government incompetence" rather than industrial discharge has gone viral on social media. The narrative has 340,000 regional engagements. The correction, citing EPA sampling data, has 6,800 engagements. The disinformation has been traced to accounts linked to a firm that represents Valley Chemical.`,
+choices:[
+  {label:'A',text:'Issue public data briefing with full documentation.',
+   effect:g=>{g.trust+=3;g.mediaNarrative-=3;},
+   outcome:()=>`Briefing issued. Local coverage is accurate. Social media corrections reach 2% of disinformation exposure. Valley Chemical narrative persists.`},
+  {label:'B',text:'Request platform takedown of demonstrably false content.',
+   effect:g=>{g.trust+=1;g.mediaNarrative+=3;},
+   outcome:()=>`Platform acknowledges request. Response timeline: 3-6 weeks. Content organic spread continues. Platforms cite free speech.`},
+  {label:'C',text:'Do not engage publicly.',
+   effect:g=>{g.trust-=4;g.mediaNarrative+=6;g.unrest+=4;},
+   outcome:()=>`Silence interpreted as confirmation. Disinformation becomes the dominant narrative in affected communities.`}
+]},
+
+// ── POLITICS & CORRUPTION ──
+{id:'ev_tif_district',tag:'FINANCE / PUBLIC SUBSIDY',minTurn:3,
+title:'TIF District Proposal: 23-Year School Revenue Diversion',
+body:()=>`A developer has proposed a Tax Increment Financing district covering 14 blocks in the Pilsen corridor. Under TIF, property tax increases in the district are diverted from public schools, parks, and services to a developer subsidy fund for 23 years. Estimated school revenue foregone: $48M. Developer contribution to local campaigns: $340,000 over 3 years.`,
+choices:[
+  {label:'A',text:'Reject TIF. Require developer to pay standard rates.',
+   effect:g=>{g.trust+=4;g.wellbeing+=3;g.corpInfluence+=6;},
+   outcome:()=>`TIF rejected. Developer proceeds with scaled-back project. One alderman announces they will not seek reelection.`,
+   restricted:g=>g.corpInfluence>70},
+  {label:'B',text:'Approve TIF with reduced timeline — 10 years.',
+   effect:g=>{g.corpInfluence+=5;g.debt-=2;g.trust-=2;},
+   outcome:()=>`10-year TIF approved. $21M foregone from schools. Developer proceeds. Affordability units reduced from proposed 20% to 8%.`},
+  {label:'C',text:'Approve TIF as proposed.',
+   effect:g=>{g.debt-=4;g.trust-=6;g.wellbeing-=4;g.corpInfluence+=10;},
+   outcome:()=>`TIF approved. 23-year clock begins. School principal reports inability to hire two needed positions.`}
+]},
+
+{id:'ev_insulin_cap',tag:'HEALTHCARE / PHARMACEUTICAL POLICY',minTurn:4,
+title:'Insulin Price Cap Legislation Blocked',
+body:()=>`State legislation that would have capped insulin at $35/month has failed in committee. A regional legislator on the committee received $180,000 from pharmaceutical manufacturers last cycle. Regional diabetes prevalence: 14.2%. Average uninsured insulin cost for a Type 1 diabetic: $400-$600/month. Three residents in the region have died this year rationing insulin.`,
+choices:[
+  {label:'A',text:'Establish regional insulin access emergency fund.',
+   effect:g=>{g.wellbeing+=5;g.trust+=4;g.debt+=4;},
+   outcome:()=>`$1.2M fund established. Covers 340 uninsured residents. 220 applicants remain on waitlist. State bill not reintroduced.`},
+  {label:'B',text:'Publicly call out the blocking legislator by name.',
+   effect:g=>{g.trust+=3;g.mediaNarrative+=4;g.unrest-=2;},
+   outcome:()=>`Statement issued. Legislator responds by citing "free market principles." Local paper runs story. Donations to legislator increase.`},
+  {label:'C',text:'No action. State matter.',
+   effect:g=>{g.wellbeing-=4;g.trust-=4;g.unrest+=4;},
+   outcome:()=>`Insulin costs continue unaddressed. Two additional rationing deaths reported in next reporting period.`}
+]},
+
+{id:'ev_pension_fund',tag:'FINANCE / PUBLIC PENSION',minTurn:5,
+title:'City Pension Fund Invested in Hedge Funds at 2% Fee',
+body:()=>`The regional pension fund has $340M in assets. 34% is currently invested in hedge funds averaging 2% management fee and 20% performance fee. Net return over 7 years: 4.2%. A simple index fund portfolio would have returned 9.1% over the same period. The hedge fund manager has contributed $180,000 to the pension board trustee campaigns.`,
+choices:[
+  {label:'A',text:'Redirect pension assets to low-cost index funds.',
+   effect:g=>{g.trust+=4;g.wellbeing+=3;g.corpInfluence+=6;},
+   outcome:()=>`Transition plan adopted. Estimated $12M saved in fees over next decade. Two trustees announce they will not seek reelection.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'B',text:'Commission independent performance audit.',
+   effect:g=>{g.trust+=2;g.debt+=1;},
+   outcome:()=>`Audit commissioned. Results in 6 months. Hedge fund managers cooperate fully. Audit recommends partial reallocation.`},
+  {label:'C',text:'No change to investment strategy.',
+   effect:g=>{g.trust-=3;g.wellbeing-=3;g.corpInfluence+=5;},
+   outcome:()=>`Investment strategy unchanged. Fee outflow continues. Pension underfunding gap increases.`}
+]},
+
+// ── WAR & MANUFACTURED CONSENT ──
+{id:'ev_recruitment_surge',tag:'MILITARY / RECRUITMENT',minTurn:7,
+title:'Enlistment Bonuses Double as Regional Unemployment Spikes',
+body:()=>`Regional unemployment has crossed 9.2%. The Department of Defense has doubled enlistment bonuses in the region to $28,000. Recruitment centers have added Saturday hours and a new location near the former Midwest Fabrications site. Three high schools have received unsolicited "career pathway" materials featuring military service.`,
+choices:[
+  {label:'A',text:'No engagement. Monitor outcomes.',
+   effect:g=>{g.unrest-=2;g.wellbeing-=3;},
+   outcome:()=>`Enlistment rates in the region increase 38%. No local intervention.`},
+  {label:'B',text:'Expand civilian job training as alternative.',
+   effect:g=>{g.wellbeing+=4;g.trust+=3;g.debt+=4;},
+   outcome:()=>`$2.4M job training program launched. 180 enrollees in year one. Enlistment rates decrease modestly in served zip codes.`},
+  {label:'C',text:'Host military career fair. Partner with recruitment centers.',
+   effect:g=>{g.corpInfluence+=4;g.unrest-=5;g.wellbeing-=4;},
+   outcome:()=>`Career fair hosted. Regional press praises "opportunity." 12 months later, two flag notifications go to regional families.`}
+]},
+
+{id:'ev_defense_contractor',tag:'MILITARY / INDUSTRIAL',minTurn:8,
+title:'Defense Contractor Announces 2,000 Jobs Contingent on New Contract',
+body:()=>`Northgate Defense Systems has announced that a potential 2,000-position expansion of its regional facility is contingent on a $2.4B federal defense contract currently under review. The contract is for precision munitions. The jobs would be the largest economic development announcement in the region in a decade. The contract requires Congressional authorization of a new conflict procurement.`,
+choices:[
+  {label:'A',text:'Advocate for the contract. Support the expansion.',
+   effect:g=>{g.wellbeing+=5;g.unrest-=6;g.corpInfluence+=8;g.trust-=2;},
+   outcome:()=>`Advocacy successful. Contract awarded. Expansion announced. Jobs materialize over 18 months. Contract supports ongoing operations.`},
+  {label:'B',text:'No position on military procurement.',
+   effect:g=>{g.trust+=2;},
+   outcome:()=>`Contract proceeds through federal channels. Regional position noted as neutral.`},
+  {label:'C',text:'Question the dependency on military spending for jobs.',
+   effect:g=>{g.trust+=3;g.mediaNarrative+=5;g.unrest+=4;},
+   outcome:()=>`Statement generates significant pushback. Local business coalition issues counter-statement. Contract awarded regardless.`}
+]},
+
+{id:'ev_gold_star',tag:'MILITARY / CONSEQUENCE',minTurn:9,
+title:'Three Flag Notifications Sent to Regional Families',
+body:()=>`Three families in the region have received notification of the death of a service member. All three were from high-unemployment zip codes in the southern part of the district. All three enlisted in the past 14 months. The mayor's office has been asked to participate in memorial services. A defense contractor is listed as a proud sponsor of the Veterans Memorial Foundation.`,
+choices:[
+  {label:'A',text:'Attend memorials. Make no public statement about context.',
+   effect:g=>{g.unrest-=2;g.trust+=1;},
+   outcome:()=>`Memorials attended. Families receive official acknowledgment. No policy discussion.`},
+  {label:'B',text:'Issue statement connecting service to regional economic conditions.',
+   effect:g=>{g.trust+=3;g.unrest+=6;g.mediaNarrative+=5;},
+   outcome:()=>`Statement issued. Significant backlash from veterans organizations and local media. Statement is factually accurate. Backlash continues regardless.`},
+  {label:'C',text:'Attend memorials. Issue statement about military service and pride.',
+   effect:g=>{g.unrest-=4;g.corpInfluence+=4;},
+   outcome:()=>`Statement well-received. Four additional recruitment center partnerships announced in the following month.`}
+]},
+
+// ── INTELLIGENCE & DATA ──
+{id:'ev_community_organizer',tag:'INTELLIGENCE / CIVIL SOCIETY',minTurn:5,
+title:'Community Organizer Audited, Sued, Background Leaked',
+body:()=>`Maria Torres, organizer of the Southside Housing Coalition, has been simultaneously subjected to an IRS audit, a civil suit from a real estate LLC alleging defamation, and a leak to two local outlets regarding a 12-year-old arrest record for trespassing at a protest. The coalition has successfully blocked two developments. There is no direct evidence of coordination between these events.`,
+choices:[
+  {label:'A',text:'Publicly defend Torres and the coalition\'s work.',
+   effect:g=>{g.trust+=4;g.unrest-=4;g.corpInfluence+=6;},
+   outcome:()=>`Statement issued. Local coverage initially negative. Coalition membership increases 40%. Audit continues.`},
+  {label:'B',text:'No comment. Private legal matters.',
+   effect:g=>{g.trust-=3;g.unrest+=4;g.wellbeing-=2;},
+   outcome:()=>`Perceived as abandonment. Coalition loses access to city meeting rooms. Organizing activity decreases.`},
+  {label:'C',text:'Commission review of coordination allegations.',
+   effect:g=>{g.trust+=2;g.corpInfluence+=4;},
+   outcome:()=>`Review commissioned. No findings in current period. Torres relocates to accept position in another city.`}
+]},
+
+{id:'ev_palantir',tag:'INTELLIGENCE / DATA',minTurn:6,
+title:'Palantir Offers to Run Social Services Intake System',
+body:()=>`Palantir Technologies has offered to implement a unified social services intake platform at no cost for 3 years. The platform would consolidate housing assistance, food assistance, mental health, and employment data. Contract terms: Palantir retains data rights. Data may be used for "product development and national security partnerships." Palantir's federal contracts include ICE and DoD.`,
+choices:[
+  {label:'A',text:'Decline. Develop open-source regional alternative.',
+   effect:g=>{g.trust+=5;g.debt+=4;g.wellbeing+=2;},
+   outcome:()=>`Open-source alternative under development. Timeline: 18 months. $1.4M cost. No data sharing with federal entities.`},
+  {label:'B',text:'Accept with data restriction clauses.',
+   effect:g=>{g.corpInfluence+=6;g.trust-=3;},
+   outcome:()=>`Accepted. Data restriction clauses in place. Palantir's legal team notes federal contract obligations supersede local agreements.`},
+  {label:'C',text:'Accept. Efficiency gains outweigh concerns.',
+   effect:g=>{g.corpInfluence+=9;g.trust-=5;g.unrest+=4;},
+   outcome:()=>`Platform deployed. Social services efficiency improves 22%. Three months later, ICE conducts an operation using records the region provided through the platform.`}
+]},
+
+{id:'ev_fusion_center',tag:'INTELLIGENCE / SURVEILLANCE',minTurn:7,
+title:'Fusion Center Shares Protest Attendance Data With Employers',
+body:()=>`Documents obtained by a journalist confirm that the regional fusion center has shared a list of protest attendees — including participants in a public housing demonstration — with three employers in the area. Two of those attendees were subsequently terminated for unrelated cause. The fusion center is federally funded and operates under a memorandum of understanding the region signed in 2019.`,
+choices:[
+  {label:'A',text:'Suspend region\'s MOU with the fusion center.',
+   effect:g=>{g.trust+=5;g.wellbeing+=3;g.corpInfluence+=5;},
+   outcome:()=>`MOU suspended pending review. Federal officials express concern. Fusion center continues operating. Regional data access suspended.`},
+  {label:'B',text:'Request full audit of data sharing practices.',
+   effect:g=>{g.trust+=3;g.unrest-=2;},
+   outcome:()=>`Audit requested. Fusion center responds that operations are classified. Audit scope reduced to non-sensitive data.`},
+  {label:'C',text:'No action. Federal program.',
+   effect:g=>{g.unrest+=6;g.trust-=6;g.wellbeing-=2;},
+   outcome:()=>`News cycle continues for two weeks. Terminations are not reversed. Fusion center continues operations.`}
+]},
+
+{id:'ev_data_center',tag:'CORPORATE / INFRASTRUCTURE',minTurn:4,
+title:'Hyperscale Data Center Proposal: 12 Jobs, 0 Local Taxes',
+body:()=>`CloudNexus Inc. proposes a 2.4M sq ft data center in the Will County industrial corridor. Permanent jobs: 12 (high-skill, nonlocal hire). Power draw: equivalent to 180,000 homes. Tax abatement requested: 20 years, $0 local property tax. Will substantially increase regional electricity rates. The facility will process data for clients CloudNexus declines to name publicly.`,
+choices:[
+  {label:'A',text:'Reject. Terms do not serve regional interests.',
+   effect:g=>{g.trust+=3;g.corpInfluence+=5;},
+   outcome:()=>`Proposal rejected. CloudNexus moves to adjacent county under same terms. Power grid impact affects the region anyway.`},
+  {label:'B',text:'Negotiate: require community benefit and tax contribution.',
+   effect:g=>{g.debt-=2;g.corpInfluence+=5;g.wellbeing-=2;},
+   outcome:()=>`Negotiated: 5-year phased abatement, $1.4M community fund. Electricity rates still increase. 12 jobs created.`},
+  {label:'C',text:'Approve as offered. Headline economic development.',
+   effect:g=>{g.debt-=3;g.wellbeing-=4;g.corpInfluence+=8;g.trust-=3;},
+   outcome:()=>`Approved. Press release: "Region Welcomes Cutting-Edge Tech Investment." Electricity bills increase next quarter.`}
+]},
+
+// ── SPECIAL / META ──
+{id:'ev_federal_visit',tag:'FEDERAL / SPECIAL BRIEFING',minTurn:10,special:true,
+title:'Federal Official Visits. Does Not Mention the Water.',
+body:()=>`A federal official has arrived unannounced for what is described as a regional assessment meeting. He does not mention the water contamination. He does not mention the lead pipes. He discusses a threat. He mentions opportunity. He leaves behind a brochure. The brochure describes a public-private security partnership framework. A recruiting contact number is listed on the back.`,
+choices:[
+  {label:'A',text:'Ignore the brochure. Continue existing priorities.',
+   effect:g=>{g.unrest+=4;g.trust+=3;},
+   outcome:()=>`No response sent. A follow-up email arrives two weeks later. Then another. The unrest continues.`},
+  {label:'B',text:'Engage the framework. Open recruitment infrastructure.',
+   effect:g=>{g.unrest-=8;g.wellbeing-=4;g.corpInfluence+=10;},
+   outcome:()=>`Engagement confirmed. Recruitment centers expand. Regional tension redirects outward. Economy receives temporary boost. Three months later, gold star families begin appearing in the wire.`,
+   delayed:g=>{g.delayed.push({at:g.turn+3,id:'gold_star_wave'});}},
+  {label:'C',text:'Request the briefing in writing. Through official channels.',
+   effect:g=>{g.trust+=2;},
+   outcome:()=>`Request acknowledged. No written materials provided. The unrest continues. The water is not addressed.`}
+]},
+
+]; // end EVENTS
+
+// ═══════════════════════════════════════════
+// TICKER HEADLINES
+// ═══════════════════════════════════════════
+const BASE_TICKER = [
+  "Regional unemployment unchanged at 8.4% — state average 5.1%.",
+  "Eviction filings up 18% from same period last year.",
+  "Water advisory remains in effect for zip codes 60623 and 60632.",
+  "Dollar General opens second location in food desert corridor.",
+  "Local paper reduces print edition to twice weekly.",
+  "Regional public transit ridership down 12% following route cuts.",
+  "Three rural schools to consolidate under state cost-sharing mandate.",
+  "Medical debt remains leading cause of bankruptcy in region.",
+  "Opioid task force meets for third consecutive month. No new funding.",
+  "Lead pipe replacement timeline extended to 2034.",
+  "Charter school operator requests emergency waiver on financial disclosure.",
+  "Regional pension fund reports 4.2% return. Index funds: 9.1%.",
+  "State legislature tables insulin price cap for second consecutive session.",
+  "Civil asset forfeiture revenue up 14% — convictions unchanged.",
+  "Community health clinic loses federal grant. No replacement identified.",
+  "Farmland sales to nonresident buyers increase 22% year over year.",
+  "Pretrial detention population: 61% of jail capacity. Most cannot afford bail.",
+  "Ambulance response times up 34% following privatization of county EMS.",
+];
+
+function addTicker(text){
+  G.ticker.unshift(text);
+  if(G.ticker.length>40) G.ticker.pop();
+  renderTicker();
+}
+
+function renderTicker(){
+  const headlines = [...G.ticker, ...BASE_TICKER];
+  const inner = document.getElementById('ticker-inner');
+  if(!inner) return;
+  const html = headlines.map(h=>`<span class="ticker-item">${h}</span>`).join('');
+  inner.innerHTML = html+html; // duplicate for seamless loop
+  const totalW = inner.scrollWidth/2;
+  const dur = Math.max(60, totalW/80);
+  inner.style.animationDuration = dur+'s';
+}
+
+// ═══════════════════════════════════════════
+// STAT RENDERING
+// ═══════════════════════════════════════════
+function clamp(v,min=0,max=100){return Math.min(max,Math.max(min,v));}
+
+function renderStats(){
+  const wb = clamp(G.wellbeing);
+  const db = clamp(G.debt);
+  const un = clamp(G.unrest);
+  const tr = clamp(G.trust);
+
+  document.getElementById('stat-wellbeing-val').textContent = wb;
+  document.getElementById('stat-debt-val').textContent = '$'+(2+db*0.08).toFixed(1)+'B';
+  document.getElementById('stat-unrest-val').textContent = un;
+  document.getElementById('stat-trust-val').textContent = tr;
+
+  setBar('bar-wellbeing', wb, 'wellbeing');
+  setBar('bar-debt', db, 'debt');
+  setBar('bar-unrest', un, 'unrest');
+  setBar('bar-trust', tr, 'trust');
+
+  const m = MONTHS[G.monthIndex % 12];
+  document.getElementById('date-display').textContent = m+' '+G.year;
+  document.getElementById('turn-display').textContent = 'Month '+G.turn;
+}
+
+function setBar(id, val, cls){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.width = val+'%';
+  el.className = 'stat-bar '+cls;
+  if(val<25) el.classList.add('low');
+}
+
+// ═══════════════════════════════════════════
+// GAME LOGIC
+// ═══════════════════════════════════════════
+let currentEvents = [];
+let resolvedCount = 0;
+
+function initGame(){
+  renderStats();
+  renderTicker();
+  startTurn();
+}
+
+function getAvailableEvents(){
+  const pool = EVENTS.filter(ev=>{
+    if(G.seenEvents.has(ev.id)) return false;
+    if(ev.minTurn && G.turn < ev.minTurn) return false;
+    if(ev.special) return false;
+    return true;
+  });
+  // shuffle
+  for(let i=pool.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [pool[i],pool[j]]=[pool[j],pool[i]];
+  }
+  const count = 2 + Math.floor(Math.random()*3); // 2-4
+  return pool.slice(0,count);
+}
+
+function checkSpecialEvents(){
+  // federal visit at turn 10 if wellbeing < 45
+  if(G.turn >= 10 && !G.seenEvents.has('ev_federal_visit') && G.wellbeing < 45){
+    const ev = EVENTS.find(e=>e.id==='ev_federal_visit');
+    if(ev) return [ev];
+  }
+  return [];
+}
+
+function startTurn(){
+  currentEvents = [];
+  resolvedCount = 0;
+
+  // Check delayed effects
+  const fired = G.delayed.filter(d=>d.at <= G.turn);
+  G.delayed = G.delayed.filter(d=>d.at > G.turn);
+  const delayedNotices = [];
+  for(const d of fired){
+    if(d.id === 'aipac_debt_ref'){
+      delayedNotices.push('The $340,000 in campaign contributions from the American Israel Public Affairs Committee is now a matter of public record. No further action required at this time.');
+    } else if(d.id === 'gold_star_wave'){
+      G.wellbeing -= 4; G.unrest += 6; G.trust -= 3;
+      delayedNotices.push('Three flag notifications sent to regional families this week. All three service members were from high-unemployment zip codes. All three enlisted within the past 14 months.');
+    } else if(d.fn){
+      d.fn(G);
+      if(d.text) delayedNotices.push(d.text);
+    }
+  }
+
+  // Check event-embedded delayed effects
+  for(const ev of EVENTS){
+    if(G.seenEvents.has(ev.id) && ev.delayed_effect && ev.delayed_effect.at === G.turn){
+      ev.delayed_effect.fn(G);
+      if(ev.delayed_effect.text) delayedNotices.push(ev.delayed_effect.text);
+    }
+  }
+
+  const specials = checkSpecialEvents();
+  const regular = getAvailableEvents();
+  currentEvents = [...specials, ...regular];
+
+  renderTurn(delayedNotices);
+}
+
+function applyStatClamp(){
+  G.wellbeing = clamp(G.wellbeing);
+  G.debt = clamp(G.debt);
+  G.unrest = clamp(G.unrest);
+  G.trust = clamp(G.trust);
+  G.corpInfluence = clamp(G.corpInfluence);
+  G.mediaNarrative = clamp(G.mediaNarrative);
+}
+
+function renderTurn(delayedNotices){
+  const area = document.getElementById('event-area');
+  area.innerHTML = '';
+
+  // Delayed notices
+  for(const notice of delayedNotices){
+    const el = document.createElement('div');
+    el.className = 'delayed-notice';
+    el.textContent = notice;
+    area.appendChild(el);
+    addTicker(notice.substring(0,80)+'...');
+  }
+
+  // Render event cards
+  currentEvents.forEach((ev,idx)=>{
+    area.appendChild(buildEventCard(ev,idx));
+  });
+
+  updateEndTurn();
+  renderStats();
+  document.getElementById('phase-name').textContent = MONTHS[G.monthIndex%12]+' '+G.year+' — '+currentEvents.length+' matter'+(currentEvents.length!==1?'s':'')+' require action';
+  document.getElementById('event-counter').textContent = 'Turn '+G.turn;
+}
+
+function buildEventCard(ev, idx){
+  const card = document.createElement('div');
+  card.className = 'event-card';
+  card.id = 'card-'+ev.id;
+
+  const bodyText = typeof ev.body === 'function' ? ev.body(G) : ev.body;
+
+  // Apply media narrative framing shift
+  let displayBody = bodyText;
+  if(G.mediaNarrative > 50){
+    // Subtle reframing — add a corporate-friendly qualifier
+    displayBody = bodyText; // keep as-is; framing shift is in choice availability
+  }
+
+  let choicesHTML = '';
+  ev.choices.forEach((ch,ci)=>{
+    const isRestricted = ch.restricted && ch.restricted(G);
+    if(isRestricted){
+      choicesHTML += `<div class="choice-restricted">[OPTION ${ch.label} — Not currently viable given regional stakeholder landscape.]</div>`;
+    } else {
+      choicesHTML += `<button class="choice-btn" onclick="makeChoice('${ev.id}','${ci}')">
+        <span class="choice-label">${ch.label}</span>
+        <span>${ch.text}</span>
+      </button>`;
+    }
+  });
+
+  card.innerHTML = `
+    <div class="event-tag">${ev.tag}</div>
+    <div class="event-title">${ev.title}</div>
+    <div class="event-body">${displayBody}</div>
+    <div class="event-choices" id="choices-${ev.id}">${choicesHTML}</div>
+  `;
+  return card;
+}
+
+function makeChoice(evId, choiceIdx){
+  const ev = EVENTS.find(e=>e.id===evId);
+  if(!ev) return;
+  const ch = ev.choices[parseInt(choiceIdx)];
+  if(!ch) return;
+
+  // Mark as seen
+  G.seenEvents.add(evId);
+  resolvedCount++;
+
+  // Apply effect
+  if(ch.effect) ch.effect(G);
+  applyStatClamp();
+
+  // Handle delayed choice effects (like the federal visit engagement)
+  if(ch.delayed) ch.delayed(G);
+
+  // Handle event-level delayed effect tracking
+  if(ev.delayed_effect){
+    G.delayed.push({at: G.turn + ev.delayed_effect.at, fn: ev.delayed_effect.fn, text: ev.delayed_effect.text});
+  }
+
+  // Get outcome text
+  const outcomeText = typeof ch.outcome === 'function' ? ch.outcome(G) : (ch.outcome || '');
+
+  // Render outcome on card
+  const choicesEl = document.getElementById('choices-'+evId);
+  if(choicesEl){
+    choicesEl.innerHTML = `<div class="outcome-display">${outcomeText}</div>`;
+  }
+  document.getElementById('card-'+evId).classList.add('resolved');
+
+  // Add to log
+  addLog(ev.title.substring(0,40)+'...', ch.label, ch.effect);
+
+  // Add ticker
+  if(outcomeText) addTicker(outcomeText.substring(0,100));
+
+  renderStats();
+  updateEndTurn();
+  saveGame();
+}
+
+function addLog(title, label, effect){
+  G.log.unshift({turn:G.turn, title, label});
+  if(G.log.length>50) G.log.pop();
+  renderLog();
+}
+
+function renderLog(){
+  const list = document.getElementById('log-list');
+  if(!list) return;
+  list.innerHTML = G.log.slice(0,30).map(entry=>`
+    <div class="log-entry">
+      <span class="log-turn">MONTH ${entry.turn}</span>
+      ${entry.title} [${entry.label}]
+    </div>
+  `).join('');
+}
+
+function updateEndTurn(){
+  const total = currentEvents.length;
+  const remaining = total - resolvedCount;
+  const btn = document.getElementById('end-turn-btn');
+  const rem = document.getElementById('events-remaining');
+  btn.disabled = remaining > 0;
+  rem.textContent = remaining > 0 ? `${remaining} matter${remaining!==1?'s':''} unresolved` : 'All matters addressed';
+}
+
+function endTurn(){
+  G.turn++;
+  G.monthIndex++;
+  if(G.monthIndex % 12 === 0) G.year++;
+
+  // Passive stat drift
+  G.wellbeing -= 0.5;
+  G.unrest += 0.3;
+  G.trust -= 0.2;
+  G.debt += 0.4;
+
+  // Corporate influence passively grows
+  G.corpInfluence += 0.5;
+  G.mediaNarrative += 0.3;
+
+  applyStatClamp();
+  saveGame();
+  startTurn();
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+document.getElementById('end-turn-btn').addEventListener('click', endTurn);
+
+// Start campaign
+renderCampaign();
+renderTicker();
+</script>
+</body>
+</html>
