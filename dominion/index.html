@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DOMINION — Territorial Simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Exo+2:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#030508;overflow:hidden;font-family:'Rajdhani',sans-serif;color:#fff;}
+canvas{position:fixed;top:0;left:0;width:100%;height:100%;display:block;}
+#menu{
+  position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at center,#0a1428 0%,#030508 70%);
+}
+#menu h1{
+  font-family:'Exo 2',sans-serif;font-weight:900;font-size:clamp(3rem,8vw,6rem);
+  letter-spacing:0.18em;color:#f5a623;
+  text-shadow:0 0 40px rgba(245,166,35,0.5),0 0 80px rgba(245,166,35,0.2);
+  margin-bottom:0.2em;
+}
+#menu .sub{
+  font-family:'Rajdhani',sans-serif;font-weight:600;font-size:clamp(0.9rem,2vw,1.2rem);
+  letter-spacing:0.35em;color:rgba(245,166,35,0.6);margin-bottom:2.4em;
+  text-transform:uppercase;
+}
+#menu .controls{
+  font-size:0.85rem;letter-spacing:0.12em;color:rgba(255,255,255,0.35);
+  margin-bottom:2em;line-height:2;text-align:center;
+}
+#menu .controls span{color:rgba(245,166,35,0.6);}
+#start-btn{
+  font-family:'Exo 2',sans-serif;font-weight:700;font-size:1rem;
+  letter-spacing:0.25em;color:#030508;background:#f5a623;
+  border:none;padding:0.7em 2.6em;cursor:pointer;
+  clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);
+  transition:background 0.15s,box-shadow 0.15s;
+}
+#start-btn:hover{background:#ffc040;box-shadow:0 0 24px rgba(245,166,35,0.5);}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="menu">
+  <h1>DOMINION</h1>
+  <div class="sub">TERRITORIAL SIMULATION</div>
+  <div class="controls">
+    <span>CLICK</span> any region to trigger a crisis &nbsp;|&nbsp;
+    <span>⏸ ▶ ▶▶ ▶▶▶</span> control simulation speed
+  </div>
+  <button id="start-btn">INITIATE SIMULATION</button>
+</div>
+
+<script>
+'use strict';
+
+// ── Canvas setup ──────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener('resize', () => { resize(); rebuildMapImage(); });
+
+// ── Seeded RNG ────────────────────────────────────────────────────────────────
+function makeRNG(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+// ── World constants ───────────────────────────────────────────────────────────
+const GRID_W = 160;
+const GRID_H = 90;
+const N = GRID_W * GRID_H;
+
+const TERRAIN_OCEAN   = 0;
+const TERRAIN_SHALLOW = 1;
+const TERRAIN_PLAINS  = 2;
+const TERRAIN_FOREST  = 3;
+const TERRAIN_MOUNTAIN= 4;
+
+// Terrain colors [r,g,b]
+const TERRAIN_COLORS = [
+  [3,  7,  18],   // OCEAN
+  [5,  10, 28],   // SHALLOW
+  [8,  16, 10],   // PLAINS
+  [6,  14, 8],    // FOREST
+  [14, 14, 12],   // MOUNTAIN
+];
+
+// Faction definitions: index 1–5
+const FACTIONS = [
+  null, // 0 = unowned
+  { name: 'CORPORATE BLOC',   short: 'CORP', color: [245, 166,  35] },
+  { name: 'FEDERAL APPARATUS',short: 'FED',  color: [204,  34,  68] },
+  { name: 'PACIFIC ALLIANCE', short: 'PAC',  color: [ 34, 170, 204] },
+  { name: 'SOVEREIGN UNION',  short: 'SOV',  color: [136,  68, 187] },
+  { name: 'EASTERN COALITION',short: 'EAST', color: [ 68, 170,  85] },
+];
+
+// Starting positions (grid coords) for each faction
+const FACTION_STARTS = [
+  null,
+  { gx: 20,  gy: 30 },  // CORP
+  { gx: 50,  gy: 20 },  // FED
+  { gx: 110, gy: 35 },  // PAC
+  { gx: 30,  gy: 65 },  // SOV
+  { gx: 130, gy: 55 },  // EAST
+];
+
+// Simulation speed intervals (ms per tick). Index = speed level.
+const SIM_INTERVALS = [Infinity, 480, 130, 40];
+
+// Offscreen canvas for the pixel map
+const offCanvas = document.createElement('canvas');
+offCanvas.width  = GRID_W;
+offCanvas.height = GRID_H;
+const offCtx = offCanvas.getContext('2d');
+const imgData = offCtx.createImageData(GRID_W, GRID_H);
+
+// ── World state ───────────────────────────────────────────────────────────────
+let terrain    = new Uint8Array(N);
+let cellOwner  = new Uint8Array(N);
+let cellStr    = new Uint8Array(N);
+let factionCells = new Int32Array(6);  // [0..5], index 0 unused
+
+let simSpeed    = 1;       // 0=pause,1,2,3
+let simTimer    = 0;       // ms accumulator for tick
+let tickCount   = 0;
+let year        = 2025;
+let eventLog    = [];      // [{text,alpha}]
+let hoverCell   = -1;      // grid index under mouse
+let victoryFaction = 0;
+let gameState   = 'MENU';  // MENU, PLAYING, VICTORY
+
+// Speed button rects (logical coords, populated in drawHUD)
+let speedBtnRects = [];
+let restartBtnRect = null;
+
+let extraTicksFor  = 0;   // faction ID currently in "campaign" mode
+let extraTicksLeft = 0;   // ticks remaining
+
+// Mouse position (logical)
+let mouseX = 0, mouseY = 0;
+
+// ── Terrain generation ────────────────────────────────────────────────────────
+const PEAKS = [
+  { x: 0.20, y: 0.40, h: 1.0, sx: 0.14, sy: 0.18 },
+  { x: 0.38, y: 0.28, h: 0.9, sx: 0.12, sy: 0.15 },
+  { x: 0.55, y: 0.45, h: 0.95,sx: 0.16, sy: 0.14 },
+  { x: 0.72, y: 0.30, h: 0.85,sx: 0.13, sy: 0.16 },
+  { x: 0.85, y: 0.55, h: 0.9, sx: 0.12, sy: 0.17 },
+  { x: 0.25, y: 0.70, h: 0.80,sx: 0.14, sy: 0.12 },
+  { x: 0.50, y: 0.72, h: 0.75,sx: 0.10, sy: 0.11 },
+  { x: 0.78, y: 0.68, h: 0.82,sx: 0.13, sy: 0.13 },
+  { x: 0.12, y: 0.58, h: 0.70,sx: 0.09, sy: 0.13 },
+  { x: 0.62, y: 0.18, h: 0.78,sx: 0.11, sy: 0.10 },
+  { x: 0.42, y: 0.55, h: 0.65,sx: 0.08, sy: 0.09 },
+  { x: 0.90, y: 0.38, h: 0.72,sx: 0.09, sy: 0.12 },
+  { x: 0.33, y: 0.45, h: 0.60,sx: 0.07, sy: 0.08 },
+  { x: 0.68, y: 0.60, h: 0.68,sx: 0.10, sy: 0.10 },
+];
+
+function generateTerrain() {
+  const rng = makeRNG(12345);
+  for (let i = 0; i < N; i++) {
+    const gx = i % GRID_W;
+    const gy = Math.floor(i / GRID_W);
+    const fx = gx / GRID_W;
+    const fy = gy / GRID_H;
+
+    let val = 0;
+    for (const p of PEAKS) {
+      const dx = (fx - p.x) / p.sx;
+      const dy = (fy - p.y) / p.sy;
+      const v  = p.h * Math.exp(-(dx*dx + dy*dy));
+      if (v > val) val = v;
+    }
+
+    // micro-detail noise
+    val += Math.sin(fx * 18.3 + fy * 11.7) * 0.05;
+    val += Math.sin(fx * 7.1  - fy * 13.4) * 0.04;
+    val += (rng() - 0.5) * 0.06;
+
+    let t;
+    if      (val < 0.28) t = TERRAIN_OCEAN;
+    else if (val < 0.36) t = TERRAIN_SHALLOW;
+    else if (val < 0.62) t = TERRAIN_PLAINS;
+    else if (val < 0.80) t = TERRAIN_FOREST;
+    else                 t = TERRAIN_MOUNTAIN;
+
+    terrain[i] = t;
+  }
+}
+
+function isLand(t) {
+  return t >= TERRAIN_PLAINS;
+}
+
+// ── Place faction starting cells ──────────────────────────────────────────────
+function placeFactions() {
+  cellOwner.fill(0);
+  cellStr.fill(0);
+  factionCells.fill(0);
+
+  for (let f = 1; f <= 5; f++) {
+    const { gx, gy } = FACTION_STARTS[f];
+    // Find nearest land cell to the start position
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let dy = -8; dy <= 8; dy++) {
+      for (let dx = -8; dx <= 8; dx++) {
+        const nx = gx + dx, ny = gy + dy;
+        if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+        const idx = ny * GRID_W + nx;
+        if (!isLand(terrain[idx])) continue;
+        const dist = dx*dx + dy*dy;
+        if (dist < bestDist) { bestDist = dist; bestIdx = idx; }
+      }
+    }
+    if (bestIdx < 0) continue;
+    // Seed a small cluster of cells
+    const sx = bestIdx % GRID_W;
+    const sy = Math.floor(bestIdx / GRID_W);
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const nx = sx + dx, ny = sy + dy;
+        if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+        const idx = ny * GRID_W + nx;
+        if (!isLand(terrain[idx])) continue;
+        if (cellOwner[idx] !== 0) continue;
+        cellOwner[idx] = f;
+        cellStr[idx]   = 200;
+        factionCells[f]++;
+      }
+    }
+  }
+}
+
+// ── Pixel map ─────────────────────────────────────────────────────────────────
+function updateMapPixel(i) {
+  const t = terrain[i];
+  const owner = cellOwner[i];
+  const str   = cellStr[i];
+  const base  = TERRAIN_COLORS[t];
+  const d     = imgData.data;
+  const p     = i * 4;
+
+  if (owner === 0) {
+    d[p]   = base[0];
+    d[p+1] = base[1];
+    d[p+2] = base[2];
+    d[p+3] = 255;
+  } else {
+    const fc   = FACTIONS[owner].color;
+    const alpha = isLand(t) ? (0.3 + (str / 255) * 0.45) : 0.3;
+    d[p]   = Math.round(base[0] * (1 - alpha) + fc[0] * alpha);
+    d[p+1] = Math.round(base[1] * (1 - alpha) + fc[1] * alpha);
+    d[p+2] = Math.round(base[2] * (1 - alpha) + fc[2] * alpha);
+    d[p+3] = 255;
+  }
+}
+
+function rebuildMapImage() {
+  for (let i = 0; i < N; i++) updateMapPixel(i);
+  offCtx.putImageData(imgData, 0, 0);
+}
+
+// ── Simulation ────────────────────────────────────────────────────────────────
+const DIRS8 = [
+  -GRID_W - 1, -GRID_W, -GRID_W + 1,
+  -1,                    1,
+   GRID_W - 1,  GRID_W,  GRID_W + 1,
+];
+
+function getNeighbors8(i) {
+  const x = i % GRID_W;
+  const y = Math.floor(i / GRID_W);
+  const result = [];
+  for (const d of DIRS8) {
+    const ni = i + d;
+    if (ni < 0 || ni >= N) continue;
+    const nx = ni % GRID_W;
+    const ny = Math.floor(ni / GRID_W);
+    if (Math.abs(nx - x) > 1 || Math.abs(ny - y) > 1) continue;
+    result.push(ni);
+  }
+  return result;
+}
+
+// Collect all owned land cells per faction (rebuild on demand, but we maintain factionCells count)
+// For O(1) random owned-cell access we maintain per-faction pools lazily
+let ownedByFaction = [[], [], [], [], [], []];
+let poolDirty = true;
+
+function rebuildPools() {
+  for (let f = 0; f < 6; f++) ownedByFaction[f] = [];
+  for (let i = 0; i < N; i++) {
+    if (cellOwner[i] > 0 && isLand(terrain[i])) {
+      ownedByFaction[cellOwner[i]].push(i);
+    }
+  }
+  poolDirty = false;
+}
+
+function simTick(rng) {
+  if (poolDirty) rebuildPools();
+
+  const attempts = 280 + (extraTicksLeft > 0 && extraTicksFor > 0 ? 180 : 0);
+
+  for (let iter = 0; iter < attempts; iter++) {
+    // pick a random owned land cell from any faction with cells
+    let owner = Math.floor(rng() * 5) + 1;
+    const pool = ownedByFaction[owner];
+    if (pool.length === 0) continue;
+    const idx  = pool[Math.floor(rng() * pool.length)];
+    if (cellOwner[idx] !== owner) continue; // stale pool entry
+
+    const neighbors = getNeighbors8(idx);
+    if (neighbors.length === 0) continue;
+    const ni = neighbors[Math.floor(rng() * neighbors.length)];
+
+    if (!isLand(terrain[ni])) continue;
+
+    const nOwner = cellOwner[ni];
+
+    if (nOwner === 0) {
+      // Expand into empty land
+      cellOwner[ni] = owner;
+      cellStr[ni]   = 60;
+      factionCells[owner]++;
+      ownedByFaction[owner].push(ni);
+      updateMapPixel(ni);
+    } else if (nOwner !== owner) {
+      // Attack
+      const atkPow = Math.max(1, cellStr[idx] * (0.25 + rng() * 0.15));
+      const newStr = cellStr[ni] - atkPow;
+      if (newStr <= 0) {
+        // Captured
+        factionCells[nOwner]--;
+        factionCells[owner]++;
+        const oldPool = ownedByFaction[nOwner];
+        const removeIdx = oldPool.indexOf(ni);
+        if (removeIdx !== -1) oldPool.splice(removeIdx, 1);
+        ownedByFaction[owner].push(ni);
+        cellOwner[ni] = owner;
+        cellStr[ni]   = 60;
+        updateMapPixel(ni);
+      } else {
+        cellStr[ni] = Math.round(newStr);
+        updateMapPixel(ni);
+      }
+    }
+  }
+
+  // Strength regen
+  for (let r = 0; r < 180; r++) {
+    const owner = Math.floor(rng() * 5) + 1;
+    const pool  = ownedByFaction[owner];
+    if (pool.length === 0) continue;
+    const idx = pool[Math.floor(rng() * pool.length)];
+    if (cellOwner[idx] === owner && cellStr[idx] < 255) {
+      cellStr[idx] = Math.min(255, cellStr[idx] + 1);
+      updateMapPixel(idx);
+    }
+  }
+
+  if (extraTicksLeft > 0) extraTicksLeft--;
+
+  tickCount++;
+  year = 2025 + Math.floor(tickCount / 20);
+
+  if (tickCount % 45 === 0) triggerRandomEvent(rng);
+  if (tickCount % 15 === 0) checkVictory();
+}
+
+// ── Events ────────────────────────────────────────────────────────────────────
+const EVENT_TYPES = [
+  (f, rng) => { // Mobilize — boost 50 random cells
+    const pool = ownedByFaction[f];
+    for (let i = 0; i < 50 && pool.length > 0; i++) {
+      const idx = pool[Math.floor(rng() * pool.length)];
+      if (cellOwner[idx] === f) {
+        cellStr[idx] = Math.min(255, cellStr[idx] + 40);
+        updateMapPixel(idx);
+      }
+    }
+    return `${FACTIONS[f].short} MOBILIZES`;
+  },
+  (f, rng) => { // Revolt — weaken 40 random cells
+    const pool = ownedByFaction[f];
+    for (let i = 0; i < 40 && pool.length > 0; i++) {
+      const idx = pool[Math.floor(rng() * pool.length)];
+      if (cellOwner[idx] === f) {
+        cellStr[idx] = Math.max(1, cellStr[idx] - 40);
+        updateMapPixel(idx);
+      }
+    }
+    return `${FACTIONS[f].short} FACES REVOLT`;
+  },
+  (f, rng) => { // Campaign — extra expansion for 8 ticks
+    extraTicksFor  = f;
+    extraTicksLeft = 8;
+    return `${FACTIONS[f].short} LAUNCHES CAMPAIGN`;
+  },
+  (f, rng) => { // Fortify borders — boost border cells
+    const pool = ownedByFaction[f];
+    let boosted = 0;
+    for (let idx of pool) {
+      if (boosted >= 60) break;
+      if (cellOwner[idx] !== f) continue;
+      const ns = getNeighbors8(idx);
+      const isBorder = ns.some(ni => cellOwner[ni] !== f && isLand(terrain[ni]));
+      if (isBorder) {
+        cellStr[idx] = Math.min(255, cellStr[idx] + 30);
+        updateMapPixel(idx);
+        boosted++;
+      }
+    }
+    return `${FACTIONS[f].short} FORTIFIES BORDERS`;
+  },
+  (f, rng) => { // Economic collapse — weaken 60 random cells
+    const pool = ownedByFaction[f];
+    for (let i = 0; i < 60 && pool.length > 0; i++) {
+      const idx = pool[Math.floor(rng() * pool.length)];
+      if (cellOwner[idx] === f) {
+        cellStr[idx] = Math.max(1, cellStr[idx] - 30);
+        updateMapPixel(idx);
+      }
+    }
+    return `${FACTIONS[f].short} SUFFERS ECONOMIC COLLAPSE`;
+  },
+];
+
+function triggerRandomEvent(rng) {
+  // Find factions that actually have cells
+  const active = [];
+  for (let f = 1; f <= 5; f++) {
+    if (factionCells[f] > 0) active.push(f);
+  }
+  if (active.length === 0) return;
+  const f    = active[Math.floor(rng() * active.length)];
+  const type = EVENT_TYPES[Math.floor(rng() * EVENT_TYPES.length)];
+  const text = type(f, rng);
+  addEvent(text, f);
+}
+
+function addEvent(text, faction) {
+  const color = faction ? FACTIONS[faction].color : null;
+  eventLog.unshift({ text, color, alpha: 1.0 });
+  if (eventLog.length > 4) eventLog.length = 4;
+}
+
+// ── Victory ───────────────────────────────────────────────────────────────────
+function countLandCells() {
+  let total = 0;
+  for (let i = 0; i < N; i++) if (isLand(terrain[i])) total++;
+  return total;
+}
+
+let totalLand = 0;
+
+function checkVictory() {
+  for (let f = 1; f <= 5; f++) {
+    if (factionCells[f] / totalLand >= 0.80) {
+      victoryFaction = f;
+      gameState = 'VICTORY';
+      return;
+    }
+  }
+}
+
+// ── Init / Reset ──────────────────────────────────────────────────────────────
+const simRng = makeRNG(99991);
+
+function initGame() {
+  generateTerrain();
+  placeFactions();
+  totalLand = countLandCells();
+  poolDirty = true;
+  rebuildPools();
+  rebuildMapImage();
+
+  simSpeed  = 1;
+  simTimer  = 0;
+  tickCount = 0;
+  year      = 2025;
+  eventLog  = [];
+  hoverCell = -1;
+  victoryFaction = 0;
+  extraTicksFor  = 0;
+  extraTicksLeft = 0;
+  gameState = 'PLAYING';
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────────────
+let loopGen  = 0;
+let lastTime = 0;
+
+function startGame() {
+  initGame();
+  lastTime = performance.now();
+  const gen = ++loopGen;
+  requestAnimationFrame(function frame(now) {
+    if (loopGen !== gen) return;
+    gameLoop(now);
+    requestAnimationFrame(frame);
+  });
+}
+
+function gameLoop(now) {
+  const dt = Math.min(now - lastTime, 100);
+  lastTime = now;
+
+  if (gameState === 'PLAYING') {
+    const interval = SIM_INTERVALS[simSpeed];
+    if (isFinite(interval)) {
+      simTimer += dt;
+      while (simTimer >= interval) {
+        simTimer -= interval;
+        simTick(simRng);
+        // flush pixel changes
+        offCtx.putImageData(imgData, 0, 0);
+        if (gameState !== 'PLAYING') break;
+      }
+    }
+    // Fade event log
+    for (const e of eventLog) e.alpha = Math.max(0, e.alpha - dt / 14000);
+  }
+
+  draw();
+}
+
+// ── Drawing ───────────────────────────────────────────────────────────────────
+function draw() {
+  ctx.fillStyle = '#030508';
+  ctx.fillRect(0, 0, W, H);
+
+  if (gameState === 'MENU') return;
+
+  // Draw pixel map scaled to fill canvas
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(offCanvas, 0, 0, W, H);
+
+  drawHUD();
+
+  if (gameState === 'VICTORY') drawVictory();
+}
+
+// Map coordinate helpers
+function cellToScreen(i) {
+  const gx = i % GRID_W;
+  const gy = Math.floor(i / GRID_W);
+  return {
+    x: (gx + 0.5) / GRID_W * W,
+    y: (gy + 0.5) / GRID_H * H,
+  };
+}
+
+function screenToCell(sx, sy) {
+  const gx = Math.floor(sx / W * GRID_W);
+  const gy = Math.floor(sy / H * GRID_H);
+  if (gx < 0 || gx >= GRID_W || gy < 0 || gy >= GRID_H) return -1;
+  return gy * GRID_W + gx;
+}
+
+function drawHUD() {
+  const pad = 12;
+  speedBtnRects = [];
+
+  // ── Territory bars (top center) ──────────────────────────────────────────
+  const barW  = Math.min(500, W * 0.55);
+  const barH  = 10;
+  const barX  = (W - barW) / 2;
+  const barY  = pad;
+
+  // Background track
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.beginPath();
+  ctx.roundRect(barX - 2, barY - 2, barW + 4, barH + 4, 3);
+  ctx.fill();
+
+  let cumX = barX;
+  for (let f = 1; f <= 5; f++) {
+    const frac = factionCells[f] / totalLand;
+    const segW = frac * barW;
+    if (segW < 0.5) continue;
+    const [r,g,b] = FACTIONS[f].color;
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(cumX, barY, segW, barH);
+    cumX += segW;
+  }
+
+  // ── Year (top left) ──────────────────────────────────────────────────────
+  ctx.font = '700 13px "Exo 2"';
+  ctx.letterSpacing = '0.12em';
+  ctx.fillStyle = 'rgba(245,166,35,0.85)';
+  ctx.textAlign = 'left';
+  ctx.fillText(`YEAR ${year}`, pad, pad + 10);
+  ctx.letterSpacing = '0';
+
+  // ── Faction legend (top right) ────────────────────────────────────────────
+  ctx.textAlign = 'right';
+  let ly = pad + 2;
+  for (let f = 1; f <= 5; f++) {
+    const [r,g,b] = FACTIONS[f].color;
+    const pct = ((factionCells[f] / totalLand) * 100).toFixed(1);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.font = '600 11px "Rajdhani"';
+    ctx.fillText(`${FACTIONS[f].short}  ${pct}%`, W - pad, ly + 10);
+    ly += 14;
+  }
+
+  // ── Speed buttons (bottom right) ─────────────────────────────────────────
+  const labels  = ['⏸', '▶', '▶▶', '▶▶▶'];
+  const btnW    = 38;
+  const btnH    = 28;
+  const btnGap  = 6;
+  const totalBtnW = labels.length * btnW + (labels.length - 1) * btnGap;
+  let bx = W - pad - totalBtnW;
+  const by = H - pad - btnH;
+
+  for (let i = 0; i < labels.length; i++) {
+    const rx = bx + i * (btnW + btnGap);
+    speedBtnRects.push({ x: rx, y: by, w: btnW, h: btnH, speed: i });
+
+    const active = simSpeed === i;
+    ctx.fillStyle = active ? 'rgba(245,166,35,0.8)' : 'rgba(10,16,32,0.7)';
+    ctx.strokeStyle = active ? 'rgba(245,166,35,1)' : 'rgba(245,166,35,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(rx, by, btnW, btnH, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = active ? '#030508' : 'rgba(245,166,35,0.75)';
+    ctx.font = `${i === 3 ? '10' : '12'}px "Rajdhani"`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(labels[i], rx + btnW / 2, by + btnH / 2);
+  }
+  ctx.textBaseline = 'alphabetic';
+
+  // ── Event log (bottom left) ───────────────────────────────────────────────
+  ctx.textAlign = 'left';
+  let ely = H - pad - 14;
+  for (let e = 0; e < eventLog.length; e++) {
+    const ev = eventLog[e];
+    const col = ev.color ? ev.color : [245, 166, 35];
+    const a   = ev.alpha * (e === 0 ? 1.0 : 0.6 - e * 0.12);
+    ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${Math.max(0, a)})`;
+    ctx.font = `${e === 0 ? '600' : '400'} ${e === 0 ? 12 : 10}px "Rajdhani"`;
+    ctx.fillText(ev.text, pad, ely);
+    ely -= (e === 0 ? 16 : 13);
+  }
+
+  // ── Hover info (bottom center) ────────────────────────────────────────────
+  if (hoverCell >= 0 && cellOwner[hoverCell] > 0) {
+    const f    = cellOwner[hoverCell];
+    const str  = cellStr[hoverCell];
+    const [r,g,b] = FACTIONS[f].color;
+    const text  = `${FACTIONS[f].name}  STR ${str}`;
+    ctx.font = '600 11px "Rajdhani"';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = `rgba(${r},${g},${b},0.9)`;
+    ctx.fillText(text, W / 2, H - pad - 4);
+  }
+
+  ctx.textAlign = 'left';
+}
+
+function drawVictory() {
+  const f  = victoryFaction;
+  const [r,g,b] = FACTIONS[f].color;
+
+  // Dark overlay
+  ctx.fillStyle = 'rgba(3,5,8,0.82)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Glow behind text
+  const glow = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W*0.35);
+  glow.addColorStop(0, `rgba(${r},${g},${b},0.18)`);
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // "DOMINION ACHIEVED"
+  ctx.font = '900 clamp(2rem,6vw,4rem)/1 "Exo 2"';
+  const fontSize = Math.min(W * 0.06, 56);
+  ctx.font = `900 ${fontSize}px "Exo 2"`;
+  ctx.fillStyle = `rgb(${r},${g},${b})`;
+  ctx.shadowColor = `rgb(${r},${g},${b})`;
+  ctx.shadowBlur  = 30;
+  ctx.fillText('DOMINION ACHIEVED', W/2, H/2 - fontSize * 1.4);
+  ctx.shadowBlur  = 0;
+
+  // Faction name
+  ctx.font = `700 ${fontSize * 0.5}px "Exo 2"`;
+  ctx.fillStyle = '#ffffff';
+  ctx.letterSpacing = '0.2em';
+  ctx.fillText(FACTIONS[f].name, W/2, H/2 - fontSize * 0.5);
+  ctx.letterSpacing = '0';
+
+  // Year
+  ctx.font = `400 ${fontSize * 0.35}px "Rajdhani"`;
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText(`YEAR ${year}`, W/2, H/2 + fontSize * 0.3);
+
+  // Restart button
+  const rbW = 180, rbH = 44;
+  const rbX = W/2 - rbW/2;
+  const rbY = H/2 + fontSize * 1.2;
+  restartBtnRect = { x: rbX, y: rbY, w: rbW, h: rbH };
+
+  ctx.fillStyle = `rgba(${r},${g},${b},0.15)`;
+  ctx.strokeStyle = `rgba(${r},${g},${b},0.7)`;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(rbX, rbY, rbW, rbH, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.font = '700 14px "Exo 2"';
+  ctx.letterSpacing = '0.2em';
+  ctx.fillStyle = `rgb(${r},${g},${b})`;
+  ctx.fillText('RESTART', W/2, rbY + rbH/2);
+  ctx.letterSpacing = '0';
+
+  ctx.textBaseline = 'alphabetic';
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+function inRect(rx, ry, rw, rh, mx, my) {
+  return mx >= rx && mx <= rx + rw && my >= ry && my <= ry + rh;
+}
+
+function handleClick(lx, ly) {
+  if (gameState === 'MENU') return;
+
+  if (gameState === 'VICTORY') {
+    if (restartBtnRect && inRect(restartBtnRect.x, restartBtnRect.y, restartBtnRect.w, restartBtnRect.h, lx, ly)) {
+      startGame();
+    }
+    return;
+  }
+
+  // Speed buttons
+  for (const btn of speedBtnRects) {
+    if (inRect(btn.x, btn.y, btn.w, btn.h, lx, ly)) {
+      simSpeed = btn.speed;
+      simTimer = 0;
+      return;
+    }
+  }
+
+  // Crisis click on map
+  if (gameState === 'PLAYING') {
+    triggerCrisis(lx, ly);
+  }
+}
+
+function triggerCrisis(sx, sy) {
+  const cellW = W / GRID_W;
+  const cellH = H / GRID_H;
+  const radius = 10; // in grid cells
+
+  const cx = sx / W * GRID_W;
+  const cy = sy / H * GRID_H;
+
+  let changed = false;
+  for (let gy = Math.max(0, Math.floor(cy - radius)); gy < Math.min(GRID_H, Math.ceil(cy + radius)); gy++) {
+    for (let gx = Math.max(0, Math.floor(cx - radius)); gx < Math.min(GRID_W, Math.ceil(cx + radius)); gx++) {
+      const dist = Math.sqrt((gx - cx) ** 2 + (gy - cy) ** 2);
+      if (dist > radius) continue;
+      const idx = gy * GRID_W + gx;
+      if (cellOwner[idx] === 0 || !isLand(terrain[idx])) continue;
+      const weaken = Math.round((1 - dist / radius) * 60 + 10);
+      const newStr = cellStr[idx] - weaken;
+      if (newStr <= 0) {
+        factionCells[cellOwner[idx]]--;
+        const oldF = cellOwner[idx];
+        const oldPool = ownedByFaction[oldF];
+        const ri = oldPool.indexOf(idx);
+        if (ri !== -1) oldPool.splice(ri, 1);
+        cellOwner[idx] = 0;
+        cellStr[idx]   = 0;
+      } else {
+        cellStr[idx] = newStr;
+      }
+      updateMapPixel(idx);
+      changed = true;
+    }
+  }
+  if (changed) {
+    offCtx.putImageData(imgData, 0, 0);
+    addEvent('CRISIS TRIGGERED', null);
+  }
+}
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const dpr  = window.devicePixelRatio || 1;
+  const lx   = (e.clientX - rect.left);
+  const ly   = (e.clientY - rect.top);
+  mouseX = lx; mouseY = ly;
+  hoverCell  = screenToCell(lx, ly);
+});
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const lx   = e.clientX - rect.left;
+  const ly   = e.clientY - rect.top;
+  handleClick(lx, ly);
+});
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const t    = e.touches[0];
+  const lx   = t.clientX - rect.left;
+  const ly   = t.clientY - rect.top;
+  handleClick(lx, ly);
+}, { passive: false });
+
+// ── Menu ──────────────────────────────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', () => {
+  document.getElementById('menu').style.display = 'none';
+  startGame();
+});
+</script>
+</body>
+</html>

@@ -111,6 +111,18 @@ body::before{content:'';position:fixed;inset:0;z-index:0;background:radial-gradi
       </div>
     </article>
 
+    <article class="game-card" data-game="dominion">
+      <div class="card-preview">
+        <canvas class="preview-canvas" id="preview-dominion" width="320" height="180"></canvas>
+      </div>
+      <div class="card-body">
+        <div class="card-tag">SIMULATION &middot; GRAND STRATEGY</div>
+        <h2 class="card-title">DOMINION</h2>
+        <p class="card-desc">Five powers. One world. Watch empires rise and fall in real time.</p>
+        <a class="card-play-btn" href="dominion/index.html">PLAY</a>
+      </div>
+    </article>
+
   </div>
 </main>
 
@@ -365,10 +377,157 @@ function initSignalPreview(){
   requestAnimationFrame(frame);
 }
 
+/* ── DOMINION PREVIEW ──────────────────────────────────────── */
+function initDominionPreview(){
+  const cnv=document.getElementById('preview-dominion');
+  if(!cnv)return;
+  const ctx=cnv.getContext('2d');
+  const W=320,H=180;
+  const GW=64,GH=36,GN=GW*GH;
+
+  // Seeded RNG
+  function makeRNG(seed){
+    let s=seed>>>0;
+    return ()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};
+  }
+
+  // Terrain
+  const PEAKS=[
+    {x:0.20,y:0.40,h:1.0,sx:0.14,sy:0.18},{x:0.38,y:0.28,h:0.9,sx:0.12,sy:0.15},
+    {x:0.55,y:0.45,h:0.95,sx:0.16,sy:0.14},{x:0.72,y:0.30,h:0.85,sx:0.13,sy:0.16},
+    {x:0.85,y:0.55,h:0.9,sx:0.12,sy:0.17},{x:0.25,y:0.70,h:0.80,sx:0.14,sy:0.12},
+    {x:0.50,y:0.72,h:0.75,sx:0.10,sy:0.11},{x:0.78,y:0.68,h:0.82,sx:0.13,sy:0.13},
+    {x:0.12,y:0.58,h:0.70,sx:0.09,sy:0.13},{x:0.62,y:0.18,h:0.78,sx:0.11,sy:0.10},
+    {x:0.42,y:0.55,h:0.65,sx:0.08,sy:0.09},{x:0.90,y:0.38,h:0.72,sx:0.09,sy:0.12},
+    {x:0.33,y:0.45,h:0.60,sx:0.07,sy:0.08},{x:0.68,y:0.60,h:0.68,sx:0.10,sy:0.10},
+  ];
+  const TCOLORS=[[3,7,18],[5,10,28],[8,16,10],[6,14,8],[14,14,12]];
+  const FCOLORS=[[245,166,35],[204,34,68],[34,170,204],[136,68,187],[68,170,85]];
+  const FSTARTS=[{gx:12,gy:13},{gx:22,gy:8},{gx:44,gy:14},{gx:14,gy:26},{gx:54,gy:22}];
+
+  const terrain  =new Uint8Array(GN);
+  const cellOwner=new Uint8Array(GN);
+  const cellStr  =new Uint8Array(GN);
+  const fCells   =new Int32Array(6);
+  const rng      =makeRNG(12345);
+
+  // Generate terrain
+  for(let i=0;i<GN;i++){
+    const fx=(i%GW)/GW,fy=Math.floor(i/GW)/GH;
+    let v=0;
+    for(const p of PEAKS){
+      const dx=(fx-p.x)/p.sx,dy=(fy-p.y)/p.sy;
+      const pv=p.h*Math.exp(-(dx*dx+dy*dy));
+      if(pv>v)v=pv;
+    }
+    v+=Math.sin(fx*18.3+fy*11.7)*0.05+Math.sin(fx*7.1-fy*13.4)*0.04+(rng()-0.5)*0.06;
+    terrain[i]=v<0.28?0:v<0.36?1:v<0.62?2:v<0.80?3:4;
+  }
+
+  // Place factions
+  for(let f=0;f<5;f++){
+    const {gx,gy}=FSTARTS[f];
+    for(let dy=-2;dy<=2;dy++){
+      for(let dx=-2;dx<=2;dx++){
+        const nx=gx+dx,ny=gy+dy;
+        if(nx<0||nx>=GW||ny<0||ny>=GH)continue;
+        const idx=ny*GW+nx;
+        if(terrain[idx]<2||cellOwner[idx]!==0)continue;
+        cellOwner[idx]=f+1;
+        cellStr[idx]=200;
+        fCells[f+1]++;
+      }
+    }
+  }
+
+  // Offscreen pixel map
+  const off=document.createElement('canvas');
+  off.width=GW;off.height=GH;
+  const offCtx=off.getContext('2d');
+  const img=offCtx.createImageData(GW,GH);
+
+  function updatePixel(i){
+    const t=terrain[i],o=cellOwner[i],s=cellStr[i];
+    const b=TCOLORS[t];const d=img.data,p=i*4;
+    if(o===0){d[p]=b[0];d[p+1]=b[1];d[p+2]=b[2];d[p+3]=255;}
+    else{
+      const fc=FCOLORS[o-1],a=0.3+(s/255)*0.45;
+      d[p]=Math.round(b[0]*(1-a)+fc[0]*a);
+      d[p+1]=Math.round(b[1]*(1-a)+fc[1]*a);
+      d[p+2]=Math.round(b[2]*(1-a)+fc[2]*a);
+      d[p+3]=255;
+    }
+  }
+
+  for(let i=0;i<GN;i++)updatePixel(i);
+  offCtx.putImageData(img,0,0);
+
+  const simRng=makeRNG(77771);
+  let totalLand=0;
+  for(let i=0;i<GN;i++)if(terrain[i]>=2)totalLand++;
+
+  // Rebuild pools each frame (small grid, acceptable)
+  function simStep(){
+    for(let iter=0;iter<15;iter++){
+      // pick random owned cell
+      let owner=Math.floor(simRng()*5)+1;
+      // find any cell of that faction
+      let tries=0,idx=-1;
+      while(tries++<8){
+        const ri=Math.floor(simRng()*GN);
+        if(cellOwner[ri]===owner&&terrain[ri]>=2){idx=ri;break;}
+      }
+      if(idx<0)continue;
+      const x=idx%GW,y=Math.floor(idx/GW);
+      const dirs=[[-1,0],[1,0],[0,-1],[0,1]];
+      const d=dirs[Math.floor(simRng()*dirs.length)];
+      const nx=x+d[0],ny=y+d[1];
+      if(nx<0||nx>=GW||ny<0||ny>=GH)continue;
+      const ni=ny*GW+nx;
+      if(terrain[ni]<2)continue;
+      const no=cellOwner[ni];
+      if(no===0){
+        cellOwner[ni]=owner;cellStr[ni]=60;fCells[owner]++;updatePixel(ni);
+      } else if(no!==owner){
+        const atk=Math.max(1,cellStr[idx]*(0.25+simRng()*0.15));
+        const ns=cellStr[ni]-atk;
+        if(ns<=0){fCells[no]--;fCells[owner]++;cellOwner[ni]=owner;cellStr[ni]=60;}
+        else{cellStr[ni]=Math.round(ns);}
+        updatePixel(ni);
+      }
+    }
+    offCtx.putImageData(img,0,0);
+  }
+
+  function frame(){
+    simStep();
+    ctx.fillStyle='#030508';ctx.fillRect(0,0,W,H);
+    ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(off,0,0,W,H);
+
+    // Territory bars at bottom
+    const bH=6,bY=H-bH;
+    let cx=0;
+    for(let f=1;f<=5;f++){
+      const frac=fCells[f]/totalLand;
+      const segW=frac*W;
+      if(segW<0.5)continue;
+      const fc=FCOLORS[f-1];
+      ctx.fillStyle=`rgb(${fc[0]},${fc[1]},${fc[2]})`;
+      ctx.fillRect(cx,bY,segW,bH);
+      cx+=segW;
+    }
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   initWarpPreview();
   initAlpinePreview();
   initSignalPreview();
+  initDominionPreview();
 });
 </script>
 </body>
