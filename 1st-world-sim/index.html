@@ -77,7 +77,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .strip-stats{display:flex;flex:1;overflow:hidden;}
 .stat-block{flex:1;display:flex;flex-direction:column;justify-content:center;padding:5px 12px;border-right:1px solid #243040;min-width:0;}
 .stat-block:last-child{border-right:none;}
-.stat-block-label{font-family:var(--mono);font-size:7px;letter-spacing:2px;color:#445570;text-transform:uppercase;margin-bottom:2px;}
+.stat-block-label{font-family:var(--mono);font-size:7px;letter-spacing:2px;color:#8090b0;text-transform:uppercase;margin-bottom:2px;}
 .stat-block-val{font-family:var(--mono);font-size:clamp(13px,2vw,18px);font-weight:700;color:#e0ecff;line-height:1;margin-bottom:4px;}
 .stat-block-bar{height:3px;background:#243040;border-radius:2px;overflow:hidden;}
 .stat-bar{height:100%;border-radius:2px;transition:width 0.5s ease,background 0.4s ease;}
@@ -577,6 +577,8 @@ let G = {
   ticker: [],
   // campaign choices (for reference)
   campaignChoices: [],
+  // event cooldowns: {evId: lastSeenTurn} — events repeat after 5 turns
+  eventCooldowns: {},
 };
 
 function saveGame(){
@@ -1447,6 +1449,433 @@ choices:[
    outcome:()=>`Approved. Press release: "Region Welcomes Cutting-Edge Tech Investment." Electricity bills increase next quarter.`}
 ]},
 
+// ── LABOR ──
+{id:'ev_min_wage',tag:'LABOR / WAGES',minTurn:1,
+title:'Minimum Wage at $10/Hour. Median Rent: $1,340/Month.',
+body:()=>`The regional minimum wage has not been adjusted in 4 years. At 40 hours/week, a minimum-wage worker earns $20,800/year before taxes. The federal poverty threshold for a family of three: $24,860. Median one-bedroom rent in the region: $1,340/month. A bill to raise the wage to $15 over 3 years died in committee after $1.6M in lobbying.`,
+choices:[
+  {label:'A',text:'Advocate for a regional minimum wage ordinance.',
+   effect:g=>{g.trust+=4;g.wellbeing+=4;g.corpInfluence+=7;g.unrest-=3;},
+   outcome:()=>`Ordinance proposed. Small business coalition opposes. State preemption statutes may apply. Legal review: 4 months.`,
+   restricted:g=>g.corpInfluence>68},
+  {label:'B',text:'Living wage requirement for regional contractors only.',
+   effect:g=>{g.trust+=2;g.wellbeing+=2;g.corpInfluence+=4;},
+   outcome:()=>`Contractor wage floor set at $15.50. Applies to 240 workers. Does not affect the broader regional labor market.`},
+  {label:'C',text:'No local action. Defer to state and federal.',
+   effect:g=>{g.unrest+=4;g.trust-=3;g.wellbeing-=2;},
+   outcome:()=>`Status quo maintained. Wage gap between region and state average widens.`}
+]},
+
+{id:'ev_union_vote',tag:'LABOR / ORGANIZING',minTurn:2,
+title:'Warehouse Workers File for Union Election. Employer Responds.',
+body:()=>`Workers at a regional distribution center have filed a petition for a union election. The employer has hired a labor relations firm at $340/hour and is holding mandatory 30-minute "listening sessions" with individual workers daily. The NLRB has scheduled an election. Four workers have been terminated for unrelated cause since the petition was filed. Average wage at the facility: $14.80/hour.`,
+choices:[
+  {label:'A',text:'Issue statement supporting worker organizing rights.',
+   effect:g=>{g.trust+=4;g.unrest-=3;g.corpInfluence+=6;},
+   outcome:()=>`Statement issued. Employer's PR team calls it "political interference." Union wins election 54-46.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'B',text:'No comment. Private labor matter.',
+   effect:g=>{g.corpInfluence+=3;g.trust-=2;},
+   outcome:()=>`No comment issued. Election held. Employer challenges results. NLRB review: 8 months.`},
+  {label:'C',text:'Facilitate dialogue between employer and workers.',
+   effect:g=>{g.trust+=2;g.corpInfluence+=4;},
+   outcome:()=>`Dialogue session convened. Employer presents improved benefits package contingent on election outcome being no. Workers vote no, 52-48.`}
+]},
+
+{id:'ev_gig_workers',tag:'LABOR / MISCLASSIFICATION',minTurn:3,
+title:'App Delivery Workers Classified as Independent Contractors',
+body:()=>`Approximately 2,200 app-based delivery workers in the region are classified as independent contractors. They receive no minimum wage guarantee, no workers' compensation, no unemployment insurance, and no right to organize. A state reclassification bill failed last session. Platform companies spent $4.8M opposing it. Two workers were hospitalized in traffic incidents this quarter. Neither had insurance.`,
+choices:[
+  {label:'A',text:'Pursue local worker protection ordinance.',
+   effect:g=>{g.trust+=3;g.wellbeing+=3;g.corpInfluence+=6;},
+   outcome:()=>`Ordinance drafted. Platforms threaten to exit regional market. Legal challenge filed citing state preemption.`,
+   restricted:g=>g.corpInfluence>68},
+  {label:'B',text:'Establish regional worker advocacy office.',
+   effect:g=>{g.trust+=3;g.debt+=2;g.wellbeing+=2;},
+   outcome:()=>`Office established. Handles wage theft complaints and classification questions. 280 cases filed in first quarter.`},
+  {label:'C',text:'No local action.',
+   effect:g=>{g.wellbeing-=2;g.unrest+=3;g.corpInfluence+=4;},
+   outcome:()=>`Classification unchanged. Injury claims denied. Workers continue without safety net.`}
+]},
+
+{id:'ev_workers_comp',tag:'LABOR / WORKER SAFETY',minTurn:4,
+title:'Warehouse Injury Rate Double National Average — No Investigation',
+body:()=>`OSHA data shows the regional warehouse and logistics sector has an injury rate 2.1x the national average. The regional OSHA office has 3 inspectors covering 1,400 facilities. Inspection frequency: once every 94 years on average. Two workers have lost fingers this quarter. Both were denied workers' compensation on grounds of "pre-existing condition."`,
+choices:[
+  {label:'A',text:'Request state emergency OSHA staffing.',
+   effect:g=>{g.trust+=3;g.wellbeing+=3;g.corpInfluence+=4;},
+   outcome:()=>`Request submitted. State budget authority: no available positions. Two inspectors cover region through interagency arrangement.`},
+  {label:'B',text:'Fund regional workplace safety office.',
+   effect:g=>{g.trust+=4;g.debt+=3;g.wellbeing+=4;},
+   outcome:()=>`Regional office funded. Cannot issue federal penalties. Can document, refer, and publicize violations.`},
+  {label:'C',text:'No action. Federal jurisdiction.',
+   effect:g=>{g.wellbeing-=3;g.unrest+=3;g.corpInfluence+=3;},
+   outcome:()=>`Injury rates continue. No enforcement activity. Three additional injury claims denied this quarter.`}
+]},
+
+// ── INFRASTRUCTURE ──
+{id:'ev_bridge',tag:'INFRASTRUCTURE / TRANSPORTATION',minTurn:2,
+title:'Bridge Inspection: Structurally Deficient. 40,000 Crossings Daily.',
+body:()=>`The Route 30 bridge over the Des Plaines River has received a "structurally deficient" rating in the annual state inspection. Deficiency noted: deck corrosion, load rating reduced by 40%. Estimated repair cost: $18M. Estimated replacement cost: $44M. Current regional infrastructure budget: $3.2M. The bridge carries 40,000 vehicle crossings per day including regional school bus routes.`,
+choices:[
+  {label:'A',text:'Emergency repair and weight restriction pending full replacement.',
+   effect:g=>{g.trust+=4;g.debt+=5;g.wellbeing+=3;},
+   outcome:()=>`Weight restriction imposed. Emergency repairs funded at $3.2M. Full replacement on 4-year capital plan pending bond authorization.`},
+  {label:'B',text:'Pursue federal infrastructure grant.',
+   effect:g=>{g.trust+=2;g.wellbeing-=2;},
+   outcome:()=>`Application submitted. Grant cycle: 18 months. Bridge continues in current condition. School bus routes rerouted adding 28 minutes.`},
+  {label:'C',text:'Monitor. No funding available.',
+   effect:g=>{g.unrest+=4;g.trust-=4;g.wellbeing-=3;},
+   outcome:()=>`Status quo. Local paper publishes inspection report. State issues advisory. Bridge remains in use.`}
+]},
+
+{id:'ev_transit_cuts',tag:'INFRASTRUCTURE / PUBLIC TRANSIT',minTurn:2,
+title:'Bus Routes Eliminated — Serving Neighborhoods With No Car Access',
+body:()=>`The regional transit authority has eliminated 6 bus routes as part of a budget reduction. Four of the six serve neighborhoods where 38-52% of households do not own a vehicle. Affected riders: approximately 12,000 daily. The transit authority's board has 11 members. None live in the affected neighborhoods. Three are employed by real estate development firms.`,
+choices:[
+  {label:'A',text:'Restore routes through regional subsidy.',
+   effect:g=>{g.trust+=5;g.wellbeing+=5;g.debt+=4;g.unrest-=4;},
+   outcome:()=>`Routes restored. Regional subsidy: $2.8M/year. Ridership returns to prior levels within 3 months.`,
+   restricted:g=>g.debt>75},
+  {label:'B',text:'Partial restoration — 3 of 6 routes.',
+   effect:g=>{g.trust+=2;g.wellbeing+=2;g.debt+=2;},
+   outcome:()=>`Three routes restored. Three remain eliminated. 6,000 riders without service.`},
+  {label:'C',text:'No restoration. Budget constraints are real.',
+   effect:g=>{g.wellbeing-=5;g.unrest+=5;g.trust-=4;},
+   outcome:()=>`Routes remain eliminated. Employment rates in affected zip codes decline. Two grocery stores lose sufficient foot traffic and close.`}
+]},
+
+{id:'ev_grid_failure',tag:'INFRASTRUCTURE / UTILITIES',minTurn:5,
+title:'Rolling Blackouts During Heat Emergency — Dialysis Patients at Risk',
+body:()=>`A summer heat emergency has combined with peak grid demand to trigger rolling blackouts across the region. Duration: 2-6 hours per neighborhood rotation. Three dialysis patients have been hospitalized following missed sessions during outages. The utility company has declined to prioritize medical necessity addresses citing "operational constraints." Utility CEO compensation last year: $14.2M.`,
+choices:[
+  {label:'A',text:'Mandate medical necessity address priority with utility.',
+   effect:g=>{g.trust+=4;g.wellbeing+=4;g.corpInfluence+=5;},
+   outcome:()=>`Mandate issued. Utility contests jurisdiction. Emergency protocols established for this event period while legal challenge proceeds.`},
+  {label:'B',text:'Deploy emergency cooling centers.',
+   effect:g=>{g.wellbeing+=3;g.trust+=3;g.debt+=2;},
+   outcome:()=>`18 cooling centers opened. Transportation arranged for dialysis patients. Heat emergency resolves in 4 days.`},
+  {label:'C',text:'Issue advisory. Defer to utility.',
+   effect:g=>{g.trust-=4;g.wellbeing-=4;g.unrest+=5;},
+   outcome:()=>`Advisory issued. One additional patient hospitalized. Utility issues statement of regret.`}
+]},
+
+// ── CRIMINAL JUSTICE (additional) ──
+{id:'ev_cash_bail',tag:'CRIMINAL JUSTICE / PRETRIAL',minTurn:2,
+title:'68% of Jail Population Pretrial. Average Bail: $500.',
+body:()=>`Regional jail population: 840. Pretrial detainees: 571 (68%). Charges range from misdemeanor to non-violent felony. Average bail amount for detainees who cannot make bail: $500. Average daily jail cost: $94/person. The region spends $53,674/day detaining people who have not been convicted of anything. Most cannot make $500 bail. Most are employed. Most will lose their jobs within 2 weeks.`,
+choices:[
+  {label:'A',text:'Implement pretrial release with monitoring for non-violent charges.',
+   effect:g=>{g.trust+=5;g.wellbeing+=4;g.unrest-=3;g.debt-=2;},
+   outcome:()=>`Release program implemented. 340 people released. Court appearance rates: 89% — higher than the detained comparison group. Jail population decreases.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'B',text:'Establish bail fund to assist low-income defendants.',
+   effect:g=>{g.trust+=3;g.wellbeing+=3;g.debt+=2;},
+   outcome:()=>`Regional bail fund established at $280,000. Assists 180 residents in first quarter. Systematic driver unchanged.`},
+  {label:'C',text:'No change to pretrial policy.',
+   effect:g=>{g.unrest+=4;g.trust-=4;g.wellbeing-=3;},
+   outcome:()=>`Status quo maintained. Employment loss from pretrial detention estimated at $2.4M annually in the region.`}
+]},
+
+{id:'ev_plea_deals',tag:'CRIMINAL JUSTICE / PROSECUTION',minTurn:3,
+title:'97% of Cases Resolved by Plea. No Trial.',
+body:()=>`Regional court data: 97% of criminal cases are resolved through plea agreements. Three public defenders cover all felony cases. Average caseload: 280 cases per attorney (ABA recommended maximum: 150). A defendant charged with a nonviolent drug felony was offered 18 months probation to plead guilty, or risk 3-5 years if convicted at trial. She has a 4-year-old daughter. She pled guilty.`,
+choices:[
+  {label:'A',text:'Fund additional public defenders to reduce caseloads.',
+   effect:g=>{g.trust+=4;g.wellbeing+=3;g.debt+=4;},
+   outcome:()=>`4 additional public defenders hired. Caseloads drop to 180/attorney. Plea rate decreases to 91% over 18 months.`},
+  {label:'B',text:'Establish case diversion programs for nonviolent offenses.',
+   effect:g=>{g.trust+=3;g.wellbeing+=3;g.debt+=2;},
+   outcome:()=>`Diversion program launched. 340 cases diverted in year one. Recidivism at 12 months: 14%. Comparable incarceration recidivism: 34%.`},
+  {label:'C',text:'No action. Court operations are independent.',
+   effect:g=>{g.unrest+=3;g.wellbeing-=3;g.trust-=2;},
+   outcome:()=>`Plea system continues. Wrongful conviction risk disproportionately falls on residents who cannot afford private counsel.`}
+]},
+
+{id:'ev_prison_phones',tag:'CRIMINAL JUSTICE / INCARCERATION',minTurn:4,
+title:'Prison Phone Calls: $0.98/Minute. Contract With Private Vendor.',
+body:()=>`The regional correctional facility has an exclusive contract with ConnectCorp for inmate phone services. Rate: $0.98/minute for local calls. Average call: 15 minutes. Average cost: $14.70. Research consistently shows maintained family contact reduces recidivism. The county receives 30% of call revenue — approximately $340,000/year — through the contract.`,
+choices:[
+  {label:'A',text:'Terminate the revenue-sharing contract. Allow free calls.',
+   effect:g=>{g.trust+=5;g.wellbeing+=4;g.debt-=1;},
+   outcome:()=>`Contract renegotiated. Call rates drop to $0.21/minute. County loses $340,000 in annual revenue. Family contact rates increase 180%.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'B',text:'Cap rates at cost, not for profit.',
+   effect:g=>{g.trust+=3;g.wellbeing+=2;g.debt-=1;},
+   outcome:()=>`Rate cap implemented at $0.25/minute. Revenue share reduced. ConnectCorp protests but complies.`},
+  {label:'C',text:'No change. Revenue supports county operations.',
+   effect:g=>{g.unrest+=3;g.trust-=3;g.wellbeing-=2;},
+   outcome:()=>`Pricing unchanged. Families average 2 calls/month due to cost. Recidivism data unfavorable at 18-month review.`}
+]},
+
+{id:'ev_reentry',tag:'CRIMINAL JUSTICE / REENTRY',minTurn:5,
+title:'Returning Citizens Denied Housing, Jobs, and Voting Rights',
+body:()=>`Approximately 340 people will leave regional correctional facilities this year. State law prohibits public housing tenancy for anyone with a drug conviction. 68% of employers conduct background checks and decline to interview. Voting rights restoration requires 3 years post-supervision. Average income for returning citizens in first year: $8,300. Average annual regional cost of reincarceration: $38,000.`,
+choices:[
+  {label:'A',text:'Ban the box on regional employer applications. Restrict housing bans.',
+   effect:g=>{g.trust+=4;g.wellbeing+=4;g.corpInfluence+=5;g.unrest-=3;},
+   outcome:()=>`Ban-the-box enacted for regional contractors. Housing restriction waiver program established. Employment rates for returning citizens improve 28%.`,
+   restricted:g=>g.corpInfluence>68},
+  {label:'B',text:'Fund reentry employment and housing navigation services.',
+   effect:g=>{g.wellbeing+=3;g.trust+=3;g.debt+=3;},
+   outcome:()=>`Navigation center funded. Serves 140 individuals in first year. 72 secure stable housing. 89 secure employment.`},
+  {label:'C',text:'No specific reentry investment.',
+   effect:g=>{g.wellbeing-=2;g.unrest+=3;g.trust-=2;},
+   outcome:()=>`Recidivism at 3-year mark: 43%. Cost to region: documented. Policy unchanged.`}
+]},
+
+// ── HEALTHCARE (additional) ──
+{id:'ev_maternal_mortality',tag:'HEALTHCARE / MATERNAL HEALTH',minTurn:3,
+title:'Black Maternal Mortality Rate 3.1x That of White Residents',
+body:()=>`Regional vital records confirm Black residents die from pregnancy-related causes at 3.1 times the rate of white residents. The disparity is not explained by income, education, or access to insurance — research consistently finds it correlates with provider bias and inadequate pain response. No regional hospital has a formalized maternal mortality review committee. Two deaths occurred in the past quarter.`,
+choices:[
+  {label:'A',text:'Mandate maternal mortality review committees at regional hospitals.',
+   effect:g=>{g.trust+=4;g.wellbeing+=4;g.corpInfluence+=5;},
+   outcome:()=>`Mandate issued. Two hospitals comply immediately. One contests jurisdiction. Review committees identify four actionable process changes.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'B',text:'Fund community doula and midwife programs.',
+   effect:g=>{g.wellbeing+=4;g.trust+=3;g.debt+=3;},
+   outcome:()=>`Program funded. 80 additional doula-supported births in year one. Adverse outcome rate in supported births: 0.`},
+  {label:'C',text:'No action. Clinical decisions are not regional jurisdiction.',
+   effect:g=>{g.wellbeing-=3;g.trust-=3;g.unrest+=4;},
+   outcome:()=>`Disparity unchanged. Two additional deaths in following quarter.`}
+]},
+
+{id:'ev_mental_health_response',tag:'HEALTHCARE / MENTAL HEALTH',minTurn:3,
+title:'Mental Health Crisis Calls Dispatched to Armed Officers',
+body:()=>`Regional 911 dispatch sends armed officers to 100% of mental health crisis calls — approximately 3,400 calls per year. In comparable jurisdictions with crisis intervention teams, 94% of calls are resolved without arrest or hospitalization. Regional outcome: 34% result in arrest, 18% in ER visits, 3% in use of force. The region has no civilian crisis response alternative.`,
+choices:[
+  {label:'A',text:'Establish civilian mental health crisis response team.',
+   effect:g=>{g.trust+=5;g.wellbeing+=5;g.unrest-=4;g.debt+=4;},
+   outcome:()=>`Crisis team launched. 12 mental health professionals on rotating dispatch. In first quarter, handles 180 calls — 96% resolved without arrest.`},
+  {label:'B',text:'Train officers in crisis intervention — no separate team.',
+   effect:g=>{g.trust+=2;g.wellbeing+=2;g.debt+=2;},
+   outcome:()=>`280 officers complete 40-hour CIT training. Arrest rate on crisis calls drops from 34% to 28%.`},
+  {label:'C',text:'No change to dispatch protocol.',
+   effect:g=>{g.unrest+=4;g.trust-=4;g.wellbeing-=3;},
+   outcome:()=>`Three additional use-of-force incidents on mental health calls this quarter. All three subjects had a diagnosed condition.`}
+]},
+
+{id:'ev_dental',tag:'HEALTHCARE / DENTAL ACCESS',minTurn:2,
+title:'Dental Care Not Covered by Medicaid. Tooth Pain as Poverty Tax.',
+body:()=>`Adult dental care is not covered under Illinois Medicaid. Regional emergency rooms treated 1,840 patients for dental pain this year — at an average cost of $740/visit versus $100 at a dentist. 68% of low-income residents have untreated tooth decay. Untreated dental disease is linked to heart disease, diabetes complications, and job loss. The nearest free dental clinic has a 14-month wait.`,
+choices:[
+  {label:'A',text:'Fund regional community dental clinic expansion.',
+   effect:g=>{g.wellbeing+=5;g.trust+=4;g.debt+=4;},
+   outcome:()=>`Clinic expansion funded. Wait time drops from 14 to 6 months. 800 additional patients served annually.`},
+  {label:'B',text:'Dental school partnership for reduced-cost care.',
+   effect:g=>{g.wellbeing+=3;g.trust+=2;g.debt+=1;},
+   outcome:()=>`Partnership established. 340 additional patients served. Dental school gains residency placements. Wait time: 9 months.`},
+  {label:'C',text:'No regional dental investment.',
+   effect:g=>{g.wellbeing-=3;g.trust-=2;g.unrest+=2;},
+   outcome:()=>`ER dental visits continue at current rate. Annual cost to regional health system: $1.36M for conditions preventable at $100.`}
+]},
+
+{id:'ev_medicaid_work',tag:'HEALTHCARE / MEDICAID',minTurn:5,
+title:'State Proposes Work Requirements for Medicaid Eligibility',
+body:()=>`The state legislature is considering a bill requiring 80 hours/month of documented work, education, or community service for Medicaid eligibility. Federal data from states that implemented similar requirements: 96% of those who lost coverage were already working, in school, or medically exempt but could not document it. Administrative cost to implement: $1.2M/year. Coverage lost: estimated 18,000 regional residents.`,
+choices:[
+  {label:'A',text:'Formally oppose the legislation.',
+   effect:g=>{g.trust+=4;g.wellbeing+=3;g.corpInfluence+=4;},
+   outcome:()=>`Formal opposition registered. Legislation advances regardless. Region joins multiregion legal challenge if bill passes.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'B',text:'Establish regional navigation to minimize coverage losses.',
+   effect:g=>{g.wellbeing+=3;g.trust+=2;g.debt+=2;},
+   outcome:()=>`Navigation program helps 4,200 residents document eligibility. 13,800 still at risk of coverage loss.`},
+  {label:'C',text:'No position. State policy matter.',
+   effect:g=>{g.wellbeing-=4;g.trust-=3;g.unrest+=3;},
+   outcome:()=>`Region does not engage. If bill passes, estimated 18,000 residents lose coverage. ER utilization projected to increase.`}
+]},
+
+// ── EDUCATION (additional) ──
+{id:'ev_lunch_debt',tag:'EDUCATION / SCHOOL POVERTY',minTurn:1,
+title:'School Lunch Debt: $86,000. Children Refused Hot Meals.',
+body:()=>`Regional school districts are carrying $86,000 in unpaid student lunch debt. Under current policy, students whose accounts are negative are given a cold cheese sandwich instead of the hot meal — a practice called "lunch shaming" in federal guidance. Average lunch cost: $2.75. The state meal reimbursement shortfall is $1.10/meal. No student has been notified in writing of available free lunch eligibility forms.`,
+choices:[
+  {label:'A',text:'Eliminate lunch debt. Provide universal free meals.',
+   effect:g=>{g.wellbeing+=5;g.trust+=5;g.debt+=3;g.unrest-=3;},
+   outcome:()=>`Regional universal meals program funded at $340,000/year. All students receive full meals. Chronic absenteeism in participating schools drops 12%.`},
+  {label:'B',text:'Aggressively identify and enroll eligible students in free lunch.',
+   effect:g=>{g.wellbeing+=3;g.trust+=3;g.debt+=1;},
+   outcome:()=>`Enrollment drive reaches 1,200 additional eligible students. Debt reduced by 60%. 200 students remain in the gap.`},
+  {label:'C',text:'No change to current policy.',
+   effect:g=>{g.wellbeing-=3;g.trust-=3;g.unrest+=3;},
+   outcome:()=>`Cheese sandwich policy continues. Two students' situations reported by teacher. Story runs in local paper. Policy unchanged.`}
+]},
+
+{id:'ev_sped_cuts',tag:'EDUCATION / SPECIAL EDUCATION',minTurn:4,
+title:'Special Education Funding Gap: IEPs Not Implemented',
+body:()=>`A state audit has found that 34% of students with Individualized Education Programs (IEPs) in the region are not receiving their mandated services. Common reason: staff shortages. Regional special education teacher vacancy rate: 28%. Federal law requires IEP implementation. Federal enforcement mechanism: filing a complaint. Average resolution time: 16 months. The child is 7 years old.`,
+choices:[
+  {label:'A',text:'Emergency special education hiring initiative.',
+   effect:g=>{g.trust+=4;g.wellbeing+=4;g.debt+=4;},
+   outcome:()=>`Signing bonuses and salary increases funded. 18 additional special educators hired in 8 months. IEP compliance improves from 66% to 82%.`},
+  {label:'B',text:'Partner with university training programs for placements.',
+   effect:g=>{g.trust+=2;g.wellbeing+=2;g.debt+=1;},
+   outcome:()=>`Partnership provides 12 student teacher placements annually. Helps partially. Vacancy rate drops from 28% to 21%.`},
+  {label:'C',text:'Submit state compliance plan without additional funding.',
+   effect:g=>{g.trust-=2;g.wellbeing-=3;},
+   outcome:()=>`Compliance plan submitted. No implementation funding. Audit finding remains unresolved. Children continue without services.`}
+]},
+
+// ── ENVIRONMENT (additional) ──
+{id:'ev_heat_island',tag:'ENVIRONMENT / CLIMATE',minTurn:4,
+title:'Heat Emergency: Three Deaths in Neighborhoods Without Green Space',
+body:()=>`A 6-day heat emergency has resulted in 3 heat-related deaths, all in neighborhoods with less than 4% tree canopy coverage. Regional tree canopy by income quartile: bottom 25% — 6%; top 25% — 28%. Air conditioning ownership in lowest-income neighborhoods: 54%. All three deaths occurred in households without air conditioning. Average summer temperature in the urban heat island: 7°F above regional parks.`,
+choices:[
+  {label:'A',text:'Urban tree planting and cooling center investment in heat islands.',
+   effect:g=>{g.trust+=4;g.wellbeing+=4;g.debt+=3;},
+   outcome:()=>`$2.8M tree planting initiative and 6 permanent cooling centers funded in identified heat island neighborhoods.`},
+  {label:'B',text:'AC unit assistance program for low-income residents.',
+   effect:g=>{g.wellbeing+=3;g.trust+=3;g.debt+=2;},
+   outcome:()=>`1,200 units distributed. Heat-related ER visits decrease 22% in participating zip codes the following summer.`},
+  {label:'C',text:'Issue heat advisory. No new investment.',
+   effect:g=>{g.wellbeing-=3;g.trust-=3;g.unrest+=4;},
+   outcome:()=>`Advisory issued. Two additional heat-related deaths next summer. Pattern unchanged.`}
+]},
+
+{id:'ev_solar_blocked',tag:'ENVIRONMENT / ENERGY',minTurn:5,
+title:'Utility Lobbies to End Net Metering. Rooftop Solar Unviable.',
+body:()=>`ConsolidatedGrid has filed a proposal with the state commerce commission to eliminate net metering — the credit given to residential solar producers for excess power fed to the grid. Without net metering, rooftop solar payback period extends from 7 to 22 years. The utility has spent $1.8M lobbying the commission. The commission chair was previously employed by ConsolidatedGrid.`,
+choices:[
+  {label:'A',text:'Formally oppose elimination. Support community solar alternatives.',
+   effect:g=>{g.trust+=3;g.wellbeing+=2;g.corpInfluence+=5;},
+   outcome:()=>`Formal opposition filed. Commission proceeding continues. Community solar ordinance passed locally enabling group subscriptions.`},
+  {label:'B',text:'Develop regional municipal solar project.',
+   effect:g=>{g.trust+=3;g.debt+=4;g.wellbeing+=3;},
+   outcome:()=>`Municipal solar array contracted. 8MW capacity. Powers regional facilities. Reduces utility dependency.`},
+  {label:'C',text:'No position.',
+   effect:g=>{g.wellbeing-=2;g.corpInfluence+=5;},
+   outcome:()=>`Commission approves utility proposal. Net metering eliminated. Solar installations in region drop 74% the following year.`}
+]},
+
+// ── HOUSING (additional) ──
+{id:'ev_manufactured_homes',tag:'HOUSING / MOBILE HOMES',minTurn:3,
+title:'Mobile Home Park Sold. Residents Own Homes. Not the Land.',
+body:()=>`Sunrise Estates, a 280-unit mobile home park, has been sold to a REIT. Residents own their manufactured homes but not the land beneath them. New ownership has announced a 34% lot rent increase and intends to redevelop the site in 18 months. Residents would need to move their homes — average cost: $8,000-$15,000 — or abandon them. Most are over 60. Most cannot afford to move.`,
+choices:[
+  {label:'A',text:'Right of first refusal: allow residents to purchase the park.',
+   effect:g=>{g.trust+=5;g.wellbeing+=4;g.debt+=3;g.corpInfluence+=5;},
+   outcome:()=>`Resident purchase option supported with $1.8M in regional bridge financing. 220 residents complete cooperative purchase.`,
+   restricted:g=>g.corpInfluence>72},
+  {label:'B',text:'Relocation assistance fund for affected residents.',
+   effect:g=>{g.wellbeing+=2;g.trust+=3;g.debt+=2;},
+   outcome:()=>`$340,000 relocation fund established. Covers moving costs for 34 households. 246 face displacement without assistance.`},
+  {label:'C',text:'No intervention. Legal real estate transaction.',
+   effect:g=>{g.wellbeing-=5;g.unrest+=5;g.trust-=4;},
+   outcome:()=>`280 households face displacement. 180 abandon homes. REIT begins demolition. 12-unit luxury complex announced.`}
+]},
+
+{id:'ev_eviction_court',tag:'HOUSING / EVICTION',minTurn:2,
+title:'Eviction Court: 98% Landlord Representation. 4% Tenant.',
+body:()=>`Regional eviction court processes 8,400 cases annually. Landlords are represented by attorneys in 98% of cases. Tenants have representation in 4% of cases. Average time from filing to judgment: 17 days. Most tenants do not appear — they cannot miss work. Default judgment rate: 67%. Average eviction record on credit: prevents renting for 7 years. Most evictions involve amounts under $800.`,
+choices:[
+  {label:'A',text:'Fund right to counsel for eviction defendants.',
+   effect:g=>{g.trust+=5;g.wellbeing+=5;g.unrest-=3;g.debt+=4;},
+   outcome:()=>`Right to counsel program funded. Tenant representation increases to 68%. Default judgment rate drops to 22%. Eviction filings decrease 18%.`},
+  {label:'B',text:'Establish eviction mediation program.',
+   effect:g=>{g.trust+=3;g.wellbeing+=3;g.debt+=2;},
+   outcome:()=>`Mediation program launched. Successful in 54% of participating cases. Participation is voluntary for landlords.`},
+  {label:'C',text:'No intervention. Legal proceedings are independent.',
+   effect:g=>{g.wellbeing-=4;g.unrest+=4;g.trust-=3;},
+   outcome:()=>`Eviction rate unchanged. Shelter population increases. School enrollment in affected districts becomes unstable.`}
+]},
+
+{id:'ev_anti_camping',tag:'HOUSING / CRIMINALIZATION',minTurn:4,
+title:'Proposed Anti-Camping Ordinance: $500 Fine for Sleeping Outside',
+body:()=>`Council is considering an ordinance criminalizing camping on public property. Proposed fine: $500. Available shelter beds in region: 420. Individuals experiencing homelessness: 1,100. The ordinance follows a Supreme Court ruling permitting criminalization where shelter capacity is insufficient. Legal challenge likely. Six cities that passed similar ordinances saw no reduction in unsheltered population. Two were reversed by courts.`,
+choices:[
+  {label:'A',text:'Oppose ordinance. Invest in housing and services instead.',
+   effect:g=>{g.trust+=4;g.wellbeing+=4;g.debt+=4;g.unrest-=3;},
+   outcome:()=>`Ordinance rejected. $2.4M housing navigation program funded. 180 individuals housed in year one.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'B',text:'Oppose fine-based version. Support shelter-first alternatives.',
+   effect:g=>{g.trust+=2;g.wellbeing+=2;g.debt+=2;},
+   outcome:()=>`Fine-based ordinance defeated. 80 additional shelter beds funded. Shelter remains at 48% of need.`},
+  {label:'C',text:'Pass the ordinance.',
+   effect:g=>{g.unrest+=6;g.trust-=5;g.wellbeing-=4;g.corpInfluence+=3;},
+   outcome:()=>`Ordinance passes. 34 citations issued in first month. No fines collected — defendants cannot pay. Unsheltered population unchanged.`}
+]},
+
+// ── FINANCE (additional) ──
+{id:'ev_grocery_close',tag:'FINANCE / FOOD ACCESS',minTurn:3,
+title:'Last Grocery Store Closes in Food Desert Corridor',
+body:()=>`SaveMart on West Roosevelt has closed, citing "insufficient margin." The closure leaves a 3.4-mile gap in grocery access for approximately 18,000 residents in the Lawndale and North Lawndale corridors. Nearest alternative: a Dollar General without fresh produce. Average household in food deserts spends $28/month extra on transportation to reach groceries. Two Dollar Generals have opened within the corridor in the past 18 months.`,
+choices:[
+  {label:'A',text:'Subsidize community grocery cooperative.',
+   effect:g=>{g.wellbeing+=5;g.trust+=4;g.debt+=4;},
+   outcome:()=>`$1.8M cooperative grocery funded. Opens in 14 months. Provides fresh produce, local employment, and community ownership structure.`},
+  {label:'B',text:'Attract a regional grocery chain with tax incentives.',
+   effect:g=>{g.wellbeing+=3;g.trust+=2;g.corpInfluence+=4;g.debt-=1;},
+   outcome:()=>`Tax incentive package attracts mid-size chain. Opens in 22 months. Prices 8% higher than the closed store. Community ownership: zero.`},
+  {label:'C',text:'No action. Market decision.',
+   effect:g=>{g.wellbeing-=4;g.unrest+=4;g.trust-=3;},
+   outcome:()=>`Food access gap remains. Health outcomes in affected zip codes begin declining within 18 months.`}
+]},
+
+{id:'ev_wage_theft',tag:'FINANCE / LABOR ENFORCEMENT',minTurn:2,
+title:'$2.4M in Documented Wage Theft — No Prosecutions',
+body:()=>`Regional labor complaints document $2.4M in wage theft — withheld tips, unpaid overtime, illegal deductions — over the past 18 months. The state labor department has 4 investigators for the region. Average case resolution time: 14 months. Employer compliance with findings: 38%. Criminal referrals: 0. The statute of limitations on most claims: 2 years.`,
+choices:[
+  {label:'A',text:'Establish regional wage theft enforcement unit.',
+   effect:g=>{g.trust+=4;g.wellbeing+=4;g.corpInfluence+=5;g.debt+=2;},
+   outcome:()=>`Unit established with 3 investigators and civil enforcement authority. $340,000 in back wages recovered in first quarter.`},
+  {label:'B',text:'Partner with legal aid for worker complaint assistance.',
+   effect:g=>{g.trust+=2;g.wellbeing+=2;g.debt+=1;},
+   outcome:()=>`Legal aid partnership provides representation to 140 wage theft claimants. $180,000 recovered. 2,260 claims remain unassisted.`},
+  {label:'C',text:'Refer to state. No additional regional capacity.',
+   effect:g=>{g.wellbeing-=2;g.corpInfluence+=4;g.trust-=2;},
+   outcome:()=>`State queue grows. Case resolution timeline extends to 22 months. Most workers give up.`}
+]},
+
+// ── POLICING (additional) ──
+{id:'ev_wellness_check',tag:'POLICING / CRISIS RESPONSE',minTurn:2,
+title:'Mental Health Call. Family Requested Help. Officer Fired Weapon.',
+body:()=>`A family called 911 requesting a mental health welfare check on their 34-year-old son, who had a documented bipolar diagnosis and was in crisis. Two armed officers responded. A use-of-force incident occurred. The son survived with non-life-threatening injuries. The family's request had specifically noted "he's not dangerous, he's scared." The responding officers had no crisis intervention training.`,
+choices:[
+  {label:'A',text:'Mandate crisis intervention training and co-responder protocols.',
+   effect:g=>{g.trust+=4;g.wellbeing+=3;g.unrest-=4;g.debt+=2;},
+   outcome:()=>`CIT training required for all patrol officers. Co-responder program with mental health professionals piloted in three districts.`},
+  {label:'B',text:'Establish civilian review with subpoena power.',
+   effect:g=>{g.trust+=3;g.unrest-=3;g.corpInfluence+=4;},
+   outcome:()=>`Civilian review board established. Police union challenges subpoena provisions. Board conducts review. Officer receives additional training.`,
+   restricted:g=>g.corpInfluence>65},
+  {label:'C',text:'Internal affairs review. Standard process.',
+   effect:g=>{g.unrest+=6;g.trust-=6;},
+   outcome:()=>`Internal review clears officer of policy violation. Family files civil suit. Settlement: $280,000 from school capital fund.`}
+]},
+
+// ── MEDIA (additional) ──
+{id:'ev_reporter_subpoena',tag:'MEDIA / PRESS FREEDOM',minTurn:5,
+title:'Journalist Subpoenaed for Source in Corruption Investigation',
+body:()=>`A journalist at an independent outlet has been subpoenaed by a county prosecutor to reveal the source of leaked documents detailing financial irregularities at a regional TIF authority. The journalist is invoking shield law protections. The source is believed to be an employee who has since been terminated. The irregularities documented involve $1.8M in unaccounted disbursements.`,
+choices:[
+  {label:'A',text:'Issue statement supporting press freedom and shield law.',
+   effect:g=>{g.trust+=3;g.mediaNarrative-=4;},
+   outcome:()=>`Statement issued. Prosecutor continues proceedings. Irregularity investigation stalls while press freedom case is litigated.`},
+  {label:'B',text:'Commission independent audit of the TIF authority.',
+   effect:g=>{g.trust+=4;g.wellbeing+=2;g.corpInfluence+=5;},
+   outcome:()=>`Audit commissioned. Three irregularities confirmed. Two officials placed on administrative leave. Journalist's source protection moot.`},
+  {label:'C',text:'No comment. Judicial proceeding.',
+   effect:g=>{g.trust-=2;g.mediaNarrative+=5;},
+   outcome:()=>`Journalist held in contempt. Source revealed. Source faces civil suit. TIF irregularities remain uninvestigated.`}
+]},
+
+{id:'ev_algorithm_news',tag:'MEDIA / INFORMATION ENVIRONMENT',minTurn:4,
+title:'Platform Algorithm Deprioritizes Local Accountability Journalism',
+body:()=>`A study by Northwestern's local news lab confirms that regional news outlets covering government accountability — budget hearings, zoning decisions, school board votes — receive 94% less engagement through platform algorithms compared to outrage-optimized content. Outlets have begun changing coverage focus to survive. Three investigative pieces planned this quarter were replaced with viral-adjacent content.`,
+choices:[
+  {label:'A',text:'Fund local journalism directly through public media grants.',
+   effect:g=>{g.trust+=4;g.mediaNarrative-=5;g.debt+=2;},
+   outcome:()=>`$280,000 in public interest journalism grants distributed. Three investigative outlets receive runway funding. Accountability coverage increases.`},
+  {label:'B',text:'Establish regional public information office with proactive disclosure.',
+   effect:g=>{g.trust+=3;g.mediaNarrative-=2;g.debt+=1;},
+   outcome:()=>`Proactive disclosure office posts budget documents, contracts, and meeting records publicly. Reduces investigative burden on underfunded outlets.`},
+  {label:'C',text:'No intervention in media landscape.',
+   effect:g=>{g.mediaNarrative+=6;g.trust-=3;},
+   outcome:()=>`Algorithmic suppression continues. Three planned investigative pieces go unpublished. One TIF irregularity goes undetected for another year.`}
+]},
+
 // ── SPECIAL / META ──
 {id:'ev_federal_visit',tag:'FEDERAL / SPECIAL BRIEFING',minTurn:10,special:true,
 title:'Federal Official Visits. Does Not Mention the Water.',
@@ -1558,10 +1987,13 @@ function initGame(){
 
 function getAvailableEvents(){
   const pool = EVENTS.filter(ev=>{
-    if(G.seenEvents.has(ev.id)) return false;
-    if(ev.minTurn && G.turn < ev.minTurn) return false;
     if(ev.special) return false;
-    return true;
+    if(ev.minTurn && G.turn < ev.minTurn) return false;
+    // One-shot events (have delayed effects or marked unique) — never repeat
+    if(ev.delayed_effect || ev.unique) return !G.seenEvents.has(ev.id);
+    // Regular events: cooldown of 5 turns before they can reappear
+    const lastSeen = G.eventCooldowns[ev.id] || 0;
+    return (G.turn - lastSeen) >= 5;
   });
   // shuffle
   for(let i=pool.length-1;i>0;i--){
@@ -1664,7 +2096,7 @@ function showCard(){
   area.innerHTML = '';
   if(cp) cp.innerHTML = '';
   if(currentEventIdx >= currentEvents.length){
-    area.innerHTML = '<div class="all-cleared"><div class="all-cleared-icon">✓</div><div class="all-cleared-text">All matters reviewed. Advance to next month.</div></div>';
+    area.innerHTML = '';
     document.getElementById('event-counter').textContent = currentEvents.length+' / '+currentEvents.length;
     return;
   }
@@ -1719,8 +2151,12 @@ function makeChoice(evId, choiceIdx){
   const ch = ev.choices[parseInt(choiceIdx)];
   if(!ch) return;
 
-  // Mark as seen
-  G.seenEvents.add(evId);
+  // Track seen — one-shots go into seenEvents, others into cooldown
+  if(ev.delayed_effect || ev.unique){
+    G.seenEvents.add(evId);
+  } else {
+    G.eventCooldowns[evId] = G.turn;
+  }
   resolvedCount++;
 
   // Apply effect
