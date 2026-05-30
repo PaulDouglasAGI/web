@@ -981,8 +981,10 @@ function draw(){
     ctx.translate((Math.random()-0.5)*shakeAmt*2,(Math.random()-0.5)*shakeAmt*2);
     shakeAmt*=0.85; if(shakeAmt<0.4) shakeAmt=0;
   }
-  // Zoom-out: scale centered on player so player stays at same screen position
-  ctx.translate(player.x*(1-CAM_ZOOM), player.y*(1-CAM_ZOOM));
+  // Zoom-out: fixed anchor at the ground beneath the player — doesn't bob on jumps
+  const camX = player.x;
+  const camY = H * SLOPE_BASE + player.x * SLOPE; // base slope, no sine jitter
+  ctx.translate(camX*(1-CAM_ZOOM), camY*(1-CAM_ZOOM));
   ctx.scale(CAM_ZOOM, CAM_ZOOM);
   drawSky();
   drawMountains();
