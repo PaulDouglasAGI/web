@@ -138,6 +138,7 @@ const SPAWN_FLOOR_START = 4800; // initial minimum gap between obstacles (ms)
 const SPAWN_FLOOR_MIN   = 2200; // floor on that minimum as speed increases
 const PICKUP_INTERVAL= 3400;
 const SCARF_LEN      = 16;    // history points for scarf
+const CAM_ZOOM       = 0.5;   // zoom-out factor: 0.5 = see double the visible area
 
 const OBSTACLE_DEFS = {
   pine:     {w:38, h:72, hp:1,   invincible:false},
@@ -214,12 +215,12 @@ function drawSky() {
     g.addColorStop(stop, lerpColor(SKY_A[i], SKY_B[i], t));
   });
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(-W*2, -H*2, W*6, H*6); // cover entire virtual canvas
   // Deep atmospheric band at top
   const topBand=ctx.createLinearGradient(0,0,0,H*0.13);
   topBand.addColorStop(0,'rgba(5,3,15,0.55)');
   topBand.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.fillStyle=topBand; ctx.fillRect(0,0,W,H*0.13);
+  ctx.fillStyle=topBand; ctx.fillRect(-W*2,-H*2,W*6,H*2+H*0.13);
 }
 
 // ── 4. TERRAIN ──────────────────────────────────────────────────
@@ -278,7 +279,7 @@ function drawForest() {
   const forestColor = '#0f1520';
   ctx.save(); ctx.translate(shift, 0);
   ctx.fillStyle = forestColor;
-  for(let rep=-1; rep<=2; rep++) {
+  for(let rep=-1; rep<=3; rep++) {
     ctx.save(); ctx.translate(rep*tileW, 0);
     // Cluster of silhouette pines along the slope
     const xPositions = [18,52,88,126,162,200,240,276,310,354,390];
@@ -310,17 +311,18 @@ function drawSilhouettePine(x, baseY, sc) {
 }
 
 function drawGroundFill() {
-  // Filled snow slope
-  const steps = 24;
+  // Filled snow slope — expanded to cover full zoomed-out virtual canvas
+  const gx0 = -W, gx1 = W*2;
+  const steps = 48;
   ctx.beginPath();
   let first = true;
   for(let i=0; i<=steps; i++) {
-    const sx = (i/steps)*W;
+    const sx = gx0 + (i/steps)*(gx1-gx0);
     const gy = groundAt(sx);
     if(first){ ctx.moveTo(sx, gy); first=false; }
     else ctx.lineTo(sx, gy);
   }
-  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.lineTo(gx1, H*2); ctx.lineTo(gx0, H*2); ctx.closePath();
   const g0 = groundAt(0), gW = groundAt(W);
   const grad = ctx.createLinearGradient(0, g0, W, gW + (gW-g0)*0.3);
   grad.addColorStop(0, '#f5f2ee');
@@ -347,8 +349,8 @@ function drawGroundFill() {
 
 // ── 6. SNOW PARTICLES ───────────────────────────────────────────
 function initSnow() {
-  snowFlakes = Array.from({length:18}, () => ({
-    x: Math.random()*W,
+  snowFlakes = Array.from({length:30}, () => ({
+    x: Math.random()*W*2,
     y: Math.random()*H*0.85,
     r: 1 + Math.random()*1.8,
     vx: -0.2 + Math.random()*0.6,
@@ -360,11 +362,11 @@ function initSnow() {
 function updateSnow() {
   snowFlakes.forEach(f => {
     f.x += f.vx; f.y += f.vy;
-    if(f.y > groundAt(f.x) || f.x > W + 10) {
-      f.x = Math.random()*W;
+    if(f.y > H*2 || f.x > W*2 + 10) {
+      f.x = Math.random()*W*2;
       f.y = -5;
     }
-    if(f.x < -10) f.x = W + 5;
+    if(f.x < -10) f.x = W*2 + 5;
   });
 }
 
@@ -868,15 +870,15 @@ function updateObstacles(df){
     o.x-=scrollSpeed*df;
     o.y=groundAt(o.x);
   });
-  obstacles=obstacles.filter(o=>o.x>-o.w-30);
+  obstacles=obstacles.filter(o=>o.x>-o.w-W*0.5);
   pickupItems.forEach(it=>{
     it.x-=scrollSpeed*df;
     it.y=groundAt(it.x)-PICKUP_R-8;
     it.pulseT+=df;
   });
-  pickupItems=pickupItems.filter(it=>it.x>-30);
+  pickupItems=pickupItems.filter(it=>it.x>-W*0.5);
   projectiles.forEach(p=>{p.x+=p.vx*df;p.y+=p.vy*df;});
-  projectiles=projectiles.filter(p=>p.x<W+20&&p.x>-20&&p.y<H+20);
+  projectiles=projectiles.filter(p=>p.x<W*2+20&&p.x>-W*0.5&&p.y<H*2+20);
 }
 
 function nextObstacleGap(){
@@ -901,12 +903,12 @@ function spawnObstacle(){
   else if(r<0.85) type='tent';
   else            type='bear';
   const def=OBSTACLE_DEFS[type];
-  const sx=W+def.w+24;
+  const sx=W*2+def.w+24; // spawn beyond zoomed-out right edge
   obstacles.push({type,x:sx,y:groundAt(sx),w:def.w,h:def.h,hp:def.hp,maxHp:def.hp,invincible:def.invincible});
 }
 
 function spawnPickup(){
-  const sx=W+50+Math.random()*60;
+  const sx=W*2+50+Math.random()*60;
   pickupItems.push({x:sx,y:groundAt(sx)-PICKUP_R-8,pulseT:0});
 }
 
@@ -979,6 +981,9 @@ function draw(){
     ctx.translate((Math.random()-0.5)*shakeAmt*2,(Math.random()-0.5)*shakeAmt*2);
     shakeAmt*=0.85; if(shakeAmt<0.4) shakeAmt=0;
   }
+  // Zoom-out: scale centered on player so player stays at same screen position
+  ctx.translate(player.x*(1-CAM_ZOOM), player.y*(1-CAM_ZOOM));
+  ctx.scale(CAM_ZOOM, CAM_ZOOM);
   drawSky();
   drawMountains();
   drawForest();
@@ -989,8 +994,9 @@ function draw(){
   projectiles.forEach(drawProjectile);
   drawParticles();
   drawPlayer();
-  if(gameState==='PLAYING'||gameState==='DEAD') drawHUD();
   ctx.restore();
+  // HUD drawn after restore so it stays at normal screen size and position
+  if(gameState==='PLAYING'||gameState==='DEAD') drawHUD();
   drawVignette();
 }
 
