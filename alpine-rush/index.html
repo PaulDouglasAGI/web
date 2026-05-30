@@ -153,6 +153,7 @@ const ctx    = canvas.getContext('2d');
 let W, H;
 
 let gameState = 'MENU';
+let camYRig   = 0; // smoothed camera Y — holds still during jumps
 let score     = 0;
 let bestScore = parseInt(localStorage.getItem('ar_best')||'0');
 let multiplier= 1;
@@ -981,10 +982,10 @@ function draw(){
     ctx.translate((Math.random()-0.5)*shakeAmt*2,(Math.random()-0.5)*shakeAmt*2);
     shakeAmt*=0.85; if(shakeAmt<0.4) shakeAmt=0;
   }
-  // Zoom-out: fixed anchor at the ground beneath the player — doesn't bob on jumps
-  const camX = player.x;
-  const camY = H * SLOPE_BASE + player.x * SLOPE; // base slope, no sine jitter
-  ctx.translate(camX*(1-CAM_ZOOM), camY*(1-CAM_ZOOM));
+  // Camera Y: smoothly tracks terrain when grounded, freezes completely during jumps
+  const isGrounded = player.state==='SKIING' || player.state==='CROUCH';
+  if(isGrounded) camYRig += (playerGroundY() - camYRig) * 0.05;
+  ctx.translate(player.x*(1-CAM_ZOOM), camYRig*(1-CAM_ZOOM));
   ctx.scale(CAM_ZOOM, CAM_ZOOM);
   drawSky();
   drawMountains();
@@ -1037,6 +1038,7 @@ function initGame(){
   obstacles=[];projectiles=[];pickupItems=[];particles=[];wipeoutPcs=[];scarfHistory=[];
   player.x=W*PLAYER_X_FRAC;
   player.y=playerGroundY();
+  camYRig=player.y;
   player.vy=0;player.state='SKIING';
   player.rotation=0;player.flipLocked=false;
   player.landingFlash=0;player.wipeoutTimer=0;player.jumpBoostMs=0;
