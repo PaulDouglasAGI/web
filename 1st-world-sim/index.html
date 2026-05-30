@@ -24,9 +24,9 @@
   --mono:'IBM Plex Mono',monospace;
   --sans:'IBM Plex Sans',sans-serif;
 }
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden;}
+html,body{height:100%;height:100dvh;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;overflow:hidden;overscroll-behavior:none;}
 body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 80% 60% at 15% 10%,rgba(40,80,180,0.07) 0%,transparent 70%);}
-#app{height:100vh;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:1;}
+#app{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:1;}
 
 /* ── SCREEN LAYERS ── */
 .screen{display:none;flex-direction:column;height:100%;overflow:hidden;}
@@ -66,10 +66,10 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 /* ═══════════════════════════════════════════
    MAIN GAME — column layout, mobile-first
 ═══════════════════════════════════════════ */
-#screen-game{flex-direction:column;height:100vh;overflow:hidden;}
+#screen-game{flex-direction:column;height:100vh;height:100dvh;overflow:hidden;}
 
 /* ── STAT STRIP (horizontal top bar) ── */
-#stat-strip{background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:stretch;flex-shrink:0;min-height:68px;overflow:hidden;}
+#stat-strip{background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:stretch;flex-shrink:0;min-height:62px;overflow:hidden;}
 
 .strip-brand{display:flex;flex-direction:column;justify-content:center;padding:0 16px;border-right:1px solid var(--border);min-width:110px;flex-shrink:0;}
 .strip-brand-title{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--gold);opacity:0.65;text-transform:uppercase;}
@@ -93,11 +93,21 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .strip-classified-row{font-family:var(--mono);font-size:7px;letter-spacing:1px;color:#1e1230;text-transform:uppercase;white-space:nowrap;}
 .strip-classified-row+.strip-classified-row{margin-top:3px;}
 
+/* ── DESK SCENE ── */
+#desk-scene{flex-shrink:0;overflow:hidden;background:#060a10;border-bottom:1px solid var(--border);}
+#desk-scene svg{display:block;width:100%;height:118px;}
+.char-body-group{animation:breathe 5s ease-in-out infinite;}
+.char-head-el{animation:headBob 6s ease-in-out infinite;}
+@keyframes breathe{0%,100%{transform:translateY(0);}50%{transform:translateY(-1.5px);}}
+@keyframes headBob{0%,100%{transform:translateY(0);}40%{transform:translateY(-2px);}70%{transform:translateY(-1px);}}
+.lamp-glow{animation:lampFlicker 8s ease-in-out infinite;}
+@keyframes lampFlicker{0%,100%{opacity:1;}45%{opacity:0.88;}50%{opacity:0.95;}85%{opacity:0.9;}}
+
 /* ── GAME BODY ── */
-#game-body{flex:1;display:flex;overflow:hidden;}
+#game-body{flex:1;display:flex;overflow:hidden;min-height:0;}
 
 /* ── MAIN COLUMN ── */
-#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;min-height:0;}
 
 #main-header{padding:10px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--panel);flex-shrink:0;}
 .phase-label{font-family:var(--mono);font-size:7px;letter-spacing:3px;color:var(--gold);text-transform:uppercase;opacity:0.65;}
@@ -105,15 +115,22 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .event-counter{font-family:var(--mono);font-size:10px;color:var(--text-dim);background:var(--border);padding:3px 10px;border-radius:2px;}
 
 /* ── EVENT AREA ── */
-#event-area{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--bg);}
+#event-area{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--bg);}
 #event-area::-webkit-scrollbar{width:4px;}
 #event-area::-webkit-scrollbar-track{background:transparent;}
 #event-area::-webkit-scrollbar-thumb{background:var(--border2);}
 
-/* ── EVENT CARD ── */
-.event-card{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--ev-color,var(--border2));border-radius:2px;overflow:hidden;animation:cardIn 0.3s ease;}
-@keyframes cardIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
-.event-card.resolved{opacity:0.32;pointer-events:none;}
+/* ── EVENT CARD — paper landing animation ── */
+.event-card{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--ev-color,var(--border2));border-radius:2px;overflow:hidden;position:relative;animation:paperIn 0.44s cubic-bezier(0.22,1,0.36,1);}
+@keyframes paperIn{
+  0%{opacity:0;transform:translateX(70px) translateY(-22px) rotate(5deg);}
+  58%{transform:translateX(-6px) translateY(3px) rotate(-0.4deg);}
+  100%{opacity:1;transform:none;}
+}
+.event-card.resolved{pointer-events:none;}
+.event-card.resolved::before{content:'';position:absolute;inset:0;background:rgba(6,10,16,0.58);z-index:2;pointer-events:none;}
+.event-card.resolved::after{content:'FILED';position:absolute;top:14px;right:16px;z-index:3;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:3px;color:rgba(200,100,40,0.8);border:2px solid rgba(200,100,40,0.55);padding:3px 9px;transform:rotate(8deg);pointer-events:none;animation:stampIn 0.28s cubic-bezier(0.22,1,0.36,1);}
+@keyframes stampIn{0%{transform:rotate(8deg) scale(2.2);opacity:0;}100%{transform:rotate(8deg) scale(1);opacity:1;}}
 
 .event-card-header{padding:16px 18px 12px;}
 .event-tag{font-family:var(--mono);font-size:8px;letter-spacing:2.5px;color:var(--ev-color,var(--text-dim));text-transform:uppercase;font-weight:600;display:inline-block;background:color-mix(in srgb,var(--ev-color,var(--border2)) 14%,transparent);padding:3px 9px;border-radius:2px;margin-bottom:11px;}
@@ -162,25 +179,35 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .log-entry .log-turn{font-size:8px;color:var(--border2);display:block;margin-bottom:2px;}
 
 /* ── DELAYED EFFECT NOTICE ── */
-.delayed-notice{background:rgba(28,16,6,0.75);border:1px solid #3a2010;border-left:3px solid var(--warn);padding:12px 16px;font-family:var(--sans);font-size:12px;color:#b08040;line-height:1.75;margin-bottom:12px;animation:cardIn 0.3s ease;}
+.delayed-notice{background:rgba(28,16,6,0.75);border:1px solid #3a2010;border-left:3px solid var(--warn);padding:12px 16px;font-family:var(--sans);font-size:12px;color:#b08040;line-height:1.75;margin-bottom:12px;animation:paperIn 0.44s cubic-bezier(0.22,1,0.36,1);}
 .delayed-notice::before{content:'⚠  DELAYED EFFECT — ';color:var(--warn);font-family:var(--mono);font-size:9px;letter-spacing:1px;}
 
 /* ── RESPONSIVE ── */
 @media(max-width:860px){
   #log-panel{display:none;}
   .strip-classified{display:none;}
+  #desk-scene{display:none;}
 }
 @media(max-width:540px){
-  .strip-brand{min-width:80px;padding:0 10px;}
-  .strip-brand-date{font-size:13px;}
-  .stat-block{padding:6px 8px;}
-  .stat-block-val{font-size:13px;}
-  .stat-block-label{font-size:7px;}
-  #end-turn-btn{padding:13px 14px;font-size:11px;letter-spacing:1px;}
+  /* Compact stat strip — just numbers, no labels or bars */
+  #stat-strip{min-height:44px;}
+  .strip-brand{min-width:72px;padding:0 8px;}
+  .strip-brand-title{display:none;}
+  .strip-brand-date{font-size:13px;margin-top:0;}
+  .strip-brand-turn{font-size:8px;}
+  .stat-block{padding:0 8px;justify-content:center;align-items:center;flex-direction:row;gap:6px;border-right:1px solid var(--border);}
+  .stat-block:last-child{border-right:none;}
+  .stat-block-label{font-size:7px;letter-spacing:1px;margin-bottom:0;flex-shrink:0;writing-mode:initial;}
+  .stat-block-val{font-size:14px;font-weight:700;margin-bottom:0;}
+  .stat-block-bar{display:none;}
+  #end-turn-btn{padding:13px 12px;font-size:11px;letter-spacing:1px;}
   #event-area{padding:10px;}
-  .choice-btn{padding:14px 14px;font-size:13px;}
-  .event-card-header{padding:12px 14px 8px;}
+  .choice-btn{padding:14px 12px;font-size:13px;gap:10px;}
+  .event-card-header{padding:12px 12px 8px;}
   .event-title{font-size:15px;}
+  .event-body{font-size:12px;}
+  #main-header{padding:8px 12px;}
+  #end-turn-wrap{padding:10px 12px;}
 }
 </style>
 </head>
@@ -242,6 +269,120 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
       <div class="strip-classified-row">CORP. INFLUENCE ░░░░░░ [CLASSIFIED]</div>
       <div class="strip-classified-row">MEDIA CAPTURE ░░░░░░░ [CLASSIFIED]</div>
     </div>
+  </div>
+
+  <!-- Desk scene (desktop only) -->
+  <div id="desk-scene">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 118" preserveAspectRatio="xMidYMax slice">
+      <defs>
+        <radialGradient id="lg" cx="0.47" cy="1" r="0.65" gradientUnits="objectBoundingBox">
+          <stop offset="0%" stop-color="#ffd060" stop-opacity="0.17"/>
+          <stop offset="100%" stop-color="#ffd060" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="amb" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0%" stop-color="#182848" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#182848" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <!-- dark bg -->
+      <rect width="900" height="118" fill="#060a10"/>
+      <!-- ambient ceiling glow -->
+      <ellipse cx="500" cy="0" rx="400" ry="80" fill="url(#amb)"/>
+      <!-- city window area (left) -->
+      <rect x="0" y="0" width="230" height="105" fill="#060c14"/>
+      <!-- building silhouettes -->
+      <rect x="8" y="22" width="48" height="96" fill="#08101a"/>
+      <rect x="12" y="28" width="7" height="5" fill="#1a2840" opacity="0.7"/>
+      <rect x="22" y="28" width="7" height="5" fill="#c8b060" opacity="0.35"/>
+      <rect x="32" y="28" width="7" height="5" fill="#1a2840" opacity="0.8"/>
+      <rect x="12" y="38" width="7" height="5" fill="#1a2840" opacity="0.4"/>
+      <rect x="22" y="38" width="7" height="5" fill="#1a2840" opacity="0.9"/>
+      <rect x="62" y="35" width="40" height="83" fill="#060e18"/>
+      <rect x="66" y="42" width="7" height="5" fill="#1a3050" opacity="0.6"/>
+      <rect x="78" y="42" width="7" height="5" fill="#c89020" opacity="0.45"/>
+      <rect x="66" y="52" width="7" height="5" fill="#1a3050" opacity="0.85"/>
+      <rect x="78" y="52" width="7" height="5" fill="#1a3050" opacity="0.25"/>
+      <rect x="110" y="28" width="50" height="90" fill="#07100c"/>
+      <rect x="114" y="35" width="7" height="5" fill="#1a3848" opacity="0.7"/>
+      <rect x="125" y="35" width="7" height="5" fill="#1a3848" opacity="0.4"/>
+      <rect x="170" y="44" width="36" height="74" fill="#060c10"/>
+      <!-- window frame -->
+      <rect x="0" y="0" width="222" height="108" fill="none" stroke="#0e2030" stroke-width="7"/>
+      <line x1="111" y1="0" x2="111" y2="108" stroke="#0e2030" stroke-width="4"/>
+      <line x1="0" y1="54" x2="222" y2="54" stroke="#0e2030" stroke-width="4"/>
+      <!-- desk surface -->
+      <rect x="228" y="98" width="672" height="14" fill="#160c04"/>
+      <rect x="228" y="97" width="672" height="3" fill="#221408"/>
+      <!-- desk edge highlight -->
+      <rect x="228" y="96" width="672" height="1" fill="#301a0a" opacity="0.6"/>
+      <!-- filing cabinet (right) -->
+      <rect x="812" y="38" width="70" height="80" fill="#0b1726" rx="2"/>
+      <line x1="812" y1="66" x2="882" y2="66" stroke="#142234" stroke-width="1.5"/>
+      <line x1="812" y1="94" x2="882" y2="94" stroke="#142234" stroke-width="1.5"/>
+      <rect x="828" y="59" width="24" height="5" fill="#162033" rx="2"/>
+      <rect x="828" y="87" width="24" height="5" fill="#162033" rx="2"/>
+      <!-- papers inbox (left of desk) -->
+      <rect x="240" y="91" width="98" height="7" fill="#d0c8b0" rx="1" transform="rotate(-2 289 95)"/>
+      <rect x="238" y="87" width="98" height="7" fill="#ddd5be" rx="1" transform="rotate(1.5 287 91)"/>
+      <rect x="242" y="83" width="98" height="7" fill="#d8d0ba" rx="1" transform="rotate(-0.8 291 87)"/>
+      <rect x="240" y="79" width="98" height="7" fill="#e0d8c4" rx="1" transform="rotate(2 289 83)"/>
+      <!-- text lines on top paper -->
+      <rect x="250" y="82" width="50" height="1.5" fill="#9a9282" rx="0.5" transform="rotate(2 275 82)"/>
+      <rect x="250" y="86" width="68" height="1.5" fill="#9a9282" rx="0.5" transform="rotate(2 284 86)"/>
+      <rect x="250" y="90" width="38" height="1.5" fill="#9a9282" rx="0.5" transform="rotate(2 269 90)"/>
+      <!-- desk lamp -->
+      <rect x="420" y="60" width="5" height="40" fill="#1a2e44" rx="2"/>
+      <path d="M 422 60 Q 444 48 468 54" stroke="#1a2e44" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <ellipse cx="476" cy="54" rx="17" ry="10" fill="#1e3248"/>
+      <!-- lamp bulb -->
+      <ellipse cx="476" cy="54" rx="6" ry="4" fill="#fff0a0" opacity="0.7"/>
+      <!-- lamp glow on desk -->
+      <ellipse class="lamp-glow" cx="452" cy="100" rx="100" ry="24" fill="url(#lg)"/>
+      <!-- monitor -->
+      <rect x="318" y="52" width="86" height="59" fill="#0a1726" rx="3"/>
+      <rect x="322" y="56" width="78" height="47" fill="#091540" rx="2"/>
+      <!-- monitor screen content (data lines) -->
+      <rect x="328" y="63" width="42" height="2" fill="#162d54" rx="1"/>
+      <rect x="328" y="68" width="60" height="2" fill="#162d54" rx="1"/>
+      <rect x="328" y="73" width="32" height="2" fill="#162d54" rx="1"/>
+      <rect x="328" y="78" width="54" height="2" fill="#1a3060" rx="1"/>
+      <rect x="328" y="83" width="25" height="2" fill="#c8922a" rx="1" opacity="0.55"/>
+      <rect x="328" y="88" width="44" height="2" fill="#162d54" rx="1"/>
+      <!-- monitor stand -->
+      <rect x="352" y="111" width="12" height="6" fill="#0a1726"/>
+      <rect x="344" y="117" width="28" height="3" fill="#0a1726" rx="1"/>
+      <!-- keyboard -->
+      <rect x="313" y="96" width="68" height="7" fill="#0c1826" rx="2"/>
+      <rect x="316" y="98" width="62" height="3" fill="#0e2030" rx="1"/>
+      <!-- coffee mug -->
+      <rect x="504" y="78" width="19" height="21" fill="#1a1010" rx="3"/>
+      <ellipse cx="513" cy="78" rx="9" ry="3.5" fill="#221818"/>
+      <path d="M 523 85 Q 530 89 523 95" stroke="#1a1010" stroke-width="2.5" fill="none"/>
+      <!-- steam wisps -->
+      <path d="M 508 74 Q 506 68 509 62" stroke="#1e2840" stroke-width="1.5" fill="none" opacity="0.5"/>
+      <path d="M 514 72 Q 512 66 515 60" stroke="#1e2840" stroke-width="1.5" fill="none" opacity="0.4"/>
+      <!-- person: chair back -->
+      <rect class="char-body-group" x="640" y="30" width="7" height="68" fill="#141e2c" rx="3"/>
+      <rect class="char-body-group" x="630" y="30" width="27" height="8" fill="#141e2c" rx="2"/>
+      <!-- person: body group (animates) -->
+      <ellipse class="char-body-group" cx="678" cy="70" rx="26" ry="28" fill="#101828"/>
+      <ellipse class="char-body-group" cx="678" cy="52" rx="32" ry="14" fill="#101828"/>
+      <!-- person: neck -->
+      <rect class="char-body-group" x="670" y="44" width="16" height="10" fill="#101828"/>
+      <!-- person: head (separate animation) -->
+      <circle class="char-head-el" cx="676" cy="29" r="16" fill="#101828"/>
+      <!-- person: hair -->
+      <ellipse class="char-head-el" cx="676" cy="18" rx="15" ry="8" fill="#08101c"/>
+      <!-- person: arm reaching toward desk -->
+      <path class="char-body-group" d="M 660 74 Q 620 88 565 99" stroke="#101828" stroke-width="14" stroke-linecap="round" fill="none"/>
+      <!-- person: left arm at keyboard -->
+      <path class="char-body-group" d="M 696 74 Q 700 86 685 98" stroke="#101828" stroke-width="13" stroke-linecap="round" fill="none"/>
+      <!-- status badge top right -->
+      <rect x="690" y="8" width="195" height="18" fill="#0b1726" rx="2"/>
+      <rect x="693" y="11" width="5" height="5" fill="#309060" rx="1"/>
+      <text x="703" y="21" font-family="monospace" font-size="7.5" fill="#445570" letter-spacing="1">SPRINGFIELD, IL — 2027</text>
+      <rect x="693" y="11" width="5" height="5" fill="#309060" rx="1"/>
+    </svg>
   </div>
 
   <!-- Body: event column + log -->
