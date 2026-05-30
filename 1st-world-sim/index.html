@@ -95,7 +95,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 #game-main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;min-height:0;}
 
 /* ── OFFICE SCENE ── */
-#office-scene{flex-shrink:0;overflow:hidden;background:#07090f;}
+#office-scene{flex-shrink:0;overflow:hidden;background:#1c2840;}
 #office-scene svg{display:block;width:100%;height:clamp(200px,42vh,300px);}
 
 /* SVG character animations */
@@ -345,62 +345,70 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
   <div id="office-scene">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 220" preserveAspectRatio="xMidYMax slice">
       <defs>
-        <radialGradient id="winGlow" cx="0.5" cy="0.5" r="0.5"><stop offset="0%" stop-color="#1a3060" stop-opacity="0.5"/><stop offset="100%" stop-color="#1a3060" stop-opacity="0"/></radialGradient>
-        <radialGradient id="lampGlow2" cx="0.5" cy="0" r="0.7"><stop offset="0%" stop-color="#ffd060" stop-opacity="0.13"/><stop offset="100%" stop-color="#ffd060" stop-opacity="0"/></radialGradient>
+        <radialGradient id="winGlow" cx="0.5" cy="0.5" r="0.5"><stop offset="0%" stop-color="#2858b8" stop-opacity="0.9"/><stop offset="60%" stop-color="#1a3880" stop-opacity="0.5"/><stop offset="100%" stop-color="#1a3060" stop-opacity="0"/></radialGradient>
+        <radialGradient id="lampGlow2" cx="0.5" cy="0" r="0.7"><stop offset="0%" stop-color="#ffd060" stop-opacity="0.45"/><stop offset="100%" stop-color="#ffd060" stop-opacity="0"/></radialGradient>
+        <radialGradient id="ambLight" cx="0.5" cy="0" r="0.8"><stop offset="0%" stop-color="#b0c8f0" stop-opacity="0.12"/><stop offset="100%" stop-color="#b0c8f0" stop-opacity="0"/></radialGradient>
       </defs>
-      <!-- room walls -->
-      <rect width="1000" height="220" fill="#080c14"/>
-      <rect x="0" y="0" width="1000" height="178" fill="#0a0e1a"/>
-      <rect x="0" y="178" width="1000" height="42" fill="#0e0a06"/>
-      <rect x="0" y="162" width="1000" height="3" fill="#16120a" opacity="0.8"/>
-      <!-- window center back -->
-      <rect x="295" y="5" width="410" height="155" fill="#050e1c"/>
+      <!-- room walls — noticeably lit navy -->
+      <rect width="1000" height="220" fill="#1c2840"/>
+      <rect x="0" y="0" width="1000" height="178" fill="#1e2c46"/>
+      <rect x="0" y="178" width="1000" height="42" fill="#1a1208"/>
+      <rect x="0" y="162" width="1000" height="3" fill="#28180a" opacity="0.9"/>
+      <!-- ambient ceiling light -->
+      <ellipse cx="500" cy="0" rx="400" ry="120" fill="url(#ambLight)"/>
+      <!-- window center back — visible night sky -->
+      <rect x="295" y="5" width="410" height="155" fill="#0e1e3c"/>
       <ellipse cx="500" cy="78" rx="210" ry="88" fill="url(#winGlow)"/>
-      <!-- city buildings -->
-      <rect x="303" y="95" width="28" height="64" fill="#060f1a"/>
-      <rect x="334" y="70" width="22" height="89" fill="#050d18"/>
-      <rect x="359" y="80" width="35" height="79" fill="#060f1a"/>
-      <rect x="397" y="60" width="20" height="98" fill="#050d16"/>
-      <rect x="420" y="75" width="30" height="83" fill="#060f1a"/>
-      <rect x="454" y="85" width="25" height="73" fill="#050d18"/>
-      <rect x="482" y="55" width="22" height="103" fill="#060f1a"/>
-      <rect x="507" y="72" width="32" height="86" fill="#050d16"/>
-      <rect x="542" y="65" width="20" height="93" fill="#060f1a"/>
-      <rect x="565" y="80" width="28" height="78" fill="#050d18"/>
-      <rect x="596" y="50" width="25" height="108" fill="#060f1a"/>
-      <rect x="624" y="88" width="35" height="70" fill="#050d16"/>
-      <rect x="661" y="72" width="22" height="86" fill="#060f1a"/>
-      <!-- lit windows on buildings -->
-      <rect x="336" y="76" width="5" height="4" fill="#c89028" opacity="0.4"/>
-      <rect x="361" y="86" width="5" height="4" fill="#c89028" opacity="0.35"/>
-      <rect x="484" y="62" width="5" height="4" fill="#c89028" opacity="0.5"/>
-      <rect x="543" y="70" width="5" height="4" fill="#1a3058" opacity="0.9"/>
-      <rect x="598" y="56" width="5" height="4" fill="#c89028" opacity="0.4"/>
+      <!-- city buildings — dark silhouettes against brighter sky -->
+      <rect x="303" y="95" width="28" height="64" fill="#0c1828"/>
+      <rect x="334" y="70" width="22" height="89" fill="#0a1624"/>
+      <rect x="359" y="80" width="35" height="79" fill="#0c1828"/>
+      <rect x="397" y="60" width="20" height="98" fill="#0a1422"/>
+      <rect x="420" y="75" width="30" height="83" fill="#0c1828"/>
+      <rect x="454" y="85" width="25" height="73" fill="#0a1624"/>
+      <rect x="482" y="55" width="22" height="103" fill="#0c1828"/>
+      <rect x="507" y="72" width="32" height="86" fill="#0a1422"/>
+      <rect x="542" y="65" width="20" height="93" fill="#0c1828"/>
+      <rect x="565" y="80" width="28" height="78" fill="#0a1624"/>
+      <rect x="596" y="50" width="25" height="108" fill="#0c1828"/>
+      <rect x="624" y="88" width="35" height="70" fill="#0a1422"/>
+      <rect x="661" y="72" width="22" height="86" fill="#0c1828"/>
+      <!-- lit windows on buildings — bright and visible -->
+      <rect x="336" y="76" width="6" height="5" fill="#f0b840" opacity="0.85"/>
+      <rect x="344" y="76" width="6" height="5" fill="#f0b840" opacity="0.6"/>
+      <rect x="361" y="86" width="6" height="5" fill="#f0b840" opacity="0.75"/>
+      <rect x="484" y="62" width="6" height="5" fill="#f0b840" opacity="0.9"/>
+      <rect x="484" y="72" width="6" height="5" fill="#f0b840" opacity="0.6"/>
+      <rect x="543" y="70" width="6" height="5" fill="#6090e0" opacity="0.95"/>
+      <rect x="543" y="80" width="6" height="5" fill="#6090e0" opacity="0.7"/>
+      <rect x="598" y="56" width="6" height="5" fill="#f0b840" opacity="0.8"/>
+      <rect x="625" y="94" width="6" height="5" fill="#f0b840" opacity="0.65"/>
+      <rect x="663" y="78" width="6" height="5" fill="#f0b840" opacity="0.7"/>
       <!-- window frame -->
-      <rect x="295" y="5" width="410" height="155" fill="none" stroke="#0c1e34" stroke-width="10"/>
-      <line x1="500" y1="5" x2="500" y2="160" stroke="#0c1e34" stroke-width="5"/>
-      <line x1="295" y1="82" x2="705" y2="82" stroke="#0c1e34" stroke-width="5"/>
-      <!-- curtains -->
-      <path d="M 295 5 C 262 50 255 105 268 160 L 295 160 Z" fill="#0c1a2e" opacity="0.92"/>
-      <path d="M 705 5 C 738 50 745 105 732 160 L 705 160 Z" fill="#0c1a2e" opacity="0.92"/>
-      <!-- American flag (left) -->
-      <rect x="82" y="4" width="4" height="175" fill="#1e2a3a" rx="1"/>
-      <rect x="86" y="4" width="92" height="62" fill="#b02838"/>
-      <rect x="86" y="9" width="92" height="4" fill="#e8e8f0" opacity="0.85"/>
-      <rect x="86" y="17" width="92" height="4" fill="#e8e8f0" opacity="0.85"/>
-      <rect x="86" y="25" width="92" height="4" fill="#e8e8f0" opacity="0.85"/>
-      <rect x="86" y="33" width="92" height="4" fill="#e8e8f0" opacity="0.85"/>
-      <rect x="86" y="41" width="92" height="4" fill="#e8e8f0" opacity="0.85"/>
-      <rect x="86" y="49" width="92" height="4" fill="#e8e8f0" opacity="0.85"/>
-      <rect x="86" y="4" width="38" height="36" fill="#283a90"/>
-      <text x="105" y="15" font-family="serif" font-size="5.5" fill="white" opacity="0.85" letter-spacing="1">★ ★ ★</text>
-      <text x="105" y="23" font-family="serif" font-size="5.5" fill="white" opacity="0.85" letter-spacing="1">★ ★ ★</text>
-      <text x="105" y="31" font-family="serif" font-size="5.5" fill="white" opacity="0.85" letter-spacing="1">★ ★ ★</text>
-      <!-- bookshelf right -->
-      <rect x="832" y="0" width="168" height="175" fill="#090e1a"/>
-      <rect x="832" y="42" width="168" height="4" fill="#0e1828"/>
-      <rect x="832" y="90" width="168" height="4" fill="#0e1828"/>
-      <rect x="832" y="138" width="168" height="4" fill="#0e1828"/>
+      <rect x="295" y="5" width="410" height="155" fill="none" stroke="#18304e" stroke-width="10"/>
+      <line x1="500" y1="5" x2="500" y2="160" stroke="#18304e" stroke-width="5"/>
+      <line x1="295" y1="82" x2="705" y2="82" stroke="#18304e" stroke-width="5"/>
+      <!-- curtains — visible navy drape -->
+      <path d="M 295 5 C 262 50 255 105 268 160 L 295 160 Z" fill="#1e3660" opacity="0.95"/>
+      <path d="M 705 5 C 738 50 745 105 732 160 L 705 160 Z" fill="#1e3660" opacity="0.95"/>
+      <!-- American flag (left) — visible -->
+      <rect x="82" y="4" width="4" height="175" fill="#3a5070" rx="1"/>
+      <rect x="86" y="4" width="92" height="62" fill="#c03040"/>
+      <rect x="86" y="9" width="92" height="4" fill="#f0f0f8" opacity="0.9"/>
+      <rect x="86" y="17" width="92" height="4" fill="#f0f0f8" opacity="0.9"/>
+      <rect x="86" y="25" width="92" height="4" fill="#f0f0f8" opacity="0.9"/>
+      <rect x="86" y="33" width="92" height="4" fill="#f0f0f8" opacity="0.9"/>
+      <rect x="86" y="41" width="92" height="4" fill="#f0f0f8" opacity="0.9"/>
+      <rect x="86" y="49" width="92" height="4" fill="#f0f0f8" opacity="0.9"/>
+      <rect x="86" y="4" width="38" height="36" fill="#2840a0"/>
+      <text x="105" y="15" font-family="serif" font-size="5.5" fill="white" opacity="0.95" letter-spacing="1">★ ★ ★</text>
+      <text x="105" y="23" font-family="serif" font-size="5.5" fill="white" opacity="0.95" letter-spacing="1">★ ★ ★</text>
+      <text x="105" y="31" font-family="serif" font-size="5.5" fill="white" opacity="0.95" letter-spacing="1">★ ★ ★</text>
+      <!-- bookshelf right — visible -->
+      <rect x="832" y="0" width="168" height="175" fill="#182038"/>
+      <rect x="832" y="42" width="168" height="4" fill="#223050"/>
+      <rect x="832" y="90" width="168" height="4" fill="#223050"/>
+      <rect x="832" y="138" width="168" height="4" fill="#223050"/>
       <rect x="836" y="6" width="13" height="36" fill="#8a2830" rx="1"/>
       <rect x="851" y="11" width="9" height="31" fill="#3a5a28" rx="1"/>
       <rect x="862" y="6" width="15" height="36" fill="#2a4070" rx="1"/>
@@ -409,66 +417,67 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
       <rect x="905" y="12" width="9" height="30" fill="#284858" rx="1"/>
       <rect x="916" y="6" width="14" height="36" fill="#582020" rx="1"/>
       <rect x="932" y="10" width="10" height="32" fill="#1e3870" rx="1"/>
-      <rect x="944" y="6" width="13" height="36" fill="#405018" rx="1"/>
-      <rect x="959" y="12" width="11" height="30" fill="#3a2018" rx="1"/>
-      <rect x="836" y="48" width="16" height="42" fill="#344016" rx="1"/>
-      <rect x="854" y="54" width="10" height="36" fill="#602028" rx="1"/>
-      <rect x="866" y="48" width="13" height="42" fill="#244440" rx="1"/>
-      <rect x="881" y="54" width="11" height="36" fill="#441828" rx="1"/>
-      <rect x="894" y="48" width="17" height="42" fill="#1c3460" rx="1"/>
-      <rect x="913" y="54" width="9" height="36" fill="#683028" rx="1"/>
-      <rect x="924" y="48" width="14" height="42" fill="#344820" rx="1"/>
-      <rect x="940" y="54" width="12" height="36" fill="#282440" rx="1"/>
-      <rect x="954" y="48" width="10" height="42" fill="#503014" rx="1"/>
-      <rect x="966" y="54" width="16" height="36" fill="#283858" rx="1"/>
+      <rect x="944" y="6" width="13" height="36" fill="#6a7828" rx="1"/>
+      <rect x="959" y="12" width="11" height="30" fill="#6a4028" rx="1"/>
+      <rect x="836" y="48" width="16" height="42" fill="#587030" rx="1"/>
+      <rect x="854" y="54" width="10" height="36" fill="#903040" rx="1"/>
+      <rect x="866" y="48" width="13" height="42" fill="#406880" rx="1"/>
+      <rect x="881" y="54" width="11" height="36" fill="#703040" rx="1"/>
+      <rect x="894" y="48" width="17" height="42" fill="#2a5090" rx="1"/>
+      <rect x="913" y="54" width="9" height="36" fill="#904840" rx="1"/>
+      <rect x="924" y="48" width="14" height="42" fill="#587040" rx="1"/>
+      <rect x="940" y="54" width="12" height="36" fill="#3a3870" rx="1"/>
+      <rect x="954" y="48" width="10" height="42" fill="#784828" rx="1"/>
+      <rect x="966" y="54" width="16" height="36" fill="#3a5880" rx="1"/>
       <!-- desk -->
-      <rect x="0" y="186" width="1000" height="34" fill="#130900"/>
-      <rect x="0" y="184" width="1000" height="3" fill="#221008"/>
-      <rect x="0" y="182" width="1000" height="2" fill="#341808" opacity="0.7"/>
+      <rect x="0" y="186" width="1000" height="34" fill="#1e1008"/>
+      <rect x="0" y="184" width="1000" height="3" fill="#2e1a0c"/>
+      <rect x="0" y="182" width="1000" height="2" fill="#3c2210" opacity="0.8"/>
       <!-- papers stack left -->
       <rect x="108" y="178" width="105" height="7" fill="#cec6ae" rx="1" transform="rotate(-2 160 182)"/>
       <rect x="106" y="174" width="105" height="7" fill="#dad2bc" rx="1" transform="rotate(1.5 158 178)"/>
       <rect x="110" y="170" width="105" height="7" fill="#d6ceb8" rx="1" transform="rotate(-0.8 162 174)"/>
-      <!-- desk lamp right of center -->
-      <rect x="680" y="148" width="5" height="38" fill="#182c42" rx="2"/>
-      <path d="M 682 148 Q 702 135 725 140" stroke="#182c42" stroke-width="5" fill="none" stroke-linecap="round"/>
-      <ellipse cx="733" cy="140" rx="16" ry="10" fill="#1c3048"/>
-      <ellipse cx="706" cy="186" rx="80" ry="20" class="lamp-flicker" fill="url(#lampGlow2)"/>
-      <!-- nameplate -->
-      <rect x="395" y="194" width="210" height="16" fill="#1a1006" rx="2"/>
-      <text x="500" y="206" text-anchor="middle" font-family="monospace" font-size="7" fill="#5a4018" letter-spacing="3.5">REGIONAL DIRECTOR</text>
+      <!-- desk lamp right of center — brighter -->
+      <rect x="680" y="148" width="5" height="38" fill="#2a4a68" rx="2"/>
+      <path d="M 682 148 Q 702 135 725 140" stroke="#2a4a68" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <ellipse cx="733" cy="140" rx="16" ry="10" fill="#304e70"/>
+      <ellipse cx="733" cy="140" rx="8" ry="5" fill="#f8d880" opacity="0.6"/>
+      <ellipse cx="706" cy="186" rx="100" ry="28" class="lamp-flicker" fill="url(#lampGlow2)"/>
+      <!-- nameplate — more visible -->
+      <rect x="395" y="194" width="210" height="16" fill="#281808" rx="2"/>
+      <text x="500" y="206" text-anchor="middle" font-family="monospace" font-size="7" fill="#9a7030" letter-spacing="3.5">REGIONAL DIRECTOR</text>
       <!-- monitor left of desk -->
-      <rect x="230" y="148" width="84" height="58" fill="#091522" rx="3"/>
-      <rect x="234" y="152" width="76" height="46" fill="#081035" rx="2"/>
-      <rect x="240" y="159" width="40" height="2" fill="#142c50" rx="1"/>
-      <rect x="240" y="165" width="58" height="2" fill="#142c50" rx="1"/>
-      <rect x="240" y="171" width="28" height="2" fill="#142c50" rx="1"/>
-      <rect x="240" y="177" width="50" height="2" fill="#1a3060" rx="1"/>
-      <rect x="240" y="183" width="22" height="2" fill="#c8922a" rx="1" opacity="0.5"/>
-      <rect x="266" y="206" width="12" height="5" fill="#091522"/>
-      <rect x="258" y="211" width="28" height="3" fill="#091522" rx="1"/>
-      <rect x="226" y="182" width="66" height="6" fill="#0a1622" rx="2"/>
+      <rect x="230" y="148" width="84" height="58" fill="#162230" rx="3"/>
+      <rect x="234" y="152" width="76" height="46" fill="#101840" rx="2"/>
+      <rect x="240" y="159" width="40" height="2" fill="#2a4878" rx="1"/>
+      <rect x="240" y="165" width="58" height="2" fill="#2a4878" rx="1"/>
+      <rect x="240" y="171" width="28" height="2" fill="#2a4878" rx="1"/>
+      <rect x="240" y="177" width="50" height="2" fill="#2a4878" rx="1"/>
+      <rect x="240" y="183" width="22" height="2" fill="#c8922a" rx="1" opacity="0.7"/>
+      <rect x="266" y="206" width="12" height="5" fill="#162230"/>
+      <rect x="258" y="211" width="28" height="3" fill="#162230" rx="1"/>
+      <rect x="226" y="182" width="66" height="6" fill="#182432" rx="2"/>
       <!-- PERSON — Director, centered, facing viewer -->
       <!-- chair back -->
-      <rect x="472" y="82" width="12" height="104" fill="#141e2e" rx="5"/>
-      <rect x="453" y="82" width="50" height="12" fill="#141e2e" rx="5"/>
-      <rect x="455" y="82" width="46" height="8" fill="#1a2840" rx="4"/>
+      <rect x="472" y="82" width="12" height="104" fill="#223048" rx="5"/>
+      <rect x="453" y="82" width="50" height="12" fill="#223048" rx="5"/>
+      <rect x="455" y="82" width="46" height="8" fill="#2a3a58" rx="4"/>
       <!-- body (breathe animation) -->
       <g class="char-breathe">
         <!-- arms -->
-        <path d="M 454 138 Q 424 162 440 188" stroke="#162030" stroke-width="26" stroke-linecap="round" fill="none"/>
-        <path d="M 546 138 Q 576 162 560 188" stroke="#162030" stroke-width="26" stroke-linecap="round" fill="none"/>
+        <path d="M 454 138 Q 424 162 440 188" stroke="#243450" stroke-width="26" stroke-linecap="round" fill="none"/>
+        <path d="M 546 138 Q 576 162 560 188" stroke="#243450" stroke-width="26" stroke-linecap="round" fill="none"/>
         <!-- shoulders / body -->
-        <ellipse cx="500" cy="118" rx="60" ry="26" fill="#162030"/>
-        <ellipse cx="500" cy="150" rx="46" ry="42" fill="#131e2e"/>
-        <rect x="474" y="118" width="52" height="42" fill="#111c2c"/>
+        <ellipse cx="500" cy="118" rx="60" ry="26" fill="#243450"/>
+        <ellipse cx="500" cy="150" rx="46" ry="42" fill="#203048"/>
+        <rect x="474" y="118" width="52" height="42" fill="#1e2e46"/>
         <!-- suit lapels -->
-        <polygon points="500,118 488,130 490,160 500,165" fill="#1a2840"/>
-        <polygon points="500,118 512,130 510,160 500,165" fill="#1a2840"/>
+        <polygon points="500,118 488,130 490,160 500,165" fill="#2a3c58"/>
+        <polygon points="500,118 512,130 510,160 500,165" fill="#2a3c58"/>
         <!-- tie -->
-        <polygon points="497,118 503,118 505,162 500,167 495,162" fill="#8a1a1a"/>
+        <polygon points="497,118 503,118 505,162 500,167 495,162" fill="#a82020"/>
         <!-- shirt collar -->
-        <rect x="490" y="108" width="20" height="14" fill="#1e2e40"/>
+        <rect x="490" y="108" width="20" height="14" fill="#304060"/>
         <!-- white shirt visible at collar -->
         <rect x="494" y="110" width="12" height="10" fill="#e8eaf0" opacity="0.15"/>
         <!-- hands on desk -->
@@ -478,16 +487,16 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
       <!-- head (head-bob animation) -->
       <g class="char-head">
         <!-- neck -->
-        <rect x="488" y="100" width="24" height="18" fill="#1a2838" rx="3"/>
+        <rect x="488" y="100" width="24" height="18" fill="#283c54" rx="3"/>
         <!-- head shape -->
-        <ellipse cx="500" cy="80" rx="30" ry="34" fill="#1a2838"/>
+        <ellipse cx="500" cy="80" rx="30" ry="34" fill="#283c54"/>
         <!-- hair / top of head darker -->
-        <ellipse cx="500" cy="54" rx="28" ry="16" fill="#0c1422"/>
+        <ellipse cx="500" cy="54" rx="28" ry="16" fill="#182030"/>
         <!-- very subtle face plane -->
-        <ellipse cx="500" cy="84" rx="18" ry="16" fill="#1c2e42" opacity="0.6"/>
+        <ellipse cx="500" cy="84" rx="18" ry="16" fill="#2e4462" opacity="0.55"/>
         <!-- eye hints -->
-        <ellipse cx="492" cy="80" rx="4" ry="3" fill="#0a1018" opacity="0.8"/>
-        <ellipse cx="508" cy="80" rx="4" ry="3" fill="#0a1018" opacity="0.8"/>
+        <ellipse cx="492" cy="80" rx="4" ry="3" fill="#101820" opacity="0.9"/>
+        <ellipse cx="508" cy="80" rx="4" ry="3" fill="#101820" opacity="0.9"/>
       </g>
       <!-- status badge -->
       <rect x="860" y="8" width="132" height="17" fill="#0a1622" rx="2"/>
@@ -1508,11 +1517,12 @@ function renderStats(){
   const db = clamp(G.debt);
   const un = clamp(G.unrest);
   const tr = clamp(G.trust);
+  const fmt = n => parseFloat(n.toFixed(1));
 
-  document.getElementById('stat-wellbeing-val').textContent = wb;
+  document.getElementById('stat-wellbeing-val').textContent = fmt(wb);
   document.getElementById('stat-debt-val').textContent = '$'+(2+db*0.08).toFixed(1)+'B';
-  document.getElementById('stat-unrest-val').textContent = un;
-  document.getElementById('stat-trust-val').textContent = tr;
+  document.getElementById('stat-unrest-val').textContent = fmt(un);
+  document.getElementById('stat-trust-val').textContent = fmt(tr);
 
   setBar('bar-wellbeing', wb, 'wellbeing');
   setBar('bar-debt', db, 'debt');
