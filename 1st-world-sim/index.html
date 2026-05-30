@@ -63,81 +63,94 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .gameover-label{font-family:var(--mono);font-size:10px;letter-spacing:4px;color:var(--text-dim);margin-bottom:24px;text-transform:uppercase;}
 .gameover-msg{font-family:var(--sans);font-size:16px;color:var(--text-bright);line-height:1.9;margin-bottom:32px;white-space:pre-line;}
 
-/* ── MAIN GAME ── */
-#screen-game{flex-direction:row;height:100vh;overflow:hidden;}
+/* ═══════════════════════════════════════════
+   MAIN GAME — column layout, mobile-first
+═══════════════════════════════════════════ */
+#screen-game{flex-direction:column;height:100vh;overflow:hidden;}
 
-/* Left sidebar: stats */
-#sidebar{width:230px;min-width:230px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0;overflow:hidden;}
-.sidebar-header{padding:16px 16px 12px;border-bottom:1px solid var(--border);background:rgba(200,146,42,0.03);}
-.region-label{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;}
-.region-name{font-family:var(--mono);font-size:12px;color:var(--text-bright);margin-top:3px;font-weight:500;}
-.date-display{font-family:var(--mono);font-size:11px;color:var(--gold);margin-top:6px;letter-spacing:1px;}
-.stats-section{padding:16px 16px 10px;border-bottom:1px solid var(--border);flex:1;overflow:hidden;}
-.stats-title{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--text-dim);margin-bottom:14px;text-transform:uppercase;}
-.stat-item{margin-bottom:14px;}
-.stat-label{font-family:var(--mono);font-size:8px;letter-spacing:1.5px;color:var(--text-dim);text-transform:uppercase;margin-bottom:2px;display:block;}
-.stat-label span{display:block;font-size:22px;color:var(--text-bright);font-weight:600;letter-spacing:0;margin-top:1px;margin-bottom:5px;line-height:1;font-family:var(--mono);}
-.stat-bar-wrap{height:6px;background:var(--border2);border-radius:1px;}
-.stat-bar{height:100%;border-radius:1px;transition:width 0.5s ease,background 0.4s ease;}
+/* ── STAT STRIP (horizontal top bar) ── */
+#stat-strip{background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:stretch;flex-shrink:0;min-height:68px;overflow:hidden;}
+
+.strip-brand{display:flex;flex-direction:column;justify-content:center;padding:0 16px;border-right:1px solid var(--border);min-width:110px;flex-shrink:0;}
+.strip-brand-title{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--gold);opacity:0.65;text-transform:uppercase;}
+.strip-brand-date{font-family:var(--mono);font-size:15px;color:var(--text-bright);font-weight:600;margin-top:2px;}
+.strip-brand-turn{font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:3px;}
+
+.strip-stats{display:flex;flex:1;overflow:hidden;}
+.stat-block{flex:1;display:flex;flex-direction:column;justify-content:center;padding:8px 14px;border-right:1px solid var(--border);min-width:0;}
+.stat-block:last-child{border-right:none;}
+.stat-block-label{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;margin-bottom:3px;}
+.stat-block-val{font-family:var(--mono);font-size:clamp(15px,2.2vw,21px);font-weight:600;color:var(--text-bright);line-height:1;margin-bottom:6px;}
+.stat-block-bar{height:4px;background:var(--border2);border-radius:2px;overflow:hidden;}
+.stat-bar{height:100%;border-radius:2px;transition:width 0.5s ease,background 0.4s ease;}
 .stat-bar.wellbeing{background:#309060;}
 .stat-bar.debt{background:#c03040;}
 .stat-bar.unrest{background:#c07030;}
 .stat-bar.trust{background:#4a8ef5;}
 .stat-bar.low{background:#8a1a20!important;}
-.stat-value{display:none;}
-.redacted-row{margin-top:12px;padding:10px;border:1px solid #18102a;background:#0c0816;}
-.redacted-label{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:#2e1840;text-transform:uppercase;}
-.redacted-label+.redacted-label{margin-top:4px;}
-.turn-info{padding:12px 16px;border-top:1px solid var(--border);}
-.turn-label{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--text-dim);text-transform:uppercase;}
-.turn-num{font-family:var(--mono);font-size:14px;color:var(--text-bright);margin-top:3px;font-weight:500;}
 
-/* Center: main content */
+.strip-classified{display:flex;flex-direction:column;justify-content:center;padding:0 12px;border-left:1px solid var(--border);flex-shrink:0;}
+.strip-classified-row{font-family:var(--mono);font-size:7px;letter-spacing:1px;color:#1e1230;text-transform:uppercase;white-space:nowrap;}
+.strip-classified-row+.strip-classified-row{margin-top:3px;}
+
+/* ── GAME BODY ── */
+#game-body{flex:1;display:flex;overflow:hidden;}
+
+/* ── MAIN COLUMN ── */
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
-#main-header{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--panel);}
-.phase-label{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--gold);text-transform:uppercase;opacity:0.65;}
+
+#main-header{padding:10px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--panel);flex-shrink:0;}
+.phase-label{font-family:var(--mono);font-size:7px;letter-spacing:3px;color:var(--gold);text-transform:uppercase;opacity:0.65;}
 .phase-name{font-family:var(--sans);font-size:12px;color:var(--text-bright);margin-top:2px;font-weight:500;}
 .event-counter{font-family:var(--mono);font-size:10px;color:var(--text-dim);background:var(--border);padding:3px 10px;border-radius:2px;}
-#event-area{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;background:var(--bg);}
+
+/* ── EVENT AREA ── */
+#event-area{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--bg);}
 #event-area::-webkit-scrollbar{width:4px;}
 #event-area::-webkit-scrollbar-track{background:transparent;}
 #event-area::-webkit-scrollbar-thumb{background:var(--border2);}
 
-/* Event card */
-.event-card{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--ev-color,var(--border2));padding:18px 20px 16px;animation:cardIn 0.3s ease;}
-@keyframes cardIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
-.event-card.resolved{opacity:0.38;pointer-events:none;}
-.event-tag{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--ev-color,var(--text-dim));text-transform:uppercase;margin-bottom:10px;font-weight:500;}
-.event-title{font-family:var(--sans);font-size:16px;color:var(--text-bright);margin-bottom:10px;line-height:1.35;font-weight:600;}
-.event-body{font-size:13px;color:var(--text);line-height:1.75;margin-bottom:18px;}
-.event-choices{display:flex;flex-direction:column;gap:6px;}
-.choice-btn{background:rgba(12,18,32,0.7);border:1px solid var(--border2);border-left:3px solid var(--ev-color,var(--border2));color:var(--text);font-family:var(--sans);font-size:13px;padding:11px 14px;text-align:left;cursor:pointer;transition:all 0.15s;line-height:1.5;display:flex;align-items:flex-start;gap:10px;}
-.choice-btn:hover{border-color:var(--ev-color,var(--accent));color:var(--text-bright);background:rgba(74,142,245,0.05);}
-.choice-btn:disabled{opacity:0.3;cursor:not-allowed;}
-.choice-label{font-family:var(--mono);font-size:9px;color:var(--ev-color,var(--text-dim));min-width:16px;margin-top:2px;flex-shrink:0;font-weight:600;}
-.choice-restricted{font-family:var(--mono);font-size:9px;color:#6a3020;padding:10px 14px;border:1px solid #3a1a10;background:#160a08;letter-spacing:0.5px;line-height:1.5;}
-.outcome-display{background:rgba(16,34,18,0.65);border:1px solid #2a4430;border-left:3px solid #309060;padding:12px 14px;font-family:var(--sans);font-size:12px;color:#7aaa88;line-height:1.75;margin-top:8px;}
+/* ── EVENT CARD ── */
+.event-card{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--ev-color,var(--border2));border-radius:2px;overflow:hidden;animation:cardIn 0.3s ease;}
+@keyframes cardIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+.event-card.resolved{opacity:0.32;pointer-events:none;}
 
-/* End turn button */
-#end-turn-wrap{padding:14px 20px;border-top:1px solid var(--border);background:var(--panel);display:flex;align-items:center;justify-content:space-between;}
-#end-turn-btn{background:transparent;border:1px solid var(--border2);color:var(--text-dim);font-family:var(--mono);font-size:11px;letter-spacing:2px;padding:11px 24px;cursor:pointer;text-transform:uppercase;transition:all 0.2s;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);}
-#end-turn-btn:not(:disabled){background:var(--gold);border-color:var(--gold);color:#080c12;font-weight:600;box-shadow:0 0 18px rgba(200,146,42,0.28);}
-#end-turn-btn:not(:disabled):hover{background:#e0a830;box-shadow:0 0 30px rgba(200,146,42,0.45);}
+.event-card-header{padding:16px 18px 12px;}
+.event-tag{font-family:var(--mono);font-size:8px;letter-spacing:2.5px;color:var(--ev-color,var(--text-dim));text-transform:uppercase;font-weight:600;display:inline-block;background:color-mix(in srgb,var(--ev-color,var(--border2)) 14%,transparent);padding:3px 9px;border-radius:2px;margin-bottom:11px;}
+.event-title{font-family:var(--sans);font-size:clamp(16px,2.5vw,20px);color:var(--text-bright);line-height:1.3;font-weight:700;margin-bottom:9px;}
+.event-body{font-size:13px;color:var(--text);line-height:1.8;padding-bottom:4px;}
+
+/* ── CHOICE BUTTONS — integrated into card bottom ── */
+.event-choices{border-top:1px solid var(--border);display:flex;flex-direction:column;}
+.choice-btn{background:transparent;border:none;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--sans);font-size:14px;padding:15px 18px;text-align:left;cursor:pointer;transition:background 0.15s,color 0.15s;line-height:1.5;display:flex;align-items:flex-start;gap:14px;min-height:56px;width:100%;}
+.choice-btn:last-child{border-bottom:none;}
+.choice-btn:hover{background:color-mix(in srgb,var(--ev-color,var(--accent)) 9%,transparent);color:var(--text-bright);}
+.choice-btn:disabled{opacity:0.3;cursor:not-allowed;}
+.choice-label{font-family:var(--mono);font-size:10px;color:var(--ev-color,var(--text-dim));min-width:22px;margin-top:3px;flex-shrink:0;font-weight:700;background:color-mix(in srgb,var(--ev-color,var(--border2)) 20%,transparent);padding:2px 6px;border-radius:2px;text-align:center;}
+.choice-restricted{font-family:var(--mono);font-size:9px;color:#5a2820;padding:12px 18px;background:#0e0608;border-bottom:1px solid #1e0a08;letter-spacing:0.5px;line-height:1.5;}
+.choice-restricted:last-child{border-bottom:none;}
+.outcome-display{background:rgba(16,34,18,0.65);border-top:1px solid #2a4430;padding:14px 18px;font-family:var(--sans);font-size:13px;color:#7aaa88;line-height:1.75;}
+
+/* ── END TURN ── */
+#end-turn-wrap{padding:12px 16px;border-top:1px solid var(--border);background:var(--panel);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px;}
+#end-turn-btn{background:transparent;border:1px solid var(--border2);color:var(--text-dim);font-family:var(--mono);font-size:12px;letter-spacing:2px;padding:13px 28px;cursor:pointer;text-transform:uppercase;transition:all 0.2s;clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);flex-shrink:0;}
+#end-turn-btn:not(:disabled){background:var(--gold);border-color:var(--gold);color:#080c12;font-weight:700;box-shadow:0 0 22px rgba(200,146,42,0.30);}
+#end-turn-btn:not(:disabled):hover{background:#e0a830;box-shadow:0 0 34px rgba(200,146,42,0.50);}
 #end-turn-btn:disabled{opacity:0.22;cursor:not-allowed;}
 .events-remaining{font-family:var(--mono);font-size:9px;color:var(--text-dim);}
 
-/* News ticker */
+/* ── NEWS TICKER ── */
 #ticker-wrap{height:32px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;overflow:hidden;flex-shrink:0;}
-.ticker-label{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--gold);opacity:0.65;padding:0 14px;white-space:nowrap;border-right:1px solid var(--border);height:100%;display:flex;align-items:center;}
+.ticker-label{font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--gold);opacity:0.7;padding:0 14px;white-space:nowrap;border-right:1px solid var(--border);height:100%;display:flex;align-items:center;}
 .ticker-scroll{flex:1;overflow:hidden;position:relative;height:100%;}
 .ticker-inner{display:flex;align-items:center;height:100%;white-space:nowrap;animation:tickerMove linear infinite;}
 @keyframes tickerMove{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
 .ticker-item{font-family:var(--mono);font-size:10px;color:#5a6e8a;padding:0 28px;letter-spacing:0.3px;}
 .ticker-item::before{content:'◆';margin-right:10px;font-size:5px;color:var(--border2);}
 
-/* Right panel: log */
-#log-panel{width:200px;min-width:200px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-.log-header{padding:12px 14px 8px;border-bottom:1px solid var(--border);}
+/* ── LOG PANEL (desktop sidebar) ── */
+#log-panel{width:210px;min-width:210px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;}
+.log-header{padding:10px 14px 8px;border-bottom:1px solid var(--border);}
 .log-title{font-family:var(--mono);font-size:8px;letter-spacing:3px;color:var(--text-dim);text-transform:uppercase;}
 #log-list{flex:1;overflow-y:auto;padding:10px 14px;}
 #log-list::-webkit-scrollbar{width:3px;}
@@ -148,17 +161,26 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 .log-entry.good{border-color:#205030;color:#406a50;}
 .log-entry .log-turn{font-size:8px;color:var(--border2);display:block;margin-bottom:2px;}
 
-/* Delayed effect notification */
+/* ── DELAYED EFFECT NOTICE ── */
 .delayed-notice{background:rgba(28,16,6,0.75);border:1px solid #3a2010;border-left:3px solid var(--warn);padding:12px 16px;font-family:var(--sans);font-size:12px;color:#b08040;line-height:1.75;margin-bottom:12px;animation:cardIn 0.3s ease;}
 .delayed-notice::before{content:'⚠  DELAYED EFFECT — ';color:var(--warn);font-family:var(--mono);font-size:9px;letter-spacing:1px;}
 
-/* Responsive */
-@media(max-width:900px){
+/* ── RESPONSIVE ── */
+@media(max-width:860px){
   #log-panel{display:none;}
-  #sidebar{width:190px;min-width:190px;}
+  .strip-classified{display:none;}
 }
-@media(max-width:640px){
-  #sidebar{width:170px;min-width:170px;}
+@media(max-width:540px){
+  .strip-brand{min-width:80px;padding:0 10px;}
+  .strip-brand-date{font-size:13px;}
+  .stat-block{padding:6px 8px;}
+  .stat-block-val{font-size:13px;}
+  .stat-block-label{font-size:7px;}
+  #end-turn-btn{padding:13px 14px;font-size:11px;letter-spacing:1px;}
+  #event-area{padding:10px;}
+  .choice-btn{padding:14px 14px;font-size:13px;}
+  .event-card-header{padding:12px 14px 8px;}
+  .event-title{font-size:15px;}
 }
 </style>
 </head>
@@ -186,67 +208,70 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
 
 <!-- MAIN GAME SCREEN -->
 <div id="screen-game" class="screen">
-  <!-- Sidebar -->
-  <div id="sidebar">
-    <div class="sidebar-header">
-      <div class="region-label">Region Report</div>
-      <div class="region-name">Illinois — Region 7</div>
-      <div class="date-display" id="date-display">JAN 2027</div>
+
+  <!-- Top: horizontal stat strip -->
+  <div id="stat-strip">
+    <div class="strip-brand">
+      <div class="strip-brand-title">Region 7</div>
+      <div class="strip-brand-date" id="date-display">JAN 2027</div>
+      <div class="strip-brand-turn" id="turn-display">Month 1</div>
     </div>
-    <div class="stats-section">
-      <div class="stats-title">Regional Indicators</div>
-      <div class="stat-item">
-        <div class="stat-label">Wellbeing <span id="stat-wellbeing-val">62</span></div>
-        <div class="stat-bar-wrap"><div class="stat-bar wellbeing" id="bar-wellbeing" style="width:62%"></div></div>
+    <div class="strip-stats">
+      <div class="stat-block">
+        <div class="stat-block-label">Wellbeing</div>
+        <div class="stat-block-val" id="stat-wellbeing-val">62</div>
+        <div class="stat-block-bar"><div class="stat-bar wellbeing" id="bar-wellbeing" style="width:62%"></div></div>
       </div>
-      <div class="stat-item">
-        <div class="stat-label">Debt <span id="stat-debt-val">$4.2B</span></div>
-        <div class="stat-bar-wrap"><div class="stat-bar debt" id="bar-debt" style="width:42%"></div></div>
+      <div class="stat-block">
+        <div class="stat-block-label">Debt</div>
+        <div class="stat-block-val" id="stat-debt-val">$4.2B</div>
+        <div class="stat-block-bar"><div class="stat-bar debt" id="bar-debt" style="width:42%"></div></div>
       </div>
-      <div class="stat-item">
-        <div class="stat-label">Unrest <span id="stat-unrest-val">28</span></div>
-        <div class="stat-bar-wrap"><div class="stat-bar unrest" id="bar-unrest" style="width:28%"></div></div>
+      <div class="stat-block">
+        <div class="stat-block-label">Unrest</div>
+        <div class="stat-block-val" id="stat-unrest-val">28</div>
+        <div class="stat-block-bar"><div class="stat-bar unrest" id="bar-unrest" style="width:28%"></div></div>
       </div>
-      <div class="stat-item">
-        <div class="stat-label">Trust <span id="stat-trust-val">44</span></div>
-        <div class="stat-bar-wrap"><div class="stat-bar trust" id="bar-trust" style="width:44%"></div></div>
-      </div>
-      <div class="redacted-row">
-        <div class="redacted-label">CORP. INFLUENCE ░░░░░░ [CLASSIFIED]</div>
-        <div class="redacted-label">MEDIA CAPTURE ░░░░░░░ [CLASSIFIED]</div>
+      <div class="stat-block">
+        <div class="stat-block-label">Trust</div>
+        <div class="stat-block-val" id="stat-trust-val">44</div>
+        <div class="stat-block-bar"><div class="stat-bar trust" id="bar-trust" style="width:44%"></div></div>
       </div>
     </div>
-    <div class="turn-info">
-      <div class="turn-label">Tenure</div>
-      <div class="turn-num" id="turn-display">Month 1</div>
+    <div class="strip-classified">
+      <div class="strip-classified-row">CORP. INFLUENCE ░░░░░░ [CLASSIFIED]</div>
+      <div class="strip-classified-row">MEDIA CAPTURE ░░░░░░░ [CLASSIFIED]</div>
     </div>
   </div>
 
-  <!-- Main area -->
-  <div id="main">
-    <div id="main-header">
-      <div>
-        <div class="phase-label">Active Events</div>
-        <div class="phase-name" id="phase-name">Awaiting Director Input</div>
+  <!-- Body: event column + log -->
+  <div id="game-body">
+    <div id="main">
+      <div id="main-header">
+        <div>
+          <div class="phase-label">Active Events</div>
+          <div class="phase-name" id="phase-name">Awaiting Director Input</div>
+        </div>
+        <div class="event-counter" id="event-counter"></div>
       </div>
-      <div class="event-counter" id="event-counter"></div>
+      <div id="event-area"></div>
+      <div id="end-turn-wrap">
+        <button id="end-turn-btn" disabled>ADVANCE MONTH ›</button>
+        <span class="events-remaining" id="events-remaining"></span>
+      </div>
     </div>
-    <div id="event-area"></div>
-    <div id="end-turn-wrap">
-      <button id="end-turn-btn" disabled>ADVANCE MONTH ›</button>
-      <span class="events-remaining" id="events-remaining"></span>
-    </div>
-    <div id="ticker-wrap">
-      <div class="ticker-label">REGION 7 WIRE</div>
-      <div class="ticker-scroll"><div class="ticker-inner" id="ticker-inner"></div></div>
+    <div id="log-panel">
+      <div class="log-header"><div class="log-title">Decision Log</div></div>
+      <div id="log-list"></div>
     </div>
   </div>
 
-  <!-- Log panel -->
-  <div id="log-panel">
-    <div class="log-header"><div class="log-title">Decision Log</div></div>
-    <div id="log-list"></div>
+  <!-- Bottom: news ticker -->
+  <div id="ticker-wrap">
+    <div class="ticker-label">REGION 7 WIRE</div>
+    <div class="ticker-scroll"><div class="ticker-inner" id="ticker-inner"></div></div>
   </div>
+
 </div>
 
 </div><!-- #app -->
@@ -1379,9 +1404,11 @@ function buildEventCard(ev, idx){
   });
 
   card.innerHTML = `
-    <div class="event-tag">${ev.tag}</div>
-    <div class="event-title">${ev.title}</div>
-    <div class="event-body">${displayBody}</div>
+    <div class="event-card-header">
+      <div class="event-tag">${ev.tag}</div>
+      <div class="event-title">${ev.title}</div>
+      <div class="event-body">${displayBody}</div>
+    </div>
     <div class="event-choices" id="choices-${ev.id}">${choicesHTML}</div>
   `;
   return card;
