@@ -142,7 +142,7 @@ body::before{content:'';position:fixed;inset:0;z-index:0;background:radial-gradi
       <div class="card-body">
         <div class="card-tag">EXPLORATION &middot; ROGUELITE</div>
         <h2 class="card-title">VOID DIGGER</h2>
-        <p class="card-desc">Dig deeper. Surface stronger. The void goes forever.</p>
+        <p class="card-desc">Drill deeper. The planet has layers. So do its secrets.</p>
         <a class="card-play-btn" href="void-digger/index.html">PLAY</a>
       </div>
     </article>
@@ -777,153 +777,187 @@ function initVoidPreview(){
   const cnv=document.getElementById('preview-void');
   if(!cnv)return;
   const ctx=cnv.getContext('2d');
-  const W=320,H=180;
-  const TILE=26,COLS=8,ROWS=5;
-  const OX=Math.floor((W-COLS*TILE)/2);
-  const OY=28;
+  const W=320,H=180,TS=10;
 
-  const INIT_GRID=[
-    [1,1,2,1,1,2,1,1],
-    [1,2,1,1,3,1,1,2],
-    [1,1,1,0,1,1,4,1],
-    [2,1,1,1,1,2,1,1],
-    [1,1,2,1,1,1,1,2],
+  // Geological layer bands (color bands scrolling downward)
+  const LAYER_COLS=[
+    {bg:'#050b04',fg:'#0c1a0a',name:'TOPSOIL'},
+    {bg:'#040608',fg:'#080c14',name:'CLAY & STONE'},
+    {bg:'#02040e',fg:'#030612',name:'CRYSTAL CAVERNS'},
+    {bg:'#010208',fg:'#020208',name:'ANCIENT DEPTHS'},
+    {bg:'#060100',fg:'#0a0000',name:'MAGMA LAYER'},
+    {bg:'#000005',fg:'#000008',name:'THE VOID'},
   ];
 
-  let grid,fog,px,py,score=0,pathIdx=0;
-  let lastStep=0;
-  const STEP_MS=650;
+  // Tile grid (scrolls to simulate descent)
+  const COLS2=Math.ceil(W/TS)+2, ROWS2=Math.ceil(H/TS)+4;
+  const WORLD_ROWS=60;
+  const tileGrid=[];
+  // 0=air, 1=dirt, 2=stone, 3=crystal, 4=lava, 5=void_crystal
+  for(let r=0;r<WORLD_ROWS;r++){
+    const row=[];
+    const layerFrac=r/WORLD_ROWS;
+    for(let c=0;c<COLS2;c++){
+      const p=Math.random();
+      let tile;
+      if(r<2) tile=0;
+      else if(layerFrac<0.15) tile=p<0.7?1:p<0.9?2:0;
+      else if(layerFrac<0.35) tile=p<0.55?2:p<0.7?1:p<0.78?3:0;
+      else if(layerFrac<0.6)  tile=p<0.6?2:p<0.7?3:p<0.75?3:0;
+      else if(layerFrac<0.8)  tile=p<0.65?2:p<0.72?4:0;
+      else                    tile=p<0.7?2:p<0.78?5:0;
+      row.push(tile);
+    }
+    tileGrid.push(row);
+  }
+
+  // Mech state
+  let mechY=H*0.18, mechVY=0.4, mechX=W/2;
+  let mechAngle=Math.PI/2+0.2; // drilling down-right
+  let depthM=0;
   const parts=[];
+  let t=0,scrollY=0;
 
-  const path=[
-    [3,2],[3,1],[4,1],[5,1],[5,2],[6,2],
-    [6,1],[5,1],[5,0],[4,0],[3,0],[2,0],
-    [1,0],[1,1],[1,2],[2,2],[2,3],[3,3],
-    [4,3],[4,2],[3,2]
-  ];
+  // Crystal pulse seed
+  function ph(x,y,s){ return ((x*73856093^y*19349663^s*83492791)>>>0)%1000/1000; }
 
-  function revealAround(gx,gy){
-    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(fog[r][c]===2) fog[r][c]=1;
-    for(let dy=-2;dy<=2;dy++) for(let dx=-2;dx<=2;dx++){
-      const ty=gy+dy,tx=gx+dx;
-      if(ty<0||ty>=ROWS||tx<0||tx>=COLS)continue;
-      const d=Math.max(Math.abs(dx),Math.abs(dy));
-      if(d<=1) fog[ty][tx]=2; else if(fog[ty][tx]<1) fog[ty][tx]=1;
-    }
+  function addPart(x,y,vx,vy,life,col){
+    if(parts.length>80) return;
+    parts.push({x,y,vx,vy,life,maxLife:life,col});
   }
 
-  function resetState(){
-    grid=INIT_GRID.map(r=>[...r]);
-    fog=Array.from({length:ROWS},()=>new Array(COLS).fill(0));
-    px=path[0][0]; py=path[0][1]; score=0; pathIdx=0;
-    revealAround(px,py);
-  }
-
-  resetState();
-
-  function emitDig(gx,gy,color){
-    const cx=OX+gx*TILE+TILE/2,cy=OY+gy*TILE+TILE/2;
-    for(let i=0;i<7;i++){
-      const ang=(i/7)*Math.PI*2+Math.random()*0.4;
-      parts.push({x:cx,y:cy,vx:Math.cos(ang)*(1+Math.random()*2.5),vy:Math.sin(ang)*(1+Math.random()*2.5),life:1,decay:0.04+Math.random()*0.02,size:2+Math.random()*2,col:color});
-    }
-  }
-
-  function step(now){
-    if(now-lastStep<STEP_MS)return;
-    lastStep=now;
-    pathIdx++;
-    if(pathIdx>=path.length){resetState();return;}
-    const [nx,ny]=path[pathIdx];
-    const type=grid[ny][nx];
-    if(type!==0){
-      let col='#3a5a7a',pts=25;
-      if(type===2){col='#2a4a6a';pts=15;}
-      else if(type===3){col='#00eeff';pts=180;}
-      else if(type===4){col='#00ff88';pts=90;}
-      emitDig(nx,ny,col);
-      grid[ny][nx]=0;
-      score+=pts;
-    }
-    px=nx; py=ny;
-    revealAround(px,py);
-  }
-
-  let t=0;
   function frame(now){
     t++;
-    step(now);
-    for(let i=parts.length-1;i>=0;i--){
-      const p=parts[i];p.x+=p.vx;p.y+=p.vy;p.life-=p.decay;
-      if(p.life<=0)parts.splice(i,1);
+    scrollY+=0.22;
+    depthM=Math.round(scrollY*0.8);
+    mechY+=mechVY;
+    if(mechY>H*0.72){ mechVY=-0.3; }
+    if(mechY<H*0.15){ mechVY=0.4; }
+    mechAngle+=Math.sin(t*0.04)*0.02;
+
+    // Drill sparks
+    if(t%4===0){
+      const drillX=mechX+Math.cos(mechAngle)*14;
+      const drillY=mechY+Math.sin(mechAngle)*14;
+      const a=mechAngle+Math.PI+(Math.random()-0.5)*0.8;
+      addPart(drillX,drillY,Math.cos(a)*(0.8+Math.random()*1.5),Math.sin(a)*(0.8+Math.random()*1.5),0.4+Math.random()*0.3,'#f5a623');
     }
 
-    ctx.fillStyle='#050810';ctx.fillRect(0,0,W,H);
+    // Update particles
+    for(let i=parts.length-1;i>=0;i--){
+      const p=parts[i];
+      p.x+=p.vx; p.y+=p.vy; p.vy+=0.04; p.life-=0.018;
+      if(p.life<=0) parts.splice(i,1);
+    }
 
-    for(let row=0;row<ROWS;row++){
-      for(let col=0;col<COLS;col++){
-        const sx=OX+col*TILE,sy=OY+row*TILE;
-        const type=grid[row][col],f=fog[row][col];
-        if(!f){ctx.fillStyle='rgba(0,0,8,0.92)';ctx.fillRect(sx,sy,TILE,TILE);continue;}
-        ctx.fillStyle=type===1?'#0d1520':type===2?'#162030':type>=3?'#0d1825':'#030608';
-        ctx.fillRect(sx,sy,TILE,TILE);
-        ctx.strokeStyle='rgba(0,50,100,0.18)';ctx.lineWidth=0.5;
-        ctx.strokeRect(sx+0.25,sy+0.25,TILE-0.5,TILE-0.5);
+    // Background
+    const mechLayerFrac=Math.max(0,Math.min(1,(mechY/H+scrollY/30)/1.6));
+    const li=Math.min(5,Math.floor(mechLayerFrac*6));
+    const lc=LAYER_COLS[li];
+    ctx.fillStyle=lc.bg;
+    ctx.fillRect(0,0,W,H);
 
-        if(type===1){
-          ctx.fillStyle='rgba(20,50,70,0.35)';
-          ctx.beginPath();ctx.arc(sx+5,sy+6,1.2,0,Math.PI*2);ctx.fill();
-          ctx.beginPath();ctx.arc(sx+15,sy+14,0.9,0,Math.PI*2);ctx.fill();
-          ctx.beginPath();ctx.arc(sx+9,sy+20,1.1,0,Math.PI*2);ctx.fill();
-        } else if(type===2){
-          ctx.strokeStyle='rgba(40,70,90,0.4)';ctx.lineWidth=1;
-          ctx.strokeRect(sx+4,sy+4,TILE-8,TILE-8);
-          ctx.beginPath();ctx.arc(sx+TILE/2,sy+TILE/2,5,0,Math.PI*2);ctx.stroke();
-        } else if(type===3){
-          const pulse=0.5+0.5*Math.sin(t*0.06);
+    // Draw tile strips (scrolling)
+    const tileOff=scrollY%TS;
+    const worldRow=Math.floor(scrollY/TS);
+    for(let row=0;row<ROWS2;row++){
+      const wr=(worldRow+row)%WORLD_ROWS;
+      const sy=row*TS-tileOff;
+      const rowFrac=(worldRow+row)/WORLD_ROWS;
+      for(let col=0;col<COLS2;col++){
+        const tile=tileGrid[wr][col];
+        if(tile===0) continue;
+        const sx=col*TS;
+        let fc;
+        if(tile===1) fc='#4c2a10';
+        else if(tile===2) fc='#2a2a38';
+        else if(tile===3){
+          const pulse=0.5+0.5*Math.sin(t*0.1+col*0.5+wr*0.3);
           ctx.save();
-          ctx.shadowBlur=10*pulse;ctx.shadowColor='#00eeff';
-          ctx.fillStyle='rgba(0,238,255,'+(0.7+0.3*pulse)+')';
-          ctx.translate(sx+TILE/2,sy+TILE/2);
-          ctx.beginPath();
-          for(let i=0;i<8;i++){const ang=(i/8)*Math.PI*2,r=i%2===0?7:3;i===0?ctx.moveTo(Math.cos(ang)*r,Math.sin(ang)*r):ctx.lineTo(Math.cos(ang)*r,Math.sin(ang)*r);}
-          ctx.closePath();ctx.fill();
-          ctx.shadowBlur=0;ctx.restore();
-        } else if(type===4){
+          ctx.shadowColor='#00eeff'; ctx.shadowBlur=8*pulse;
+          ctx.fillStyle=`rgba(0,150,200,${0.7+0.3*pulse})`;
+          ctx.fillRect(sx+2,sy+2,TS-4,TS-4);
+          ctx.restore();
+          continue;
+        } else if(tile===4){
+          const pulse=(Math.sin(t*0.15+col*0.4+wr*0.2)+1)*0.5;
+          ctx.fillStyle=`rgb(${140+Math.floor(pulse*40)},${15+Math.floor(pulse*15)},0)`;
+          ctx.fillRect(sx,sy,TS,TS);
+          continue;
+        } else if(tile===5){
+          const pulse=0.6+0.4*Math.sin(t*0.08+col*0.3+wr*0.4);
           ctx.save();
-          ctx.shadowBlur=8;ctx.shadowColor='#00ff88';
-          ctx.strokeStyle='#00ff88';ctx.lineWidth=1.5;
-          ctx.beginPath();ctx.arc(sx+TILE/2,sy+TILE/2,6,0,Math.PI*2);ctx.stroke();
-          ctx.shadowBlur=0;ctx.restore();
-        }
-        if(f===1){ctx.fillStyle='rgba(0,0,8,0.55)';ctx.fillRect(sx,sy,TILE,TILE);}
+          ctx.shadowColor='#aa00ff'; ctx.shadowBlur=10*pulse;
+          ctx.fillStyle=`rgba(100,0,220,${0.8*pulse})`;
+          ctx.fillRect(sx+2,sy+2,TS-4,TS-4);
+          ctx.restore();
+          continue;
+        } else fc='#0a0200';
+        ctx.fillStyle=fc;
+        ctx.fillRect(sx,sy,TS,TS);
       }
     }
 
-    // Player
-    const psx=OX+px*TILE+TILE/2,psy=OY+py*TILE+TILE/2;
-    const pp=0.7+0.3*Math.sin(t*0.07);
-    ctx.save();
-    ctx.shadowBlur=10*pp;ctx.shadowColor='#f5a623';
-    ctx.fillStyle='#f5a623';
-    ctx.beginPath();ctx.roundRect(psx-5,psy-5,10,10,2);ctx.fill();
-    ctx.shadowBlur=0;ctx.restore();
+    // Parallax light glow from mech
+    const lightGrd=ctx.createRadialGradient(mechX,mechY,0,mechX,mechY,70);
+    lightGrd.addColorStop(0,'rgba(245,166,35,0.12)');
+    lightGrd.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=lightGrd;
+    ctx.fillRect(0,0,W,H);
+
+    // Darkness overlay (depth-based)
+    const darkAlpha=0.3+mechLayerFrac*0.45;
+    ctx.fillStyle=`rgba(0,0,6,${darkAlpha})`;
+    ctx.fillRect(0,0,W,H);
 
     // Particles
-    parts.forEach(p=>{ctx.globalAlpha=p.life;ctx.fillStyle=p.col;ctx.fillRect(p.x-p.size/2,p.y-p.size/2,p.size,p.size);});
+    parts.forEach(p=>{
+      ctx.globalAlpha=Math.max(0,p.life/p.maxLife);
+      ctx.fillStyle=p.col;
+      ctx.fillRect(p.x-1.5,p.y-1.5,3,3);
+    });
     ctx.globalAlpha=1;
 
-    // HUD
-    ctx.font='bold 9px "Exo 2",sans-serif';
-    ctx.fillStyle='rgba(0,200,255,0.7)';ctx.textAlign='left';
-    ctx.fillText('DEPTH  F03',OX,16);
-    ctx.font='bold 12px "Exo 2",sans-serif';
-    ctx.fillStyle='#ffffff';ctx.textAlign='right';
-    ctx.fillText(score,W-OX,16);
-    ctx.font='bold 7px "Exo 2",sans-serif';
-    ctx.fillStyle='rgba(0,200,255,0.5)';
-    ctx.fillText('SCORE',W-OX,26);
-    ctx.textAlign='left';
+    // Mech body
+    const pp=0.7+0.3*Math.sin(t*0.12);
+    ctx.save();
+    ctx.shadowColor='#f5a623'; ctx.shadowBlur=10*pp;
+    ctx.fillStyle='#f5a623';
+    ctx.beginPath();
+    ctx.moveTo(mechX,mechY-8);
+    ctx.lineTo(mechX+7,mechY-4);
+    ctx.lineTo(mechX+7,mechY+4);
+    ctx.lineTo(mechX,mechY+8);
+    ctx.lineTo(mechX-7,mechY+4);
+    ctx.lineTo(mechX-7,mechY-4);
+    ctx.closePath(); ctx.fill();
+    // Visor
+    ctx.fillStyle='rgba(0,200,255,0.6)';
+    ctx.fillRect(mechX-4,mechY-3,8,3);
+    // Drill bit
+    ctx.translate(mechX,mechY);
+    ctx.rotate(mechAngle);
+    ctx.fillStyle='#ffcc44';
+    ctx.shadowColor='#ffcc44'; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.moveTo(10,0); ctx.lineTo(6,-4); ctx.lineTo(6,4); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // HUD overlay
+    ctx.font='700 8px "Exo 2",sans-serif';
+    ctx.fillStyle='rgba(245,166,35,0.7)'; ctx.textAlign='left';
+    ctx.fillText(depthM+'m',6,12);
+    ctx.fillStyle='rgba(100,120,100,0.6)';
+    ctx.fillText(LAYER_COLS[li].name,6,22);
+    // Energy bar
+    const ePct=0.55+0.15*Math.sin(t*0.06);
+    ctx.fillStyle='rgba(0,10,0,0.5)';
+    ctx.fillRect(W-56,4,50,5);
+    ctx.fillStyle=ePct<0.3?'#ff3344':'#00ccff';
+    ctx.fillRect(W-56,4,50*ePct,5);
+    ctx.fillStyle='rgba(0,200,255,0.4)';
+    ctx.font='600 7px Rajdhani,sans-serif';
+    ctx.textAlign='right';
+    ctx.fillText('ENERGY',W-4,18);
 
     requestAnimationFrame(frame);
   }
