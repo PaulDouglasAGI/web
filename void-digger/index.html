@@ -847,9 +847,6 @@ function updatePhysics(dt){
     }
   }
 
-  // Energy death → forced surface (grace period blocks this on first 5s of dive)
-  if(player.energy<=0&&gameState==='DIVING'&&surfaceGrace<=0) triggerSurface();
-
   // Depth tracking
   const depth=Math.floor(player.y/TS);
   if(depth>maxDepth) maxDepth=depth;
@@ -877,6 +874,7 @@ function getDrillTarget(){
 }
 
 function updateDrill(dt){
+  if(player.energy<=0) return; // drill disabled at 0 energy — recharge first
   const {tx,ty}=getDrillTarget();
   drillTX=tx; drillTY=ty;
   if(tx<0||ty<0) return;
