@@ -236,6 +236,7 @@ let coins=0, maxDepth=0, tilesDrilled=0;
 let radarActive=false, radarT=0;
 let anchorY=-1;
 let dmgFlashT=0;
+let surfaceGrace=0; // seconds before surface-exit can trigger
 let layerBannerT=0, lastLayer=-1;
 let surfacingT=0;
 
@@ -450,10 +451,13 @@ function generateWorld(){
     if(grid[y*WW+x]===T.VOID_STONE&&ph(x,y,77)<0.012) grid[y*WW+x]=T.VOID_X;
   }
 
-  // Clear spawn column (2 tiles wide)
+  // Clear spawn column so player has room to land
   const spawnX=Math.floor(WW/2);
-  for(let y=0;y<=6;y++) for(let dx=-1;dx<=1;dx++){
-    if(inBounds(spawnX+dx,y)) grid[y*WW+spawnX+dx]=y<=0?T.AIR:y===1?T.GRASS:T.AIR;
+  for(let y=0;y<=8;y++) for(let dx=-2;dx<=2;dx++){
+    if(!inBounds(spawnX+dx,y)) continue;
+    if(y===0) grid[y*WW+spawnX+dx]=T.AIR;
+    else if(y===1) grid[y*WW+spawnX+dx]=T.GRASS;
+    else grid[y*WW+spawnX+dx]=T.AIR;
   }
 }
 
@@ -835,7 +839,8 @@ function updatePhysics(dt){
   }
 
   // Surfacing check
-  if(player.y<TS*SURFACE_ROW&&gameState==='DIVING') triggerSurface();
+  if(surfaceGrace>0) surfaceGrace-=dt;
+  if(player.y<TS*SURFACE_ROW&&gameState==='DIVING'&&surfaceGrace<=0) triggerSurface();
 
   // Energy death
   if(player.energy<=0&&gameState==='DIVING') triggerSurface();
@@ -1261,14 +1266,14 @@ function startDive(){
   generateWorld();
   drill.fill(0);
   parts.length=0;
-  player.x=WW*TS/2; player.y=TS*1.5;
+  player.x=WW*TS/2; player.y=TS*5;
   player.vx=0; player.vy=0;
   player.maxEnergy=100+upgEff('energyCore');
   player.energy=player.maxEnergy;
   player.drillAngle=Math.PI/2;
   player.onGround=false;
   coins=0; maxDepth=0; tilesDrilled=0;
-  radarReveal=[]; radarT=0; lastLayer=-1; layerBannerT=0;
+  radarReveal=[]; radarT=0; lastLayer=-1; layerBannerT=0; surfaceGrace=3;
   camX=WW*TS/2-W/2; camY=0;
   joyVec={x:0,y:0}; mouseDown=false; mobileDrill=false;
   gameState='DIVING';
