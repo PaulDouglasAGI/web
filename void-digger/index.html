@@ -451,13 +451,15 @@ function generateWorld(){
     if(grid[y*WW+x]===T.VOID_STONE&&ph(x,y,77)<0.012) grid[y*WW+x]=T.VOID_X;
   }
 
-  // Clear spawn column so player has room to land
+  // Wide spawn shaft — clear 9 tiles wide, 20 rows deep so the player
+  // has room to move freely and can fly back up to the surface
   const spawnX=Math.floor(WW/2);
-  for(let y=0;y<=8;y++) for(let dx=-2;dx<=2;dx++){
-    if(!inBounds(spawnX+dx,y)) continue;
-    if(y===0) grid[y*WW+spawnX+dx]=T.AIR;
-    else if(y===1) grid[y*WW+spawnX+dx]=T.GRASS;
-    else grid[y*WW+spawnX+dx]=T.AIR;
+  for(let y=0;y<=19;y++) for(let dx=-4;dx<=4;dx++){
+    if(inBounds(spawnX+dx,y)) grid[y*WW+spawnX+dx]=T.AIR;
+  }
+  // Grass border on either side of the shaft opening at row 1
+  for(let x=0;x<WW;x++){
+    if(x<spawnX-4||x>spawnX+4) grid[1*WW+x]=T.GRASS;
   }
 }
 
@@ -738,36 +740,38 @@ function drawParticles(){
 
 // ─── PHYSICS & COLLISION ─────────────────────────────────────────────────────
 function resolveX(nx){
-  const left=nx-PLAYER_W/2, right=nx+PLAYER_W/2;
-  const top=player.y-PLAYER_H/2, bot=player.y+PLAYER_H/2;
-  const tl=Math.floor(left/TS), tr=Math.floor((right-0.1)/TS);
-  const ty=Math.floor((top+2)/TS), by=Math.floor((bot-2)/TS);
-  for(let ty2=ty;ty2<=by;ty2++){
-    for(let tx2=tl;tx2<=tr;tx2++){
-      if(!solid(tx2,ty2)) continue;
-      // Push out
-      const tileL=tx2*TS, tileR=(tx2+1)*TS;
-      if(player.vx>0) return tileL-PLAYER_W/2;
-      if(player.vx<0) return tileR+PLAYER_W/2;
+  // Only check the leading-edge column so we never push from the wrong side
+  const rowT=Math.floor((player.y-PLAYER_H/2+1)/TS);
+  const rowB=Math.floor((player.y+PLAYER_H/2-1)/TS);
+  if(player.vx>0){
+    const col=Math.floor((nx+PLAYER_W/2)/TS);
+    for(let r=rowT;r<=rowB;r++){
+      if(solid(col,r)){ player.vx=0; return col*TS-PLAYER_W/2; }
+    }
+  } else if(player.vx<0){
+    const col=Math.floor((nx-PLAYER_W/2)/TS);
+    for(let r=rowT;r<=rowB;r++){
+      if(solid(col,r)){ player.vx=0; return (col+1)*TS+PLAYER_W/2; }
     }
   }
   return nx;
 }
 function resolveY(ny){
-  const left=player.x-PLAYER_W/2+2, right=player.x+PLAYER_W/2-2;
-  const top=ny-PLAYER_H/2, bot=ny+PLAYER_H/2;
-  const tl=Math.floor(left/TS), tr=Math.floor((right)/TS);
-  const ty=Math.floor(top/TS), by=Math.floor((bot-0.1)/TS);
-  for(let ty2=ty;ty2<=by;ty2++){
-    for(let tx2=tl;tx2<=tr;tx2++){
-      if(!solid(tx2,ty2)) continue;
-      const tileT=ty2*TS, tileB=(ty2+1)*TS;
-      if(player.vy>0){
+  const colL=Math.floor((player.x-PLAYER_W/2+1)/TS);
+  const colR=Math.floor((player.x+PLAYER_W/2-1)/TS);
+  if(player.vy>0){
+    const row=Math.floor((ny+PLAYER_H/2)/TS);
+    for(let c=colL;c<=colR;c++){
+      if(solid(c,row)){
         if(!player.onGround) emitLanding(player.x,ny);
         player.onGround=true; player.vy=0;
-        return tileT-PLAYER_H/2;
+        return row*TS-PLAYER_H/2;
       }
-      if(player.vy<0){ player.vy=0; return tileB+PLAYER_H/2; }
+    }
+  } else if(player.vy<0){
+    const row=Math.floor((ny-PLAYER_H/2)/TS);
+    for(let c=colL;c<=colR;c++){
+      if(solid(c,row)){ player.vy=0; return (row+1)*TS+PLAYER_H/2; }
     }
   }
   return ny;
@@ -809,9 +813,7 @@ function updatePhysics(dt){
     player.vy=Math.max(-MAX_VY_UP,Math.min(MAX_VY_DOWN,player.vy));
 
     // Move X
-    const intX=player.x+player.vx*subDt;
-    const nx=resolveX(intX);
-    if(Math.abs(nx-intX)>0.01) player.vx=0;
+    const nx=resolveX(player.x+player.vx*subDt);
     player.x=Math.max(PLAYER_W/2,Math.min(WW*TS-PLAYER_W/2,nx));
 
     // Move Y
@@ -1268,7 +1270,7 @@ function startDive(){
   generateWorld();
   drill.fill(0);
   parts.length=0;
-  player.x=WW*TS/2; player.y=TS*5;
+  player.x=WW*TS/2; player.y=TS*10;
   player.vx=0; player.vy=0;
   player.maxEnergy=100+upgEff('energyCore');
   player.energy=player.maxEnergy;
