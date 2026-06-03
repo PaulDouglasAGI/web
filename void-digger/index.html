@@ -701,9 +701,9 @@ function emitDrillStream(wx,wy,angle,tile){
   const sp=20+Math.random()*40;
   addPart(wx,wy,Math.cos(a+Math.PI)*sp,Math.sin(a+Math.PI)*sp-10,0.15+Math.random()*0.2,1+Math.random()*2,col,60);
 }
-function emitThruster(sx,sy,facing){
-  const col='rgba(180,120,40,0.7)';
-  addPart(sx-facing*10+player.x,sy+player.y,-facing*(20+Math.random()*40),(Math.random()-0.5)*20,0.1+Math.random()*0.15,1.5+Math.random()*2,col,0);
+function emitThruster(wx,wy,facing){
+  // wx/wy are world coords
+  addPart(wx-facing*10,wy+6,-facing*(20+Math.random()*40),(Math.random()-0.5)*20,0.1+Math.random()*0.15,1.5+Math.random()*2,'rgba(180,120,40,0.7)',0);
 }
 function emitLanding(px,py){
   for(let i=0;i<8;i++){
@@ -809,8 +809,9 @@ function updatePhysics(dt){
     player.vy=Math.max(-MAX_VY_UP,Math.min(MAX_VY_DOWN,player.vy));
 
     // Move X
-    const nx=resolveX(player.x+player.vx*subDt);
-    if(nx===player.x) player.vx=0;
+    const intX=player.x+player.vx*subDt;
+    const nx=resolveX(intX);
+    if(Math.abs(nx-intX)>0.01) player.vx=0;
     player.x=Math.max(PLAYER_W/2,Math.min(WW*TS-PLAYER_W/2,nx));
 
     // Move Y
@@ -854,7 +855,8 @@ function updatePhysics(dt){
 let drillTX=-1, drillTY=-1;
 
 function getDrillTarget(){
-  const angle=Math.atan2(mouseY-H/2,mouseX-W/2);
+  const psx=player.x-camX, psy=player.y-camY;
+  const angle=Math.atan2(mouseY-psy,mouseX-psx);
   player.drillAngle=angle;
   const reach=TS*(1.8+upgEff('drillReach')*0.7);
   // Step along ray
@@ -953,7 +955,7 @@ function drawLighting(){
 
   // Player light
   const lr=BASE_LIGHT_R*upgEff('lightRadius');
-  const px=W/2, py=H/2;
+  const px=player.x-camX, py=player.y-camY;
   const pg=lctx.createRadialGradient(px,py,0,px,py,lr);
   pg.addColorStop(0,'rgba(0,0,0,1)');
   pg.addColorStop(0.55,'rgba(0,0,0,0.65)');
@@ -1027,12 +1029,12 @@ function hexToRgba(hex,a){
 
 // ─── MECH / PLAYER DRAWING ───────────────────────────────────────────────────
 function drawMech(){
-  const sx=W/2, sy=H/2;
+  const sx=player.x-camX, sy=player.y-camY;
   ctx.save();
 
-  // Thruster particles
+  // Thruster particles (world coords)
   if(Math.abs(player.vx)>10||Math.abs(player.vy)>10){
-    if(Math.random()<0.4) emitThruster(sx,sy,player.facing);
+    if(Math.random()<0.4) emitThruster(player.x,player.y,player.facing);
   }
 
   // Body — angular polygon (mech shape)
@@ -1148,7 +1150,7 @@ function drawDrillTarget(){
 
 function drawDrillLine(){
   if(!(mouseDown||mobileDrill)) return;
-  const sx=W/2, sy=H/2;
+  const sx=player.x-camX, sy=player.y-camY;
   ctx.strokeStyle='rgba(245,166,35,0.25)';
   ctx.lineWidth=1;
   ctx.setLineDash([3,6]);
@@ -1274,7 +1276,8 @@ function startDive(){
   player.onGround=false;
   coins=0; maxDepth=0; tilesDrilled=0;
   radarReveal=[]; radarT=0; lastLayer=-1; layerBannerT=0; surfaceGrace=3;
-  camX=WW*TS/2-W/2; camY=0;
+  camX=Math.max(0,Math.min(WW*TS-W,player.x-W/2));
+  camY=Math.max(0,Math.min(WH*TS-H,player.y-H/2));
   joyVec={x:0,y:0}; mouseDown=false; mobileDrill=false;
   gameState='DIVING';
   document.getElementById('menu').classList.add('hidden');
