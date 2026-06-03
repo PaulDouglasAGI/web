@@ -161,28 +161,28 @@ const T={AIR:0,GRASS:1,DIRT:2,CLAY:3,STONE:4,IRON:5,FOSSIL:6,
 
 // [hp, coinVal, solid, glowColor, lava]
 const TDEF=[
-  [0,  0,  0, null,      0], // AIR
-  [8,  0,  1, null,      0], // GRASS
-  [10, 0,  1, null,      0], // DIRT
-  [16, 18, 1, null,      0], // CLAY
-  [26, 10, 1, null,      0], // STONE
-  [32, 55, 1, null,      0], // IRON
-  [24, 80, 1, null,      0], // FOSSIL
-  [22,175, 1, '#00eeff', 0], // CRYSTAL
-  [18, 60, 1, '#88aaff', 0], // QUARTZ
-  [40, 0,  1, null,      0], // BASALT
-  [55, 35, 1, null,      0], // OBSIDIAN
-  [34,190, 1, '#aa55ff', 0], // RUNE
-  [48,260, 1, null,      0], // ANCIENT
-  [80, 0,  1, null,      0], // ART_WALL
-  [28, 0,  1, null,      0], // LAVA_ROCK
-  [0,  0,  0, '#ff4400', 1], // LAVA
-  [36,350, 1, '#ff6600', 0], // MAGMA_X
-  [60, 0,  1, null,      0], // VOID_STONE
-  [44,800, 1, '#cc00ff', 0], // VOID_X
-  [4,  0,  0, '#00ff88', 0], // POWER_CELL
-  [4, 500, 0, '#f5a623', 0], // ARTIFACT
-  [2,  0,  1, null,      0], // ROOT
+  [0,  0,   0, null,      0], // AIR
+  [8,  0,   1, null,      0], // GRASS
+  [10, 0,   1, null,      0], // DIRT
+  [16, 35,  1, null,      0], // CLAY
+  [26, 20,  1, null,      0], // STONE
+  [32, 110, 1, null,      0], // IRON
+  [24, 160, 1, null,      0], // FOSSIL
+  [22, 350, 1, '#00eeff', 0], // CRYSTAL
+  [18, 120, 1, '#88aaff', 0], // QUARTZ
+  [40, 0,   1, null,      0], // BASALT
+  [55, 70,  1, null,      0], // OBSIDIAN
+  [34, 380, 1, '#aa55ff', 0], // RUNE
+  [48, 520, 1, null,      0], // ANCIENT
+  [80, 0,   1, null,      0], // ART_WALL
+  [28, 0,   1, null,      0], // LAVA_ROCK
+  [0,  0,   0, '#ff4400', 1], // LAVA
+  [36, 700, 1, '#ff6600', 0], // MAGMA_X
+  [60, 0,   1, null,      0], // VOID_STONE
+  [44,1600, 1, '#cc00ff', 0], // VOID_X
+  [4,  0,   0, '#00ff88', 0], // POWER_CELL
+  [4, 1000, 0, '#f5a623', 0], // ARTIFACT
+  [2,  0,   1, null,      0], // ROOT
 ];
 
 const LAYERS=[
@@ -197,17 +197,17 @@ const LAYERS=[
 const SK={bank:'vdg_bank',upg:'vdg_upgrades',best:'vdg_best',runs:'vdg_runs'};
 
 const UPG_DEFS=[
-  {id:'drillPower', cat:'DRILL',name:'DRILL POWER',   max:5, costs:[25,55,110,220,400], desc:'Faster drilling rate'},
-  {id:'drillReach', cat:'DRILL',name:'DRILL REACH',   max:3, costs:[50,110,220],        desc:'Extended drill range'},
-  {id:'drillSpeed', cat:'DRILL',name:'DRILL SPEED',   max:3, costs:[40,90,180],         desc:'Drill animation speed'},
-  {id:'energyCore', cat:'MECH', name:'ENERGY CORE',   max:5, costs:[30,70,140,280,500], desc:'+25 max energy/level'},
-  {id:'hullPlating',cat:'MECH', name:'HULL PLATING',  max:3, costs:[45,100,200],        desc:'Reduce hazard damage'},
-  {id:'thruster',   cat:'MECH', name:'THRUSTER',      max:3, costs:[35,80,160],         desc:'+15% move speed/level'},
-  {id:'lightRadius',cat:'MECH', name:'LIGHT RADIUS',  max:4, costs:[30,65,130,260],     desc:'Larger vision radius'},
-  {id:'radarPulse', cat:'TECH', name:'RADAR PULSE',   max:3, costs:[60,130,260],        desc:'E: reveal resources nearby'},
-  {id:'artScanner', cat:'TECH', name:'ART. SCANNER',  max:2, costs:[90,200],            desc:'Outline artifacts through walls'},
-  {id:'autoCollect',cat:'TECH', name:'AUTO COLLECTOR',max:2, costs:[100,200],           desc:'Auto-collect adjacent items'},
-  {id:'depthAnchor',cat:'TECH', name:'DEPTH ANCHOR',  max:1, costs:[300],               desc:'Set one checkpoint per run'},
+  {id:'drillPower', cat:'DRILL',name:'DRILL POWER',   max:5, costs:[12,27,55,110,200], desc:'Faster drilling rate'},
+  {id:'drillReach', cat:'DRILL',name:'DRILL REACH',   max:3, costs:[25,55,110],        desc:'Extended drill range'},
+  {id:'drillSpeed', cat:'DRILL',name:'DRILL SPEED',   max:3, costs:[20,45,90],         desc:'Drill animation speed'},
+  {id:'energyCore', cat:'MECH', name:'ENERGY CORE',   max:5, costs:[15,35,70,140,250], desc:'+25 max energy/level'},
+  {id:'hullPlating',cat:'MECH', name:'HULL PLATING',  max:3, costs:[22,50,100],        desc:'Reduce hazard damage'},
+  {id:'thruster',   cat:'MECH', name:'THRUSTER',      max:3, costs:[17,40,80],         desc:'+15% move speed/level'},
+  {id:'lightRadius',cat:'MECH', name:'LIGHT RADIUS',  max:4, costs:[15,32,65,130],     desc:'Larger vision radius'},
+  {id:'radarPulse', cat:'TECH', name:'RADAR PULSE',   max:3, costs:[30,65,130],        desc:'E: reveal resources nearby'},
+  {id:'artScanner', cat:'TECH', name:'ART. SCANNER',  max:2, costs:[45,100],           desc:'Outline artifacts through walls'},
+  {id:'autoCollect',cat:'TECH', name:'AUTO COLLECTOR',max:2, costs:[50,100],           desc:'Auto-collect adjacent items'},
+  {id:'depthAnchor',cat:'TECH', name:'DEPTH ANCHOR',  max:1, costs:[150],              desc:'Set one checkpoint per run'},
 ];
 
 // ─── CANVAS & LIGHTING ───────────────────────────────────────────────────────
@@ -825,11 +825,14 @@ function updatePhysics(dt){
   // Lava damage
   checkLava();
 
+  // Tick grace timer (blocks energy-triggered surface for first 5s of dive)
+  if(surfaceGrace>0) surfaceGrace-=dt;
+
   // Energy drain (idle drain from environment)
   const layer=getLayer(Math.floor(player.y/TS));
   const envDrain=[0,0,0.4,0.8,1.2,1.8][layer]||0;
   player.energy-=envDrain*dt;
-  // Slow passive regen when idle (not drilling) — keeps shallow exploration viable
+  // Passive regen when idle (not drilling)
   if(!(mouseDown||mobileDrill)) player.energy+=4*dt;
   player.energy=Math.max(0,Math.min(player.maxEnergy,player.energy));
 
@@ -844,8 +847,8 @@ function updatePhysics(dt){
     }
   }
 
-  // Energy death → forced surface
-  if(player.energy<=0&&gameState==='DIVING') triggerSurface();
+  // Energy death → forced surface (grace period blocks this on first 5s of dive)
+  if(player.energy<=0&&gameState==='DIVING'&&surfaceGrace<=0) triggerSurface();
 
   // Depth tracking
   const depth=Math.floor(player.y/TS);
@@ -882,7 +885,7 @@ function updateDrill(dt){
   const hp=TDEF[tile][0];
   const rate=DRILL_BASE_RATE*upgEff('drillPower')*upgEff('drillSpeed')*dt;
   drill[ty*WW+tx]+=rate/hp;
-  player.energy-=8*dt;
+  player.energy-=2*dt;
   // Emit particles occasionally
   if(Math.random()<0.6){
     const wx=tx*TS+TS/2, wy=ty*TS+TS/2;
@@ -1271,12 +1274,12 @@ function startDive(){
   parts.length=0;
   player.x=WW*TS/2; player.y=TS*10;
   player.vx=0; player.vy=0;
-  player.maxEnergy=100+upgEff('energyCore');
+  player.maxEnergy=200+upgEff('energyCore');
   player.energy=player.maxEnergy;
   player.drillAngle=Math.PI/2;
   player.onGround=false;
   coins=0; maxDepth=0; tilesDrilled=0;
-  radarReveal=[]; radarT=0; lastLayer=-1; layerBannerT=0; surfaceGrace=3;
+  radarReveal=[]; radarT=0; lastLayer=-1; layerBannerT=0; surfaceGrace=5;
   camX=Math.max(0,Math.min(WW*TS-W,player.x-W/2));
   camY=Math.max(0,Math.min(WH*TS-H,player.y-H/2));
   joyVec={x:0,y:0}; mouseDown=false; mobileDrill=false;
