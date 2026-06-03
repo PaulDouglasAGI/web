@@ -740,9 +740,9 @@ function drawParticles(){
 
 // ─── PHYSICS & COLLISION ─────────────────────────────────────────────────────
 function resolveX(nx){
-  // Only check the leading-edge column so we never push from the wrong side
-  const rowT=Math.floor((player.y-PLAYER_H/2+1)/TS);
-  const rowB=Math.floor((player.y+PLAYER_H/2-1)/TS);
+  // 3px vertical skin so floor/ceiling tiles don't block sideways movement
+  const rowT=Math.floor((player.y-PLAYER_H/2+3)/TS);
+  const rowB=Math.floor((player.y+PLAYER_H/2-3)/TS);
   if(player.vx>0){
     const col=Math.floor((nx+PLAYER_W/2)/TS);
     for(let r=rowT;r<=rowB;r++){
@@ -757,8 +757,9 @@ function resolveX(nx){
   return nx;
 }
 function resolveY(ny){
-  const colL=Math.floor((player.x-PLAYER_W/2+1)/TS);
-  const colR=Math.floor((player.x+PLAYER_W/2-1)/TS);
+  // 3px horizontal skin so wall tiles don't block vertical movement
+  const colL=Math.floor((player.x-PLAYER_W/2+3)/TS);
+  const colR=Math.floor((player.x+PLAYER_W/2-3)/TS);
   if(player.vy>0){
     const row=Math.floor((ny+PLAYER_H/2)/TS);
     for(let c=colL;c<=colR;c++){
@@ -841,11 +842,7 @@ function updatePhysics(dt){
     }
   }
 
-  // Surfacing check
-  if(surfaceGrace>0) surfaceGrace-=dt;
-  if(player.y<TS*SURFACE_ROW&&gameState==='DIVING'&&surfaceGrace<=0) triggerSurface();
-
-  // Energy death
+  // Energy death → forced surface
   if(player.energy<=0&&gameState==='DIVING') triggerSurface();
 
   // Depth tracking
