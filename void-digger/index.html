@@ -1368,9 +1368,9 @@ function updateSurfacing(dt){
   player.vy=-280;
   player.vx*=0.9;
   updateCamera(dt);
-  // Bright flash at end
-  const alpha=Math.max(0,1-surfacingT/0.8)*0.6;
-  ctx.fillStyle=`rgba(255,255,255,${alpha})`;
+  // Dark fade (not white — white caused user confusion)
+  const alpha=Math.max(0,1-surfacingT/0.8)*0.92;
+  ctx.fillStyle=`rgba(0,0,0,${alpha})`;
   ctx.fillRect(0,0,W,H);
   if(surfacingT<=0) showBase();
 }
@@ -1435,9 +1435,12 @@ function drawMenuBg(){
 
 // ─── HOLD-TO-SURFACE ─────────────────────────────────────────────────────────
 let surfaceHoldTimer=null;
+let lastMoveKeyTime=0;
 const sfillEl=document.querySelector('#surface-btn .sfill');
 function startSurfaceHold(){
   if(gameState!=='DIVING'||surfaceHoldTimer) return;
+  if(mouseDown||mobileDrill) return;               // not while drilling
+  if(performance.now()-lastMoveKeyTime<400) return; // not within 400ms of moving
   if(sfillEl){ sfillEl.style.transition='transform 0.5s linear'; sfillEl.style.transform='scaleX(1)'; }
   surfaceHoldTimer=setTimeout(()=>{ surfaceHoldTimer=null; triggerSurface(); },500);
 }
@@ -1447,18 +1450,19 @@ function cancelSurfaceHold(){
 }
 
 // ─── INPUT ────────────────────────────────────────────────────────────────────
+const MOVE_CODES=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight']);
 document.addEventListener('keydown',e=>{
   keys[e.code]=true;
-  if((e.code==='KeyR'||e.code==='Escape')&&!e.repeat) startSurfaceHold();
+  if(MOVE_CODES.has(e.code)) lastMoveKeyTime=performance.now();
+  if(e.code==='KeyR'&&!e.repeat) startSurfaceHold(); // Escape removed — too easy to press accidentally
   if(e.code==='KeyE') doRadar();
   if(e.code==='KeyD'||e.code==='ArrowRight') e.preventDefault();
   if(e.code==='KeyA'||e.code==='ArrowLeft') e.preventDefault();
-  if(e.code==='Space') e.preventDefault();
-  if(e.code==='Escape') e.preventDefault();
+  if(e.code==='Space'||e.code==='Escape') e.preventDefault();
 });
 document.addEventListener('keyup',e=>{
   keys[e.code]=false;
-  if(e.code==='KeyR'||e.code==='Escape') cancelSurfaceHold();
+  if(e.code==='KeyR') cancelSurfaceHold();
 });
 
 window.addEventListener('mousemove',e=>{
