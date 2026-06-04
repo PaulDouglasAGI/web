@@ -127,6 +127,7 @@ canvas{display:block;position:absolute;inset:0}
   <div id="hud-right">
     <div id="hud-coins">0</div>
     <div class="hud-label">COINS</div>
+    <div id="hud-combo" style="font-family:'Exo 2',sans-serif;font-size:13px;font-weight:700;color:#ff8800;letter-spacing:2px;margin-top:4px;opacity:0;transition:opacity .3s"></div>
   </div>
   <button id="surface-btn" tabindex="-1"><span class="sfill"></span>SURFACE [R]</button>
   <div id="layer-banner"></div>
@@ -180,7 +181,7 @@ const BASE_LIGHT_R=150, MAX_PARTS=300;
 const T={AIR:0,GRASS:1,DIRT:2,CLAY:3,STONE:4,IRON:5,FOSSIL:6,
          CRYSTAL:7,QUARTZ:8,BASALT:9,OBSIDIAN:10,RUNE:11,ANCIENT:12,
          ART_WALL:13,LAVA_ROCK:14,LAVA:15,MAGMA_X:16,
-         VOID_STONE:17,VOID_X:18,POWER_CELL:19,ARTIFACT:20,ROOT:21};
+         VOID_STONE:17,VOID_X:18,POWER_CELL:19,ARTIFACT:20,ROOT:21,CHEST:22};
 
 // [hp, coinVal, solid, glowColor, lava]
 const TDEF=[
@@ -206,6 +207,7 @@ const TDEF=[
   [4,  0,   0, '#00ff88', 0], // POWER_CELL
   [4, 1000, 0, '#f5a623', 0], // ARTIFACT
   [2,  0,   1, null,      0], // ROOT
+  [10, 0,   1, '#ffcc00', 0], // CHEST (value handled on break)
 ];
 
 const LAYERS=[
@@ -262,6 +264,32 @@ let dmgFlashT=0;
 let surfaceGrace=0; // seconds before surface-exit can trigger
 let layerBannerT=0, lastLayer=-1;
 let surfacingT=0;
+
+// ─── ENEMIES ─────────────────────────────────────────────────────────────────
+// def: [speed, dmgPerSec, maxHp, baseCol, glowCol, behaviour]
+// behaviour: 0=crawler 1=flyer 2=walker 3=homing 4=fasthoming
+const ENEMY_DEFS=[
+  {spd:40, dmg:6,  hp:2, col:'#5a3010', glow:null,      beh:0, layer:0, name:'GRUB'},
+  {spd:70, dmg:10, hp:1, col:'#4030a0', glow:'#8060ff', beh:1, layer:2, name:'SHADE BAT'},
+  {spd:38, dmg:16, hp:4, col:'#200808', glow:null,      beh:2, layer:3, name:'STONE CRAB'},
+  {spd:85, dmg:20, hp:3, col:'#a02000', glow:'#ff6600', beh:3, layer:4, name:'FIRE IMP'},
+  {spd:110,dmg:28, hp:3, col:'#1a0030', glow:'#cc00ff', beh:4, layer:5, name:'VOID WRAITH'},
+];
+const enemies=[];
+let enemySpawnTimer=0;
+const ENEMY_SPAWN_INTERVAL=10; // seconds between spawns
+const MAX_ENEMIES=6;
+let playerInvT=0; // invincibility frames after hit
+
+// ─── COMBO ────────────────────────────────────────────────────────────────────
+let comboCount=0;
+let comboTimer=0;
+const COMBO_DECAY=1.8;
+function getComboMult(){ return Math.min(1+Math.floor(comboCount/3)*0.5, 4.0); }
+
+// ─── DEPTH MILESTONES ─────────────────────────────────────────────────────────
+const DEPTH_MILES=[50,150,300,500,750];
+let milesHit=new Set();
 
 // ─── WORLD DATA ─────────────────────────────────────────────────────────────
 const grid    = new Uint8Array(WW*WH);
@@ -375,6 +403,12 @@ function generateWorld(){
   for(let i=0;i<4;i++){
     const tx=10+Math.floor(ph(i,0,99)*100),ty=5+Math.floor(ph(i,1,99)*35);
     if(inBounds(tx,ty)) grid[ty*WW+tx]=T.POWER_CELL;
+  }
+  // Buried treasure chests (5 per run, scattered across layers 2-5)
+  for(let i=0;i<5;i++){
+    const chestY=50+Math.floor(ph(i,77,99)*900);
+    const chestX=5+Math.floor(ph(i,88,99)*110);
+    if(inBounds(chestX,chestY)) grid[chestY*WW+chestX]=T.CHEST;
   }
 
   // Layer 2: Clay/Stone (50-149)
@@ -518,6 +552,7 @@ const TILE_COLS=[
   '#05100a',   // POWER_CELL
   '#100808',   // ARTIFACT
   '#2a1a08',   // ROOT
+  '#b89820',   // CHEST
 ];
 
 function drawTile(tile,sx,sy,tx,ty){
@@ -700,6 +735,31 @@ function drawTile(tile,sx,sy,tx,ty){
     ctx.moveTo(sx+s/2,sy); ctx.lineTo(sx+s/2+Math.floor(p*8)-4,sy+s);
     ctx.stroke();
     if(p2<0.5){ ctx.beginPath(); ctx.moveTo(sx+s/2,sy+8); ctx.lineTo(sx+2,sy+s); ctx.stroke(); }
+  }
+  else if(tile===T.CHEST){
+    // Lid
+    ctx.fillStyle='#8b6010';
+    ctx.fillRect(sx+1,sy+1,s-2,s*0.45);
+    ctx.fillStyle='#c8a020';
+    ctx.fillRect(sx+2,sy+2,s-4,s*0.42-2);
+    // Body
+    ctx.fillStyle='#6b4808';
+    ctx.fillRect(sx+1,sy+s*0.45,s-2,s*0.55-1);
+    ctx.fillStyle='#b89020';
+    ctx.fillRect(sx+2,sy+s*0.45+1,s-4,s*0.52-2);
+    // Latch
+    const pulse=0.7+0.3*Math.sin(t*3+p*6.28);
+    ctx.fillStyle='#000';
+    ctx.fillRect(sx+s/2-3,sy+s*0.4,6,5);
+    ctx.shadowColor='#ffdd44'; ctx.shadowBlur=10*pulse;
+    ctx.fillStyle=`rgba(255,210,50,${pulse})`;
+    ctx.fillRect(sx+s/2-2,sy+s*0.4+1,4,3);
+    ctx.shadowBlur=0;
+    // Metal straps
+    ctx.fillStyle='#2a1800';
+    ctx.fillRect(sx+1,sy+s*0.44,s-2,2);
+    ctx.fillRect(sx+3,sy+1,2,s-2);
+    ctx.fillRect(sx+s-5,sy+1,2,s-2);
   }
 }
 
@@ -928,6 +988,14 @@ function updateDrill(dt){
     tilesDrilled++;
     drillTX=-1; drillTY=-1;
   }
+  // Drill hits enemies
+  const drillWX=(tx+0.5)*TS, drillWY=(ty+0.5)*TS;
+  for(let i=enemies.length-1;i>=0;i--){
+    const e=enemies[i];
+    if(Math.abs(e.x-drillWX)<TS*0.9&&Math.abs(e.y-drillWY)<TS*0.9){
+      damageEnemy(i, DRILL_BASE_RATE*upgEff('drillPower')*dt*3);
+    }
+  }
 }
 
 function collectTile(tx,ty){
@@ -936,15 +1004,31 @@ function collectTile(tx,ty){
   if(tile===T.POWER_CELL){
     player.energy=Math.min(player.maxEnergy,player.energy+40);
     emitCollect((tx+0.5)*TS,(ty+0.5)*TS,'#00ff88');
-    grid[ty*WW+tx]=T.AIR;
+  } else if(tile===T.CHEST){
+    const depth=Math.floor(player.y/TS);
+    const jackpot=150+Math.floor(depth*1.5)+Math.floor(Math.random()*200);
+    coins+=jackpot;
+    for(let i=0;i<16;i++) addPart((tx+0.5)*TS,(ty+0.5)*TS,(Math.random()-0.5)*180,(Math.random()-1.5)*180,0.9,6,'#ffcc00',0);
+    for(let i=0;i<8;i++) addPart((tx+0.5)*TS,(ty+0.5)*TS,(Math.random()-0.5)*120,(Math.random()-1.8)*140,1.1,4,'#ffffff',0);
+    showLayerBanner('TREASURE! +'+jackpot);
+    comboCount=0; comboTimer=0;
   } else if(tile===T.ARTIFACT){
-    coins+=TDEF[T.ARTIFACT][1];
+    const mult=getComboMult();
+    coins+=Math.round(TDEF[T.ARTIFACT][1]*mult);
     emitCollect((tx+0.5)*TS,(ty+0.5)*TS,'#f5a623');
-    grid[ty*WW+tx]=T.AIR;
+    comboCount++; comboTimer=COMBO_DECAY;
   } else if(val>0){
-    coins+=val;
+    const mult=getComboMult();
+    coins+=Math.round(val*mult);
     emitCollect((tx+0.5)*TS,(ty+0.5)*TS,TILE_COLS[tile]||'#f5a623');
+    comboCount++; comboTimer=COMBO_DECAY;
   }
+}
+
+function showLayerBanner(txt){
+  layerBannerEl.textContent=txt;
+  layerBannerEl.classList.add('show');
+  layerBannerT=2.0;
 }
 
 // ─── RADAR ───────────────────────────────────────────────────────────────────
@@ -1224,6 +1308,145 @@ function drawArtifactScanner(){
   }
 }
 
+
+// ─── ENEMY SYSTEM ─────────────────────────────────────────────────────────────
+function spawnEnemy(){
+  const layer=getLayer(Math.floor(player.y/TS));
+  const def=ENEMY_DEFS[Math.min(layer,ENEMY_DEFS.length-1)];
+  // Find an air tile 4-10 tiles away from player
+  for(let attempt=0;attempt<20;attempt++){
+    const dx=(Math.random()>0.5?1:-1)*(4+Math.floor(Math.random()*7));
+    const dy=(Math.random()-0.5)*8;
+    const tx=Math.floor(player.x/TS)+dx;
+    const ty=Math.floor(player.y/TS)+dy;
+    if(!inBounds(tx,ty)) continue;
+    if(grid[ty*WW+tx]!==T.AIR) continue;
+    enemies.push({
+      x:(tx+0.5)*TS, y:(ty+0.5)*TS,
+      vx:(Math.random()-0.5)*def.spd, vy:(Math.random()-0.5)*20,
+      def, hp:def.hp, maxHp:def.hp,
+      flashT:0, dir:Math.random()>0.5?1:-1,
+      turnTimer:0.5+Math.random()*1.5
+    });
+    return;
+  }
+}
+
+function updateEnemies(dt){
+  // Spawn
+  enemySpawnTimer-=dt;
+  if(enemySpawnTimer<=0){
+    enemySpawnTimer=ENEMY_SPAWN_INTERVAL;
+    if(enemies.length<MAX_ENEMIES) spawnEnemy();
+  }
+  // Update player invincibility
+  if(playerInvT>0) playerInvT-=dt;
+  // Update each enemy
+  for(let i=enemies.length-1;i>=0;i--){
+    const e=enemies[i];
+    if(e.flashT>0) e.flashT-=dt;
+    const beh=e.def.beh;
+    if(beh===0){ // GRUB: horizontal crawler, bounces off walls
+      e.x+=e.dir*e.def.spd*dt;
+      const tx=Math.floor(e.x/TS), ty=Math.floor(e.y/TS);
+      if(solid(tx,ty)||!inBounds(tx,ty)) e.dir*=-1;
+    } else if(beh===1){ // BAT: erratic flyer
+      e.turnTimer-=dt;
+      if(e.turnTimer<=0){
+        e.vx=(Math.random()-0.5)*e.def.spd*2;
+        e.vy=(Math.random()-0.5)*e.def.spd*2;
+        e.turnTimer=0.4+Math.random()*0.8;
+      }
+      e.x+=e.vx*dt; e.y+=e.vy*dt;
+      if(solid(Math.floor(e.x/TS),Math.floor(e.y/TS))){e.x-=e.vx*dt;e.y-=e.vy*dt;e.vx*=-1;e.vy*=-1;}
+    } else if(beh===2){ // CRAB: floor walker
+      e.x+=e.dir*e.def.spd*dt;
+      e.vy+=GRAVITY*dt*0.4; e.y+=e.vy*dt;
+      const tx=Math.floor(e.x/TS), ty=Math.floor(e.y/TS);
+      if(solid(tx,ty)){e.vy=0; e.y=ty*TS-1;}
+      if(solid(Math.floor((e.x+e.dir*8)/TS),ty)) e.dir*=-1;
+    } else { // IMP/WRAITH: homing
+      const dx=player.x-e.x, dy2=player.y-e.y;
+      const dist=Math.sqrt(dx*dx+dy2*dy2)||1;
+      const spd=beh===4?e.def.spd*1.2:e.def.spd;
+      e.vx+=(dx/dist)*spd*dt*4; e.vy+=(dy2/dist)*spd*dt*4;
+      const maxV=spd*0.8;
+      const vl=Math.sqrt(e.vx*e.vx+e.vy*e.vy);
+      if(vl>maxV){e.vx=e.vx/vl*maxV;e.vy=e.vy/vl*maxV;}
+      e.x+=e.vx*dt; e.y+=e.vy*dt;
+      if(solid(Math.floor(e.x/TS),Math.floor(e.y/TS))){e.x-=e.vx*dt;e.y-=e.vy*dt;e.vx*=-0.5;e.vy*=-0.5;}
+    }
+    // Contact damage
+    const ex=Math.abs(e.x-player.x), ey2=Math.abs(e.y-player.y);
+    if(ex<14&&ey2<16&&playerInvT<=0){
+      player.energy-=e.def.dmg*dt*2;
+      playerInvT=0.4;
+      dmgFlashT=0.18;
+    }
+    // Out of screen range — remove
+    if(Math.abs(e.x-player.x)>W*1.5||Math.abs(e.y-player.y)>H*1.5) enemies.splice(i,1);
+  }
+}
+
+function drawEnemies(){
+  enemies.forEach(e=>{
+    const sx=e.x-camX, sy=e.y-camY;
+    if(sx<-30||sx>W+30||sy<-30||sy>H+30) return;
+    const beh=e.def.beh;
+    const flash=e.flashT>0;
+    ctx.save();
+    ctx.translate(sx,sy);
+    ctx.fillStyle=flash?'#ffffff':e.def.col;
+    ctx.shadowColor=e.def.glow||e.def.col;
+    ctx.shadowBlur=flash?20:6;
+    if(beh===0){ // GRUB: segmented worm
+      for(let s=0;s<3;s++){
+        ctx.beginPath(); ctx.ellipse(-s*7,0,5,4,0,0,Math.PI*2); ctx.fill();
+      }
+    } else if(beh===1){ // BAT: diamond + wings
+      ctx.beginPath(); ctx.moveTo(0,-6); ctx.lineTo(5,0); ctx.lineTo(0,6); ctx.lineTo(-5,0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=(flash?'#ffffff':e.def.col)+'88';
+      ctx.beginPath(); ctx.ellipse(-9,-2,7,3,-0.4,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(9,-2,7,3,0.4,0,Math.PI*2); ctx.fill();
+    } else if(beh===2){ // CRAB: wide squat
+      ctx.beginPath(); ctx.ellipse(0,2,9,6,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=flash?'#ffffff':'#3a1010';
+      ctx.beginPath(); ctx.moveTo(-9,2); ctx.lineTo(-14,-2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(9,2); ctx.lineTo(14,-2); ctx.stroke();
+    } else if(beh===3){ // IMP: angular teardrop
+      ctx.beginPath(); ctx.moveTo(0,-9); ctx.lineTo(7,5); ctx.lineTo(0,3); ctx.lineTo(-7,5); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='rgba(255,150,0,0.5)';
+      ctx.beginPath(); ctx.ellipse(0,8,3,6,0,0,Math.PI*2); ctx.fill();
+    } else { // WRAITH: ethereal wisps
+      ctx.globalAlpha=0.75;
+      ctx.beginPath(); ctx.ellipse(0,0,7,10,0,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=0.4;
+      ctx.beginPath(); ctx.ellipse(-4,-6,3,5,0.5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(4,-5,3,5,-0.5,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=1;
+    }
+    // HP bar (only if damaged)
+    if(e.hp<e.maxHp){
+      const barW=16, barH=2;
+      ctx.fillStyle='#200000'; ctx.fillRect(-barW/2,-14,barW,barH);
+      ctx.fillStyle='#ff4444'; ctx.fillRect(-barW/2,-14,(e.hp/e.maxHp)*barW,barH);
+    }
+    ctx.shadowBlur=0;
+    ctx.restore();
+  });
+}
+
+function damageEnemy(i, dmg){
+  const e=enemies[i];
+  e.hp-=dmg;
+  e.flashT=0.1;
+  if(e.hp<=0){
+    for(let p=0;p<8;p++) addPart(e.x,e.y,(Math.random()-0.5)*140,(Math.random()-1.2)*100,0.6,4,e.def.col,0);
+    enemies.splice(i,1);
+    coins+=Math.floor(e.def.dmg*1.5); // bonus coins for killing
+  }
+}
+
 function render(){
   drawBackground();
 
@@ -1244,6 +1467,7 @@ function render(){
   drawArtifactScanner();
   drawRadarBlips();
   drawParticles();
+  drawEnemies();
   drawDrillLine();
   drawMech();
   drawLighting();
@@ -1255,6 +1479,7 @@ const ebarValEl=document.getElementById('ebar-val');
 const depthValEl=document.getElementById('depth-val');
 const depthLayerEl=document.getElementById('depth-layer');
 const hudCoinsEl=document.getElementById('hud-coins');
+const hudComboEl=document.getElementById('hud-combo');
 const layerBannerEl=document.getElementById('layer-banner');
 const dmgFlashEl=document.getElementById('dmg-flash');
 
@@ -1268,6 +1493,14 @@ function updateHUD(){
   const layer=getLayer(depth);
   depthLayerEl.textContent=LAYERS[layer].name;
   hudCoinsEl.textContent=coins;
+  // Combo display
+  if(comboCount>=3){
+    const mult=getComboMult();
+    hudComboEl.textContent='×'+mult.toFixed(1)+' COMBO';
+    hudComboEl.style.opacity='1';
+  } else {
+    hudComboEl.style.opacity='0';
+  }
 
   // Layer banner
   if(layer!==lastLayer){
@@ -1309,6 +1542,8 @@ function startDive(){
   player.drillAngle=Math.PI/2;
   player.onGround=false;
   coins=0; maxDepth=0; tilesDrilled=0;
+  enemies.length=0; enemySpawnTimer=ENEMY_SPAWN_INTERVAL; playerInvT=0;
+  comboCount=0; comboTimer=0; milesHit=new Set();
   radarReveal=[]; radarT=0; lastLayer=-1; layerBannerT=0; surfaceGrace=5;
   camX=Math.max(0,Math.min(WW*TS-W,player.x-W/2));
   camY=Math.max(0,Math.min(WH*TS-H,player.y-H/2));
@@ -1531,250 +1766,45 @@ function drawCottage(){
   cc.strokeStyle='#4a3010'; cc.lineWidth=1.5;
   cc.beginPath(); cc.moveTo(lnx,lny-22); cc.lineTo(lnx,lny-28); cc.stroke();
 
-  // ── SHOPKEEPER (Mira) ─────────────────────────────
-  const kx=cx+cw*0.02;                   // slightly right of center
-  const headCY=ch*0.35;                  // head center Y
-  const hw=cw*0.075;                     // half-head width
-  const hh=hw*1.28;                      // head height (taller than wide)
-  const bodyBot=ctrTop+2;
-  const bodyTop=headCY+hh*0.6;
-
-  // Robe body (trapezoid getting wider at bottom)
-  const rg=cc.createLinearGradient(kx-hw*2,0,kx+hw*2,0);
-  rg.addColorStop(0,'#16102a'); rg.addColorStop(0.5,'#1e1535'); rg.addColorStop(1,'#120e22');
-  cc.fillStyle=rg;
+  // ── SHOPKEEPER SILHOUETTE ─────────────────────────
+  const kx=cx+cw*0.02;
+  const kBottom=ctrTop+2;
+  // Tall narrow body shape
+  cc.fillStyle='#07040e';
   cc.beginPath();
-  cc.moveTo(kx-hw*2.1,bodyBot); cc.lineTo(kx+hw*2.1,bodyBot);
-  cc.lineTo(kx+hw*1.1,bodyTop); cc.lineTo(kx,bodyTop-hh*0.1);
-  cc.lineTo(kx-hw*1.1,bodyTop);
+  cc.moveTo(kx-cw*0.055,kBottom);
+  cc.lineTo(kx+cw*0.055,kBottom);
+  cc.bezierCurveTo(kx+cw*0.068,ch*0.3,kx+cw*0.052,ch*0.14,kx+cw*0.034,ch*0.07);
+  cc.bezierCurveTo(kx+cw*0.018,ch*0.01,kx-cw*0.018,ch*0.01,kx-cw*0.034,ch*0.07);
+  cc.bezierCurveTo(kx-cw*0.052,ch*0.14,kx-cw*0.068,ch*0.3,kx-cw*0.055,kBottom);
   cc.closePath(); cc.fill();
-  // Robe center fold line
-  cc.strokeStyle='#281e40'; cc.lineWidth=1.5;
-  cc.beginPath(); cc.moveTo(kx,bodyTop+4); cc.lineTo(kx,bodyBot); cc.stroke();
-  // Robe clasp buttons
-  cc.fillStyle='#5a4878';
-  for(let i=0;i<4;i++){
-    const by2=bodyTop+10+i*14;
-    cc.beginPath(); cc.arc(kx,by2,2.5,0,Math.PI*2); cc.fill();
-    cc.fillStyle='#7a68a8'; cc.beginPath(); cc.arc(kx,by2,1.2,0,Math.PI*2); cc.fill();
-    cc.fillStyle='#5a4878';
-  }
-  // Collar V-shape
-  cc.fillStyle='#2e2240';
+  // Head oval
+  cc.beginPath(); cc.ellipse(kx,ch*0.18,cw*0.038,ch*0.09,0,0,Math.PI*2); cc.fill();
+  // Fireplace rim light on right edge
+  cc.strokeStyle='rgba(255,90,15,0.22)'; cc.lineWidth=2;
   cc.beginPath();
-  cc.moveTo(kx-hw*0.7,bodyTop+4); cc.lineTo(kx,bodyTop+hh*0.35);
-  cc.lineTo(kx+hw*0.7,bodyTop+4);
-  cc.lineTo(kx+hw*0.5,bodyTop); cc.lineTo(kx,bodyTop+hh*0.2);
-  cc.lineTo(kx-hw*0.5,bodyTop); cc.closePath(); cc.fill();
-  // Shoulders
-  cc.fillStyle='#1c163a';
-  cc.beginPath(); cc.ellipse(kx-hw*1.1,bodyTop+6,hw*0.7,hw*0.3,-0.15,0,Math.PI*2); cc.fill();
-  cc.beginPath(); cc.ellipse(kx+hw*1.1,bodyTop+6,hw*0.7,hw*0.3,0.15,0,Math.PI*2); cc.fill();
-  cc.fillStyle='#26203e';
-  cc.beginPath(); cc.ellipse(kx-hw*1.0,bodyTop+3,hw*0.45,hw*0.14,-0.15,Math.PI,0); cc.fill();
-  cc.beginPath(); cc.ellipse(kx+hw*1.0,bodyTop+3,hw*0.45,hw*0.14,0.15,Math.PI,0); cc.fill();
-  // Forearms on counter
-  cc.fillStyle='#1c1630';
-  cc.beginPath();
-  cc.moveTo(kx-hw*2.0,bodyBot); cc.lineTo(kx-hw*0.9,bodyTop+10);
-  cc.lineTo(kx-hw*0.6,bodyTop+14); cc.lineTo(kx-hw*1.4,bodyBot);
-  cc.closePath(); cc.fill();
-  cc.beginPath();
-  cc.moveTo(kx+hw*2.0,bodyBot); cc.lineTo(kx+hw*0.9,bodyTop+10);
-  cc.lineTo(kx+hw*0.6,bodyTop+14); cc.lineTo(kx+hw*1.4,bodyBot);
-  cc.closePath(); cc.fill();
-  // Hands (simplified: rounded palm + finger bumps)
-  [[-1,1],[1,-1]].forEach(([s,_])=>{
-    const hx2=kx+s*hw*1.65, hy2=ctrTop-5;
-    cc.fillStyle='#7a4e30';
-    cc.beginPath(); cc.ellipse(hx2,hy2,hw*0.34,hw*0.2,s*0.1,0,Math.PI*2); cc.fill();
-    // Finger bumps
-    cc.fillStyle='#6a4228';
-    for(let f=-1;f<=1;f++){
-      cc.beginPath(); cc.arc(hx2+f*hw*0.1-s*hw*0.02,hy2-hw*0.13,hw*0.08,Math.PI,0); cc.fill();
-    }
-  });
-  // Neck
-  cc.fillStyle='#7a4e30';
-  cc.fillRect(kx-hw*0.22,bodyTop-hh*0.12,hw*0.44,hh*0.14);
-
-  // ── FACE (the important part) ──────────────────────
-  // Head base — warm olive-tan skin
-  const skinG=cc.createRadialGradient(kx-hw*0.1,headCY-hh*0.05,0,kx,headCY,hw*1.2);
-  skinG.addColorStop(0,'#c49460'); skinG.addColorStop(0.55,'#a87840'); skinG.addColorStop(1,'#7a5025');
-  cc.fillStyle=skinG;
-  cc.beginPath();
-  cc.moveTo(kx,headCY-hh);
-  cc.bezierCurveTo(kx+hw*0.9,headCY-hh,kx+hw,headCY-hh*0.2,kx+hw*0.75,headCY+hh*0.45);
-  cc.bezierCurveTo(kx+hw*0.5,headCY+hh*0.8,kx-hw*0.5,headCY+hh*0.8,kx-hw*0.75,headCY+hh*0.45);
-  cc.bezierCurveTo(kx-hw,headCY-hh*0.2,kx-hw*0.9,headCY-hh,kx,headCY-hh);
-  cc.closePath(); cc.fill();
-
-  // Facial plane shading (sides darker, center lit by lantern)
-  cc.fillStyle='rgba(50,20,5,0.38)';
-  cc.beginPath(); cc.ellipse(kx-hw*0.62,headCY,hw*0.38,hh*0.5,0.2,0,Math.PI*2); cc.fill();
-  cc.beginPath(); cc.ellipse(kx+hw*0.62,headCY,hw*0.38,hh*0.5,-0.2,0,Math.PI*2); cc.fill();
-  cc.fillStyle='rgba(30,10,0,0.3)';
-  cc.beginPath(); cc.ellipse(kx,headCY-hh*0.35,hw*0.6,hh*0.28,0,0,Math.PI*2); cc.fill();
-
-  // Ears
-  cc.fillStyle='#b07838';
-  cc.beginPath(); cc.ellipse(kx-hw*0.96,headCY-hh*0.05,hw*0.16,hh*0.22,0.1,0,Math.PI*2); cc.fill();
-  cc.beginPath(); cc.ellipse(kx+hw*0.96,headCY-hh*0.05,hw*0.16,hh*0.22,-0.1,0,Math.PI*2); cc.fill();
-  cc.fillStyle='#8a5825';
-  cc.beginPath(); cc.ellipse(kx-hw*0.95,headCY-hh*0.03,hw*0.09,hh*0.13,0.1,0,Math.PI*2); cc.fill();
-  cc.beginPath(); cc.ellipse(kx+hw*0.95,headCY-hh*0.03,hw*0.09,hh*0.13,-0.1,0,Math.PI*2); cc.fill();
-
-  // Eyes
-  const eyeY=headCY-hh*0.06;
-  const eyeSep=hw*0.44;
-  [-1,1].forEach(side=>{
-    const ex2=kx+side*eyeSep;
-    // Socket shadow
-    cc.fillStyle='rgba(40,12,2,0.5)';
-    cc.beginPath(); cc.ellipse(ex2,eyeY,hw*0.28,hh*0.18,0,0,Math.PI*2); cc.fill();
-    // Sclera (eye white, slightly cream)
-    cc.fillStyle='#d8c8a0';
-    cc.beginPath(); cc.ellipse(ex2,eyeY,hw*0.22,hh*0.13,0,0,Math.PI*2); cc.fill();
-    // Iris — amber radial gradient
-    const irisG=cc.createRadialGradient(ex2,eyeY,0,ex2,eyeY,hw*0.15);
-    irisG.addColorStop(0,'#f5c040'); irisG.addColorStop(0.5,'#c88025'); irisG.addColorStop(1,'#7a4800');
-    cc.fillStyle=irisG;
-    cc.beginPath(); cc.ellipse(ex2,eyeY,hw*0.15,hh*0.115,0,0,Math.PI*2); cc.fill();
-    // Pupil
-    cc.fillStyle='#080404';
-    cc.beginPath(); cc.ellipse(ex2+side*hw*0.015,eyeY+hh*0.01,hw*0.07,hh*0.07,0,0,Math.PI*2); cc.fill();
-    // Catchlight
-    cc.fillStyle='rgba(255,250,220,0.8)';
-    cc.beginPath(); cc.arc(ex2+hw*0.05,eyeY-hh*0.04,hw*0.04,0,Math.PI*2); cc.fill();
-    // Upper eyelid shadow
-    cc.fillStyle='rgba(50,18,2,0.55)';
-    cc.beginPath();
-    cc.moveTo(ex2-hw*0.25,eyeY-hh*0.04);
-    cc.bezierCurveTo(ex2-hw*0.1,eyeY-hh*0.15,ex2+hw*0.1,eyeY-hh*0.15,ex2+hw*0.25,eyeY-hh*0.04);
-    cc.bezierCurveTo(ex2+hw*0.1,eyeY-hh*0.08,ex2-hw*0.1,eyeY-hh*0.08,ex2-hw*0.25,eyeY-hh*0.04);
-    cc.closePath(); cc.fill();
-    // Eyelid crease line
-    cc.strokeStyle='rgba(60,20,3,0.65)'; cc.lineWidth=1;
-    cc.beginPath();
-    cc.moveTo(ex2-hw*0.25,eyeY-hh*0.06);
-    cc.bezierCurveTo(ex2-hw*0.08,eyeY-hh*0.17,ex2+hw*0.08,eyeY-hh*0.17,ex2+hw*0.25,eyeY-hh*0.06);
-    cc.stroke();
-    // Lower lid thin line
-    cc.strokeStyle='rgba(80,30,5,0.35)'; cc.lineWidth=0.8;
-    cc.beginPath();
-    cc.moveTo(ex2-hw*0.22,eyeY+hh*0.08);
-    cc.bezierCurveTo(ex2-hw*0.06,eyeY+hh*0.14,ex2+hw*0.06,eyeY+hh*0.14,ex2+hw*0.22,eyeY+hh*0.08);
-    cc.stroke();
-    // Eyebrow (arched, slightly raised outer edge, slightly skeptical)
-    cc.fillStyle='#3a2210';
-    cc.beginPath();
-    cc.moveTo(ex2-hw*0.28,eyeY-hh*0.27+side*hh*0.04);
-    cc.bezierCurveTo(ex2-hw*0.12,eyeY-hh*0.35,ex2+hw*0.12,eyeY-hh*0.33,ex2+hw*0.26,eyeY-hh*0.24+side*hh*0.02);
-    cc.bezierCurveTo(ex2+hw*0.12,eyeY-hh*0.26,ex2-hw*0.12,eyeY-hh*0.28,ex2-hw*0.28,eyeY-hh*0.22+side*hh*0.04);
-    cc.closePath(); cc.fill();
-    // Brow hair texture (subtle dark strokes)
-    cc.strokeStyle='rgba(30,12,2,0.5)'; cc.lineWidth=0.7;
-    for(let h=0;h<4;h++){
-      cc.beginPath();
-      cc.moveTo(ex2-hw*0.2+h*hw*0.13,eyeY-hh*0.27+side*hh*0.04);
-      cc.lineTo(ex2-hw*0.22+h*hw*0.13,eyeY-hh*0.22+side*hh*0.04);
-      cc.stroke();
-    }
-  });
-
-  // Nose bridge and nostrils
-  const noseY=headCY+hh*0.09;
-  // Bridge shadow (thin line down center)
-  cc.strokeStyle='rgba(70,25,5,0.4)'; cc.lineWidth=1;
-  cc.beginPath(); cc.moveTo(kx,eyeY+hh*0.12); cc.lineTo(kx,noseY+hh*0.1); cc.stroke();
-  // Nostrils
-  cc.fillStyle='rgba(55,18,3,0.55)';
-  cc.beginPath(); cc.ellipse(kx-hw*0.14,noseY+hh*0.12,hw*0.1,hh*0.065,0.35,0,Math.PI*2); cc.fill();
-  cc.beginPath(); cc.ellipse(kx+hw*0.14,noseY+hh*0.12,hw*0.1,hh*0.065,-0.35,0,Math.PI*2); cc.fill();
-  // Nose tip (subtle highlight)
-  cc.fillStyle='rgba(200,140,60,0.25)';
-  cc.beginPath(); cc.ellipse(kx,noseY+hh*0.08,hw*0.12,hh*0.07,0,0,Math.PI*2); cc.fill();
-
-  // Mouth and subtle smile
-  const mouthY=headCY+hh*0.38;
-  // Upper lip M-curve
-  cc.fillStyle='#9a5838';
-  cc.beginPath();
-  cc.moveTo(kx-hw*0.32,mouthY);
-  cc.bezierCurveTo(kx-hw*0.18,mouthY-hh*0.07,kx-hw*0.06,mouthY-hh*0.05,kx,mouthY-hh*0.02);
-  cc.bezierCurveTo(kx+hw*0.06,mouthY-hh*0.05,kx+hw*0.18,mouthY-hh*0.07,kx+hw*0.32,mouthY);
-  cc.bezierCurveTo(kx+hw*0.18,mouthY+hh*0.04,kx-hw*0.18,mouthY+hh*0.04,kx-hw*0.32,mouthY);
-  cc.closePath(); cc.fill();
-  // Lower lip (fuller)
-  cc.fillStyle='#8a4c30';
-  cc.beginPath();
-  cc.moveTo(kx-hw*0.3,mouthY+hh*0.03);
-  cc.bezierCurveTo(kx-hw*0.12,mouthY+hh*0.12,kx+hw*0.12,mouthY+hh*0.12,kx+hw*0.3,mouthY+hh*0.03);
-  cc.bezierCurveTo(kx+hw*0.18,mouthY+hh*0.15,kx-hw*0.18,mouthY+hh*0.15,kx-hw*0.3,mouthY+hh*0.03);
-  cc.closePath(); cc.fill();
-  // Mouth crease / knowing smirk (slightly asymmetric)
-  cc.strokeStyle='rgba(60,20,5,0.7)'; cc.lineWidth=1.2;
-  cc.beginPath();
-  cc.moveTo(kx-hw*0.32,mouthY);
-  cc.bezierCurveTo(kx-hw*0.1,mouthY+hh*0.05,kx+hw*0.15,mouthY+hh*0.07,kx+hw*0.34,mouthY-hh*0.01);
+  cc.moveTo(kx+cw*0.055,kBottom);
+  cc.bezierCurveTo(kx+cw*0.068,ch*0.3,kx+cw*0.052,ch*0.14,kx+cw*0.034,ch*0.07);
+  cc.bezierCurveTo(kx+cw*0.018,ch*0.01,kx,ch*0.09,kx,ch*0.09);
   cc.stroke();
-  // Smirk corner deepening (right side more)
-  cc.fillStyle='rgba(50,15,3,0.45)';
-  cc.beginPath(); cc.ellipse(kx+hw*0.32,mouthY,hw*0.06,hh*0.035,0.4,0,Math.PI*2); cc.fill();
-  // Laugh lines (nasolabial folds)
-  cc.strokeStyle='rgba(60,20,5,0.28)'; cc.lineWidth=1;
+  // Moonlight edge on left
+  cc.strokeStyle='rgba(80,100,180,0.15)'; cc.lineWidth=1.5;
+  cc.beginPath();
+  cc.moveTo(kx-cw*0.055,kBottom);
+  cc.bezierCurveTo(kx-cw*0.068,ch*0.3,kx-cw*0.052,ch*0.14,kx-cw*0.034,ch*0.07);
+  cc.stroke();
+  // Two faint amber eye glows — the only feature visible
+  const eyeY=ch*0.195;
   [-1,1].forEach(s=>{
-    cc.beginPath();
-    cc.moveTo(kx+s*hw*0.24,mouthY-hh*0.04);
-    cc.bezierCurveTo(kx+s*hw*0.32,headCY+hh*0.08,kx+s*hw*0.28,headCY-hh*0.05,kx+s*hw*0.22,headCY-hh*0.1);
-    cc.stroke();
+    const ex=kx+s*cw*0.016;
+    const eg=cc.createRadialGradient(ex,eyeY,0,ex,eyeY,cw*0.018);
+    eg.addColorStop(0,'rgba(245,166,35,0.55)'); eg.addColorStop(1,'transparent');
+    cc.fillStyle=eg; cc.beginPath(); cc.arc(ex,eyeY,cw*0.018,0,Math.PI*2); cc.fill();
+    cc.fillStyle='rgba(245,166,35,0.4)';
+    cc.beginPath(); cc.arc(ex,eyeY,cw*0.005,0,Math.PI*2); cc.fill();
   });
-  // Forehead concern crease
-  cc.strokeStyle='rgba(55,18,3,0.25)'; cc.lineWidth=0.8;
-  cc.beginPath();
-  cc.moveTo(kx-hw*0.3,headCY-hh*0.44);
-  cc.bezierCurveTo(kx,headCY-hh*0.5,kx+hw*0.3,headCY-hh*0.44,kx+hw*0.38,headCY-hh*0.38);
-  cc.stroke();
 
-  // ── HOOD ──────────────────────────────────────────
-  // Main hood drape (goes around and behind head)
-  cc.fillStyle='#18102a';
-  cc.beginPath();
-  cc.moveTo(kx-hw*1.3,ch*0.57);
-  cc.lineTo(kx-hw*1.4,bodyTop+8);
-  cc.bezierCurveTo(kx-hw*1.6,headCY+hh*0.4,kx-hw*1.2,headCY-hh*1.0,kx,headCY-hh*1.15);
-  cc.bezierCurveTo(kx+hw*1.2,headCY-hh*1.0,kx+hw*1.6,headCY+hh*0.4,kx+hw*1.4,bodyTop+8);
-  cc.lineTo(kx+hw*1.3,ch*0.57);
-  cc.closePath(); cc.fill();
-  // Hood rim (the opening frame around face)
-  cc.strokeStyle='#281e3c'; cc.lineWidth=2;
-  cc.beginPath();
-  cc.moveTo(kx-hw*1.0,bodyTop+5);
-  cc.bezierCurveTo(kx-hw*1.15,headCY+hh*0.3,kx-hw*1.1,headCY-hh*0.85,kx,headCY-hh*1.0);
-  cc.bezierCurveTo(kx+hw*1.1,headCY-hh*0.85,kx+hw*1.15,headCY+hh*0.3,kx+hw*1.0,bodyTop+5);
-  cc.stroke();
-  // Hood fold highlights (cloth creases)
-  cc.strokeStyle='#22183a'; cc.lineWidth=1.5;
-  cc.beginPath();
-  cc.moveTo(kx-hw*0.8,headCY-hh*0.88);
-  cc.bezierCurveTo(kx-hw*0.95,headCY-hh*0.5,kx-hw*0.9,headCY+hh*0.1,kx-hw*0.85,bodyTop+6);
-  cc.stroke();
-  cc.beginPath();
-  cc.moveTo(kx+hw*0.7,headCY-hh*0.85);
-  cc.bezierCurveTo(kx+hw*0.88,headCY-hh*0.48,kx+hw*0.85,headCY+hh*0.12,kx+hw*0.82,bodyTop+6);
-  cc.stroke();
-  // Wispy silver-white hair at temples
-  cc.strokeStyle='rgba(200,200,220,0.7)'; cc.lineWidth=1;
-  cc.beginPath();
-  cc.moveTo(kx-hw*0.88,headCY-hh*0.18);
-  cc.bezierCurveTo(kx-hw*0.72,headCY-hh*0.32,kx-hw*0.55,headCY-hh*0.28,kx-hw*0.45,headCY-hh*0.18);
-  cc.stroke();
-  cc.strokeStyle='rgba(180,180,200,0.5)'; cc.lineWidth=0.8;
-  cc.beginPath();
-  cc.moveTo(kx-hw*0.85,headCY-hh*0.06);
-  cc.bezierCurveTo(kx-hw*0.68,headCY-hh*0.15,kx-hw*0.52,headCY-hh*0.11,kx-hw*0.44,headCY-hh*0.05);
-  cc.stroke();
+
 
   // ── LIGHTING OVERLAY ──────────────────────────────
   // Warm fireplace rim on right side of figure
@@ -1804,58 +1834,26 @@ function drawSkPortrait(){
   const cnv=document.getElementById('sk-portrait');
   if(!cnv) return;
   const pc=cnv.getContext('2d');
-  const pw=44, ph2=44;
-  pc.fillStyle='#0c0608'; pc.fillRect(0,0,pw,ph2);
-  const hcx=pw/2, hcy=ph2*0.44, hr=pw*0.28, hh2=hr*1.25;
-  // Hood
-  pc.fillStyle='#18102a';
+  const pw=38, ph=38;
+  pc.fillStyle='#08050e'; pc.fillRect(0,0,pw,ph);
+  pc.fillStyle='#06040a';
   pc.beginPath();
-  pc.moveTo(hcx-pw*0.42,ph2);
-  pc.bezierCurveTo(hcx-pw*0.5,hcy+hh2*0.35,hcx-pw*0.48,hcy-hh2*0.95,hcx,hcy-hh2*1.0);
-  pc.bezierCurveTo(hcx+pw*0.48,hcy-hh2*0.95,hcx+pw*0.5,hcy+hh2*0.35,hcx+pw*0.42,ph2);
+  pc.moveTo(pw*0.28,ph); pc.bezierCurveTo(pw*0.22,ph*0.6,pw*0.2,ph*0.32,pw*0.3,ph*0.12);
+  pc.bezierCurveTo(pw*0.38,ph*0.02,pw*0.62,ph*0.02,pw*0.7,ph*0.12);
+  pc.bezierCurveTo(pw*0.8,ph*0.32,pw*0.78,ph*0.6,pw*0.72,ph);
   pc.closePath(); pc.fill();
-  // Skin
-  const sg=pc.createRadialGradient(hcx-hr*0.1,hcy,0,hcx,hcy,hr*1.1);
-  sg.addColorStop(0,'#c49460'); sg.addColorStop(0.65,'#a07035'); sg.addColorStop(1,'#7a4820');
-  pc.fillStyle=sg;
-  pc.beginPath();
-  pc.moveTo(hcx,hcy-hh2);
-  pc.bezierCurveTo(hcx+hr*0.88,hcy-hh2,hcx+hr,hcy-hh2*0.18,hcx+hr*0.72,hcy+hh2*0.46);
-  pc.bezierCurveTo(hcx+hr*0.45,hcy+hh2*0.78,hcx-hr*0.45,hcy+hh2*0.78,hcx-hr*0.72,hcy+hh2*0.46);
-  pc.bezierCurveTo(hcx-hr,hcy-hh2*0.18,hcx-hr*0.88,hcy-hh2,hcx,hcy-hh2);
-  pc.closePath(); pc.fill();
-  // Side shading
-  pc.fillStyle='rgba(45,15,3,0.38)';
-  pc.beginPath(); pc.ellipse(hcx-hr*0.62,hcy,hr*0.4,hh2*0.48,0.18,0,Math.PI*2); pc.fill();
-  pc.beginPath(); pc.ellipse(hcx+hr*0.62,hcy,hr*0.4,hh2*0.48,-0.18,0,Math.PI*2); pc.fill();
-  // Eyes
-  const ey=hcy-hh2*0.06, es=hr*0.42;
+  pc.beginPath(); pc.ellipse(pw*0.5,ph*0.2,pw*0.16,ph*0.14,0,0,Math.PI*2); pc.fill();
+  pc.strokeStyle='rgba(255,80,10,0.3)'; pc.lineWidth=1;
+  pc.beginPath(); pc.moveTo(pw*0.72,ph); pc.bezierCurveTo(pw*0.78,ph*0.6,pw*0.8,ph*0.32,pw*0.7,ph*0.12); pc.stroke();
+  const ey2=ph*0.21;
   [-1,1].forEach(s=>{
-    const ex3=hcx+s*es;
-    pc.fillStyle='rgba(35,10,2,0.5)';
-    pc.beginPath(); pc.ellipse(ex3,ey,hr*0.28,hh2*0.18,0,0,Math.PI*2); pc.fill();
-    pc.fillStyle='#d8c8a0';
-    pc.beginPath(); pc.ellipse(ex3,ey,hr*0.21,hh2*0.13,0,0,Math.PI*2); pc.fill();
-    const ig=pc.createRadialGradient(ex3,ey,0,ex3,ey,hr*0.15);
-    ig.addColorStop(0,'#f5c040'); ig.addColorStop(0.5,'#c07820'); ig.addColorStop(1,'#7a4400');
-    pc.fillStyle=ig; pc.beginPath(); pc.ellipse(ex3,ey,hr*0.15,hh2*0.11,0,0,Math.PI*2); pc.fill();
-    pc.fillStyle='#060402'; pc.beginPath(); pc.ellipse(ex3,ey,hr*0.07,hh2*0.07,0,0,Math.PI*2); pc.fill();
-    pc.fillStyle='rgba(255,248,210,0.75)'; pc.beginPath(); pc.arc(ex3+hr*0.06,ey-hh2*0.04,hr*0.04,0,Math.PI*2); pc.fill();
-    // Brow
-    pc.fillStyle='#3a2010';
-    pc.beginPath(); pc.ellipse(ex3,ey-hh2*0.28,hr*0.22,hh2*0.05,s*0.2,0,Math.PI*2); pc.fill();
+    const ex=pw*0.5+s*pw*0.065;
+    const eg=pc.createRadialGradient(ex,ey2,0,ex,ey2,pw*0.07);
+    eg.addColorStop(0,'rgba(245,166,35,0.65)'); eg.addColorStop(1,'transparent');
+    pc.fillStyle=eg; pc.beginPath(); pc.arc(ex,ey2,pw*0.07,0,Math.PI*2); pc.fill();
+    pc.fillStyle='rgba(245,166,35,0.5)'; pc.beginPath(); pc.arc(ex,ey2,pw*0.02,0,Math.PI*2); pc.fill();
   });
-  // Nose bridge shadow
-  pc.strokeStyle='rgba(65,22,4,0.38)'; pc.lineWidth=0.8;
-  pc.beginPath(); pc.moveTo(hcx,ey+hh2*0.12); pc.lineTo(hcx,hcy+hh2*0.15); pc.stroke();
-  // Mouth smirk
-  pc.strokeStyle='rgba(60,20,5,0.72)'; pc.lineWidth=1;
-  pc.beginPath();
-  pc.moveTo(hcx-hr*0.3,hcy+hh2*0.36);
-  pc.bezierCurveTo(hcx-hr*0.1,hcy+hh2*0.42,hcx+hr*0.14,hcy+hh2*0.44,hcx+hr*0.31,hcy+hh2*0.36);
-  pc.stroke();
-  // Border
-  pc.strokeStyle='#2a1808'; pc.lineWidth=1; pc.strokeRect(0.5,0.5,43,43);
+  pc.strokeStyle='#1e1008'; pc.lineWidth=1; pc.strokeRect(0.5,0.5,37,37);
 }
 
 function showBase(){
@@ -1998,6 +1996,13 @@ function loop(timestamp){
   if(gameState==='DIVING'){
     updatePhysics(dt);
     if(mouseDown||mobileDrill) updateDrill(dt);
+    updateEnemies(dt);
+    // Combo decay
+    if(comboTimer>0){ comboTimer-=dt; if(comboTimer<=0) comboCount=0; }
+    // Depth milestones
+    const curDepth=Math.floor(player.y/TS);
+    if(curDepth>maxDepth) maxDepth=curDepth;
+    DEPTH_MILES.forEach((d,i)=>{ if(curDepth>=d&&!milesHit.has(i)){ milesHit.add(i); showLayerBanner(LAYERS[i+1].name+' REACHED'); } });
     updateCamera(dt);
     updateParticles(dt);
     render();
