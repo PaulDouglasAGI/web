@@ -45,28 +45,35 @@ canvas{display:block;position:absolute;inset:0}
 #radar-ring{position:absolute;top:50%;left:50%;width:0;height:0;pointer-events:none;z-index:9}
 
 /* ── BASE / UPGRADE SHOP ─────────────────────────── */
-#base{position:absolute;inset:0;background:#000;z-index:20;overflow-y:auto;display:none;flex-direction:column;align-items:center;padding:32px 16px 40px}
+#cottage-bg{position:absolute;inset:0;z-index:19;display:none}
+#cottage-bg.visible{display:block}
+#base{position:absolute;inset:0;background:transparent;z-index:20;overflow-y:auto;display:none;flex-direction:column;align-items:center;padding:32px 16px 40px}
 #base.visible{display:flex}
-#base h2{font-family:'Exo 2',sans-serif;font-size:clamp(24px,4vw,40px);font-weight:900;color:#f5a623;letter-spacing:6px;margin-bottom:4px}
+#shopkeeper-wrap{width:100%;max-width:800px;margin-bottom:20px;background:#0a0604cc;border:1px solid #2a1a08;clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);padding:16px 24px;display:flex;align-items:center;gap:16px}
+#sk-portrait{width:52px;height:52px;flex-shrink:0;border:1px solid #2a1808;background:#060304}
+#sk-dialogue{font-size:13px;color:#b8945a;line-height:1.6;font-style:italic}
+#sk-name{font-size:9px;letter-spacing:4px;color:#443322;margin-bottom:4px}
+#base h2{font-family:'Exo 2',sans-serif;font-size:clamp(24px,4vw,40px);font-weight:900;color:#f5a623;letter-spacing:6px;margin-bottom:4px;text-shadow:0 2px 20px #000a}
 #base .sub2{font-size:13px;color:#334433;letter-spacing:3px;margin-bottom:20px}
-#run-summary{display:flex;gap:32px;margin-bottom:28px;flex-wrap:wrap;justify-content:center}
+#run-summary{display:flex;gap:32px;margin-bottom:20px;flex-wrap:wrap;justify-content:center;background:#060a06cc;padding:16px 24px;border:1px solid #1a2a1a;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%)}
 .sum-block{text-align:center}
 .sum-val{font-family:'Exo 2',sans-serif;font-size:22px;font-weight:700;color:#f5a623}
 .sum-lbl{font-size:10px;color:#445544;letter-spacing:2px}
-#bank-display{font-family:'Exo 2',sans-serif;font-size:18px;color:#f5a623;margin-bottom:24px;letter-spacing:2px}
+#bank-display{font-family:'Exo 2',sans-serif;font-size:18px;color:#f5a623;margin-bottom:20px;letter-spacing:2px;background:#060a06cc;padding:10px 24px;border:1px solid #1a3a1a}
 #upg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;width:100%;max-width:800px;margin-bottom:28px}
-.upg-card{background:#060a06;border:1px solid #1a2a1a;padding:16px;display:flex;flex-direction:column;gap:8px;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%)}
+.upg-card{background:#060a06ee;border:1px solid #1a2a1a;padding:16px;display:flex;flex-direction:column;gap:8px;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%)}
 .upg-cat{font-size:9px;letter-spacing:4px;color:#334433}
 .upg-name{font-family:'Exo 2',sans-serif;font-size:14px;font-weight:700;color:#aaccaa;letter-spacing:2px}
 .upg-desc{font-size:11px;color:#446644;line-height:1.5}
-.upg-pips{display:flex;gap:4px;margin:2px 0}
-.pip{width:16px;height:4px;background:#1a2a1a}
+.upg-pips{display:flex;gap:3px;margin:2px 0;flex-wrap:wrap}
+.pip{width:10px;height:3px;background:#1a2a1a}
 .pip.filled{background:#f5a623}
+.drill-preview{display:block;margin:4px 0}
 .upg-btn{font-family:'Exo 2',sans-serif;font-size:10px;font-weight:700;letter-spacing:3px;padding:7px 0;background:transparent;border:1px solid #334433;color:#334433;cursor:pointer;transition:all .2s;clip-path:polygon(4px 0%,100% 0%,calc(100% - 4px) 100%,0% 100%)}
 .upg-btn:hover:not(:disabled){border-color:#f5a623;color:#f5a623;background:#f5a62311}
 .upg-btn:disabled{opacity:.3;cursor:default}
 .upg-btn.maxed{border-color:#223322;color:#223322}
-#dive-btn{font-family:'Exo 2',sans-serif;font-weight:900;font-size:14px;letter-spacing:6px;padding:16px 64px;background:transparent;border:1px solid #f5a623;color:#f5a623;cursor:pointer;clip-path:polygon(10px 0%,100% 0%,calc(100% - 10px) 100%,0% 100%);transition:all .2s}
+#dive-btn{font-family:'Exo 2',sans-serif;font-weight:900;font-size:14px;letter-spacing:6px;padding:16px 64px;background:#060a06cc;border:1px solid #f5a623;color:#f5a623;cursor:pointer;clip-path:polygon(10px 0%,100% 0%,calc(100% - 10px) 100%,0% 100%);transition:all .2s}
 #dive-btn:hover{background:#f5a62322;box-shadow:0 0 32px #f5a62355}
 
 /* ── MOBILE CONTROLS ─────────────────────────────── */
@@ -123,10 +130,17 @@ canvas{display:block;position:absolute;inset:0}
   <div id="radar-ring"></div>
 </div>
 
+<!-- COTTAGE BACKGROUND -->
+<canvas id="cottage-bg"></canvas>
+
 <!-- BASE / UPGRADE SHOP -->
 <div id="base">
-  <h2>BASE CAMP</h2>
+  <h2>THE SURFACE</h2>
   <div class="sub2">UMBRA DIRECTORATE — DEEP DRILL OPERATION</div>
+  <div id="shopkeeper-wrap">
+    <canvas id="sk-portrait" width="52" height="52"></canvas>
+    <div><div id="sk-name">MIRA — DRILL MERCHANT</div><div id="sk-dialogue">Back already? Let's see what the depths gave you.</div></div>
+  </div>
   <div id="run-summary">
     <div class="sum-block"><div class="sum-val" id="s-depth">0m</div><div class="sum-lbl">MAX DEPTH</div></div>
     <div class="sum-block"><div class="sum-val" id="s-coins">0</div><div class="sum-lbl">COINS EARNED</div></div>
@@ -198,17 +212,17 @@ const LAYERS=[
 const SK={bank:'vdg_bank',upg:'vdg_upgrades',best:'vdg_best',runs:'vdg_runs'};
 
 const UPG_DEFS=[
-  {id:'drillPower', cat:'DRILL',name:'DRILL POWER',   max:5, costs:[12,27,55,110,200], desc:'Faster drilling rate'},
-  {id:'drillReach', cat:'DRILL',name:'DRILL REACH',   max:3, costs:[25,55,110],        desc:'Extended drill range'},
-  {id:'drillSpeed', cat:'DRILL',name:'DRILL SPEED',   max:3, costs:[20,45,90],         desc:'Drill animation speed'},
-  {id:'energyCore', cat:'MECH', name:'ENERGY CORE',   max:5, costs:[15,35,70,140,250], desc:'+25 max energy/level'},
-  {id:'hullPlating',cat:'MECH', name:'HULL PLATING',  max:3, costs:[22,50,100],        desc:'Reduce hazard damage'},
-  {id:'thruster',   cat:'MECH', name:'THRUSTER',      max:3, costs:[17,40,80],         desc:'+15% move speed/level'},
-  {id:'lightRadius',cat:'MECH', name:'LIGHT RADIUS',  max:4, costs:[15,32,65,130],     desc:'Larger vision radius'},
-  {id:'radarPulse', cat:'TECH', name:'RADAR PULSE',   max:3, costs:[30,65,130],        desc:'E: reveal resources nearby'},
-  {id:'artScanner', cat:'TECH', name:'ART. SCANNER',  max:2, costs:[45,100],           desc:'Outline artifacts through walls'},
-  {id:'autoCollect',cat:'TECH', name:'AUTO COLLECTOR',max:2, costs:[50,100],           desc:'Auto-collect adjacent items'},
-  {id:'depthAnchor',cat:'TECH', name:'DEPTH ANCHOR',  max:1, costs:[150],              desc:'Set one checkpoint per run'},
+  {id:'drillPower', cat:'DRILL',name:'DRILL POWER',   max:15,costs:[5,10,15,22,30,40,55,72,95,125,165,215,280,365,475],desc:'Faster drilling — changes drill color'},
+  {id:'drillReach', cat:'DRILL',name:'DRILL REACH',   max:9, costs:[10,18,28,40,58,80,110,150,205],                   desc:'Extended drill range'},
+  {id:'drillSpeed', cat:'DRILL',name:'DRILL SPEED',   max:9, costs:[8,14,22,32,46,63,86,115,155],                     desc:'Faster drill visuals'},
+  {id:'energyCore', cat:'MECH', name:'ENERGY CORE',   max:15,costs:[6,11,18,25,35,48,65,88,115,150,195,255,330,425,550],desc:'+10 max energy/level'},
+  {id:'hullPlating',cat:'MECH', name:'HULL PLATING',  max:9, costs:[9,16,25,38,55,80,115,165,235],                   desc:'Reduce hazard damage'},
+  {id:'thruster',   cat:'MECH', name:'THRUSTER',      max:9, costs:[8,14,21,31,44,63,88,122,170],                    desc:'+7% move speed/level'},
+  {id:'lightRadius',cat:'MECH', name:'LIGHT RADIUS',  max:12,costs:[6,10,16,24,34,48,65,90,123,165,220,290],         desc:'+8% light radius/level'},
+  {id:'radarPulse', cat:'TECH', name:'RADAR PULSE',   max:9, costs:[12,22,35,50,70,98,135,188,260],                  desc:'E: reveal resources nearby'},
+  {id:'artScanner', cat:'TECH', name:'ART. SCANNER',  max:6, costs:[18,30,50,83,135,220],                            desc:'Outline artifacts through walls'},
+  {id:'autoCollect',cat:'TECH', name:'AUTO COLLECTOR',max:6, costs:[20,35,58,95,155,250],                            desc:'Auto-collect adjacent items'},
+  {id:'depthAnchor',cat:'TECH', name:'DEPTH ANCHOR',  max:3, costs:[60,125,250],                                     desc:'Set checkpoints per run'},
 ];
 
 // ─── CANVAS & LIGHTING ───────────────────────────────────────────────────────
@@ -280,17 +294,25 @@ function saveSave(){
   localStorage.setItem(SK.upg,JSON.stringify(upgLevels));
 }
 function upgLvl(id){ return upgLevels[id]||0; }
+// Drill colors by drillPower level (0–15)
+const DRILL_COLORS=[
+  '#ffcc44','#ffbb33','#ffaa00','#ff8800',
+  '#ff6600','#ff4400','#ff2200','#ff0066',
+  '#cc00cc','#8800ff','#4400ff','#0044ff',
+  '#0088ff','#00ccff','#00ffcc','#ffffff'
+];
+
 function upgEff(id){
   const lv=upgLvl(id);
   switch(id){
-    case 'drillPower': return 1+lv*0.5;
-    case 'drillReach': return lv;
-    case 'drillSpeed': return 1+lv*0.3;
-    case 'energyCore': return lv*25;
-    case 'hullPlating': return 1-lv*0.2;
-    case 'thruster':   return 1+lv*0.15;
-    case 'lightRadius':return 1+lv*0.22;
-    case 'radarPulse': return lv===0?0:lv*4+3;
+    case 'drillPower': return 1+lv*0.18;
+    case 'drillReach': return lv*0.33;
+    case 'drillSpeed': return 1+lv*0.1;
+    case 'energyCore': return lv*10;
+    case 'hullPlating':return Math.max(0.1,1-lv*0.1);
+    case 'thruster':   return 1+lv*0.07;
+    case 'lightRadius':return 1+lv*0.08;
+    case 'radarPulse': return lv===0?0:(lv+1)*2;
     default: return lv;
   }
 }
@@ -1059,13 +1081,14 @@ function drawMech(){
   ctx.fillStyle='rgba(0,200,255,0.7)';
   ctx.fillRect(sx-5,sy-5,10,5);
 
-  // Drill bit (rotates toward mouse)
+  // Drill bit (rotates toward mouse, color from drillPower level)
   ctx.translate(sx,sy);
   ctx.rotate(player.drillAngle);
-  const drillGlow=(mouseDown||mobileDrill)?'#ffff00':'#ffcc44';
-  ctx.shadowColor=drillGlow;
-  ctx.shadowBlur=mouseDown||mobileDrill?16:6;
-  ctx.fillStyle=drillGlow;
+  const dCol=DRILL_COLORS[Math.min(upgLvl('drillPower'),DRILL_COLORS.length-1)];
+  const drillGlow=(mouseDown||mobileDrill)?dCol:'#88664422';
+  ctx.shadowColor=dCol;
+  ctx.shadowBlur=mouseDown||mobileDrill?18:8;
+  ctx.fillStyle=dCol;
   ctx.beginPath();
   ctx.moveTo(14,0); ctx.lineTo(9,-5); ctx.lineTo(9,5);
   ctx.closePath(); ctx.fill();
@@ -1297,10 +1320,197 @@ function triggerSurface(){
   mouseDown=false; mobileDrill=false;
 }
 
+const SK_LINES=[
+  "Back already? Let's see what the depths gave you.",
+  "The crystal caverns are deadly tonight. Stay sharp.",
+  "Found anything ancient down there? I'll pay well for relics.",
+  "Your drill's looking worn. Might want to upgrade before the next run.",
+  "Heard there are void crystals near the thousand-meter mark. Just saying.",
+  "Careful below the magma layer — the heat warps your instruments.",
+  "Another run survived. Not everyone does.",
+  "The deeper you go, the stranger things get. You know that by now.",
+  "Sit a minute. Warm yourself by the fire before you dive again.",
+  "That drill of yours is almost art at this point.",
+];
+
+function drawCottage(){
+  const cnv=document.getElementById('cottage-bg');
+  cnv.width=window.innerWidth; cnv.height=window.innerHeight;
+  const cc=cnv.getContext('2d');
+  const cw=cnv.width, ch=cnv.height;
+
+  // Base wall tone
+  const bg=cc.createLinearGradient(0,0,0,ch);
+  bg.addColorStop(0,'#1c0e07'); bg.addColorStop(0.55,'#130905'); bg.addColorStop(1,'#0a0604');
+  cc.fillStyle=bg; cc.fillRect(0,0,cw,ch);
+
+  // Warm wooden floor (perspective lines)
+  const vpx=cw/2, vpy=ch*0.48;
+  cc.strokeStyle='#2a1508'; cc.lineWidth=1;
+  for(let i=0;i<=10;i++){
+    const bx=cw*i/10;
+    cc.beginPath(); cc.moveTo(bx,ch); cc.lineTo(vpx,vpy); cc.stroke();
+  }
+  for(let i=1;i<=5;i++){
+    const py=vpy+(ch-vpy)*(i/5);
+    const hw=(cw/2)*(i/5);
+    cc.beginPath(); cc.moveTo(cw/2-hw,py); cc.lineTo(cw/2+hw,py); cc.stroke();
+  }
+
+  // Back wall panel
+  cc.fillStyle='#1e1008';
+  cc.fillRect(cw*0.08,0,cw*0.84,ch*0.52);
+
+  // Fireplace right — warm glow
+  const fg=cc.createRadialGradient(cw*0.87,ch*0.38,0,cw*0.87,ch*0.38,cw*0.45);
+  fg.addColorStop(0,'rgba(255,110,20,0.28)'); fg.addColorStop(1,'rgba(255,50,0,0)');
+  cc.fillStyle=fg; cc.fillRect(0,0,cw,ch);
+
+  // Fireplace arch
+  cc.fillStyle='#0e0806';
+  cc.beginPath();
+  cc.arc(cw*0.87,ch*0.38,cw*0.09,Math.PI,0);
+  cc.lineTo(cw*0.96,ch*0.52); cc.lineTo(cw*0.78,ch*0.52);
+  cc.closePath(); cc.fill();
+  cc.fillStyle='rgba(255,140,30,0.5)';
+  cc.beginPath(); cc.arc(cw*0.87,ch*0.41,cw*0.06,0,Math.PI*2); cc.fill();
+
+  // Window left with night sky
+  const wx=cw*0.1, wy=ch*0.06, ww=cw*0.14, wh=ch*0.22;
+  cc.fillStyle='#040810'; cc.fillRect(wx,wy,ww,wh);
+  cc.strokeStyle='#3a2510'; cc.lineWidth=3; cc.strokeRect(wx,wy,ww,wh);
+  cc.beginPath();
+  cc.moveTo(wx,wy+wh/2); cc.lineTo(wx+ww,wy+wh/2);
+  cc.moveTo(wx+ww/2,wy); cc.lineTo(wx+ww/2,wy+wh);
+  cc.stroke();
+  cc.fillStyle='#b0b8d8';
+  [[0.12,0.09],[0.15,0.14],[0.21,0.07],[0.18,0.22],[0.23,0.17]].forEach(([sx,sy])=>{
+    cc.beginPath(); cc.arc(cw*sx,ch*sy,1,0,Math.PI*2); cc.fill();
+  });
+  // Moon
+  cc.fillStyle='#c0c8e0';
+  cc.beginPath(); cc.arc(cw*0.2,ch*0.12,5,0,Math.PI*2); cc.fill();
+
+  // Shelves on back wall
+  const shelfX=cw*0.22, shelfW=cw*0.56;
+  cc.fillStyle='#3a2010';
+  [ch*0.09, ch*0.20, ch*0.31].forEach(sy=>{
+    cc.fillRect(shelfX,sy,shelfW,4);
+    const vcols=['#00eeff','#ff4400','#aa00ff','#00ff88','#ffaa00','#ff0066'];
+    for(let j=0;j<6;j++){
+      const vx=shelfX+12+j*(shelfW/6), vy=sy-20, vc=vcols[j];
+      const vg=cc.createRadialGradient(vx+3,vy+9,0,vx+3,vy+9,14);
+      vg.addColorStop(0,vc+'55'); vg.addColorStop(1,'transparent');
+      cc.fillStyle=vg; cc.fillRect(vx-10,vy-8,24,30);
+      cc.fillStyle='#151520'; cc.fillRect(vx,vy+5,6,13);
+      cc.fillStyle=vc+'cc'; cc.fillRect(vx+1,vy+8,4,9);
+      cc.fillStyle='#5a3a18'; cc.fillRect(vx+1,vy+2,4,4);
+    }
+  });
+
+  // Counter trapezoid (foreground)
+  cc.fillStyle='#1e0e06';
+  cc.beginPath();
+  cc.moveTo(-10,ch); cc.lineTo(cw+10,ch);
+  cc.lineTo(cw*0.73,ch*0.57); cc.lineTo(cw*0.27,ch*0.57);
+  cc.closePath(); cc.fill();
+  cc.strokeStyle='#3a1e0a'; cc.lineWidth=2; cc.stroke();
+  cc.fillStyle='#2a1508';
+  cc.beginPath();
+  cc.moveTo(cw*0.24,ch*0.51); cc.lineTo(cw*0.76,ch*0.51);
+  cc.lineTo(cw*0.73,ch*0.57); cc.lineTo(cw*0.27,ch*0.57);
+  cc.closePath(); cc.fill();
+
+  // Shopkeeper silhouette behind counter
+  const kx=cw/2, ky=ch*0.43;
+  const bd=cc.createLinearGradient(kx,ky-90,kx,ky);
+  bd.addColorStop(0,'#181018'); bd.addColorStop(1,'#0c080c');
+  cc.fillStyle=bd;
+  cc.beginPath();
+  cc.moveTo(kx-32,ch*0.57); cc.lineTo(kx+32,ch*0.57);
+  cc.lineTo(kx+22,ky-15); cc.lineTo(kx,ky-90); cc.lineTo(kx-22,ky-15);
+  cc.closePath(); cc.fill();
+  // Hood
+  cc.fillStyle='#140c14';
+  cc.beginPath();
+  cc.arc(kx,ky-72,24,Math.PI,0);
+  cc.lineTo(kx+20,ky-32); cc.lineTo(kx-20,ky-32);
+  cc.closePath(); cc.fill();
+  // Face shadow
+  cc.fillStyle='#080408';
+  cc.beginPath(); cc.ellipse(kx,ky-60,14,11,0,0,Math.PI*2); cc.fill();
+  // Glowing amber eyes
+  [-7,7].forEach(ex=>{
+    const eg=cc.createRadialGradient(kx+ex,ky-62,0,kx+ex,ky-62,6);
+    eg.addColorStop(0,'rgba(245,166,35,0.95)');
+    eg.addColorStop(0.6,'rgba(245,166,35,0.5)');
+    eg.addColorStop(1,'transparent');
+    cc.fillStyle=eg;
+    cc.beginPath(); cc.arc(kx+ex,ky-62,6,0,Math.PI*2); cc.fill();
+    cc.fillStyle='#f5a623';
+    cc.beginPath(); cc.arc(kx+ex,ky-62,2,0,Math.PI*2); cc.fill();
+  });
+  // Hands resting on counter
+  cc.fillStyle='#1a1018';
+  cc.beginPath(); cc.ellipse(kx-22,ch*0.545,13,6,0.1,0,Math.PI*2); cc.fill();
+  cc.beginPath(); cc.ellipse(kx+22,ch*0.545,13,6,-0.1,0,Math.PI*2); cc.fill();
+
+  // Lantern on counter (left side)
+  const lx=kx-65, ly=ch*0.52;
+  const lg2=cc.createRadialGradient(lx,ly,0,lx,ly,35);
+  lg2.addColorStop(0,'rgba(255,185,45,0.55)'); lg2.addColorStop(1,'rgba(255,90,0,0)');
+  cc.fillStyle=lg2; cc.fillRect(lx-35,ly-35,70,70);
+  cc.fillStyle='#2a1a08'; cc.fillRect(lx-5,ly-14,10,16);
+  cc.fillStyle='rgba(255,210,70,0.85)'; cc.fillRect(lx-3,ly-11,6,11);
+  cc.strokeStyle='#3a2a10'; cc.lineWidth=1; cc.strokeRect(lx-5,ly-14,10,16);
+
+  // Dark vignette
+  const vig=cc.createRadialGradient(cw/2,ch*0.5,ch*0.15,cw/2,ch*0.5,ch*0.95);
+  vig.addColorStop(0,'transparent'); vig.addColorStop(1,'rgba(0,0,0,0.78)');
+  cc.fillStyle=vig; cc.fillRect(0,0,cw,ch);
+
+  // Shopkeeper portrait
+  drawSkPortrait();
+}
+
+function drawSkPortrait(){
+  const cnv=document.getElementById('sk-portrait');
+  const cc=cnv.getContext('2d');
+  const cw=52, ch=52;
+  cc.fillStyle='#0c0608'; cc.fillRect(0,0,cw,ch);
+  // Hood
+  cc.fillStyle='#180c18';
+  cc.beginPath(); cc.arc(cw/2,ch/2-2,18,Math.PI,0);
+  cc.lineTo(cw/2+14,ch/2+12); cc.lineTo(cw/2-14,ch/2+12);
+  cc.closePath(); cc.fill();
+  // Face
+  cc.fillStyle='#080408';
+  cc.beginPath(); cc.ellipse(cw/2,ch/2+2,10,8,0,0,Math.PI*2); cc.fill();
+  // Eyes
+  [-5,5].forEach(ex=>{
+    const eg=cc.createRadialGradient(cw/2+ex,ch/2+1,0,cw/2+ex,ch/2+1,4);
+    eg.addColorStop(0,'rgba(245,166,35,1)'); eg.addColorStop(1,'transparent');
+    cc.fillStyle=eg;
+    cc.beginPath(); cc.arc(cw/2+ex,ch/2+1,4,0,Math.PI*2); cc.fill();
+    cc.fillStyle='#f5a623';
+    cc.beginPath(); cc.arc(cw/2+ex,ch/2+1,1.5,0,Math.PI*2); cc.fill();
+  });
+  // Border glow
+  cc.strokeStyle='#2a1808'; cc.lineWidth=1; cc.strokeRect(0.5,0.5,51,51);
+}
+
 function showBase(){
   gameState='BASE';
   document.getElementById('hud').classList.add('hidden');
   document.getElementById('base').classList.add('visible');
+  const cbg=document.getElementById('cottage-bg');
+  cbg.classList.add('visible');
+  drawCottage();
+
+  // Shopkeeper line
+  const runs=parseInt(localStorage.getItem(SK.runs)||'0');
+  const line=SK_LINES[runs%SK_LINES.length];
+  document.getElementById('sk-dialogue').textContent=line;
 
   // Update bank
   bank+=coins;
@@ -1320,6 +1530,42 @@ function showBase(){
   renderUpgrades();
 }
 
+// ─── DRILL COLOR PREVIEW ─────────────────────────────────────────────────────
+function drawDrillPreview(cnv, powerLv){
+  const cc=cnv.getContext('2d');
+  const cw=cnv.width, ch=cnv.height;
+  cc.clearRect(0,0,cw,ch);
+  cc.fillStyle='#060a06';
+  cc.fillRect(0,0,cw,ch);
+
+  // Show all 16 color swatches with current level highlighted
+  const swW=Math.floor(cw/DRILL_COLORS.length);
+  DRILL_COLORS.forEach((col,i)=>{
+    const active=i<=powerLv;
+    cc.fillStyle=active?col:'#1a1a1a';
+    cc.fillRect(i*swW+1, active?4:7, swW-2, active?ch-8:ch-14);
+    if(active){
+      const gl=cc.createRadialGradient(i*swW+swW/2,ch/2,0,i*swW+swW/2,ch/2,swW);
+      gl.addColorStop(0,col+'88'); gl.addColorStop(1,'transparent');
+      cc.fillStyle=gl;
+      cc.fillRect(i*swW,0,swW,ch);
+    }
+  });
+
+  // Current drill shape in center-right
+  const dx=cw-18, dy=ch/2;
+  const col=DRILL_COLORS[Math.min(powerLv,DRILL_COLORS.length-1)];
+  cc.save();
+  cc.translate(dx,dy);
+  const glow=cc.createRadialGradient(0,0,0,0,0,12);
+  glow.addColorStop(0,col+'aa'); glow.addColorStop(1,'transparent');
+  cc.fillStyle=glow; cc.fillRect(-12,-12,24,24);
+  cc.shadowColor=col; cc.shadowBlur=8;
+  cc.fillStyle=col;
+  cc.beginPath(); cc.moveTo(10,0); cc.lineTo(4,-4); cc.lineTo(4,4); cc.closePath(); cc.fill();
+  cc.restore();
+}
+
 // ─── UPGRADE UI ───────────────────────────────────────────────────────────────
 function renderUpgrades(){
   document.getElementById('bank-val').textContent=bank;
@@ -1334,17 +1580,23 @@ function renderUpgrades(){
     card.className='upg-card';
     let pips='';
     for(let i=0;i<ud.max;i++) pips+=`<div class="pip${i<lv?' filled':''}"></div>`;
+    const isDrill=(ud.id==='drillPower'||ud.id==='drillReach'||ud.id==='drillSpeed');
     card.innerHTML=`
       <div class="upg-cat">${ud.cat}</div>
       <div class="upg-name">${ud.name}</div>
       <div class="upg-desc">${ud.desc}</div>
       <div class="upg-pips">${pips}</div>
+      ${isDrill?`<canvas class="drill-preview" width="120" height="28" data-id="${ud.id}"></canvas>`:''}
       <button class="upg-btn${maxed?' maxed':''}" ${maxed||!canAfford?'disabled':''}
         data-id="${ud.id}">
         ${maxed?'MAXED':'BUY — '+cost+' COINS'}
       </button>
     `;
     grid2.appendChild(card);
+    if(isDrill){
+      const pc=card.querySelector('.drill-preview');
+      drawDrillPreview(pc, upgLvl('drillPower'));
+    }
   });
   grid2.querySelectorAll('.upg-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{
@@ -1549,6 +1801,7 @@ surfBtn.addEventListener('touchend',e=>{ e.preventDefault(); cancelSurfaceHold()
 surfBtn.addEventListener('touchcancel',cancelSurfaceHold);
 document.getElementById('dive-btn').addEventListener('click',()=>{
   document.getElementById('base').classList.remove('visible');
+  document.getElementById('cottage-bg').classList.remove('visible');
   startDive();
 });
 
