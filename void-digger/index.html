@@ -1015,7 +1015,7 @@ function drawCrystalGlow(){
       const r=tile===T.VOID_X?40:tile===T.CRYSTAL||tile===T.MAGMA_X?30:20;
       const pulse=0.4+0.2*Math.sin(t*2+tx2*0.3+ty*0.4);
       const gg=ctx.createRadialGradient(sx,sy,0,sx,sy,r);
-      gg.addColorStop(0,glowCol.replace('#','rgba(').replace(/(.{2})(.{2})(.{2})/,(_,r2,g2,b2)=>`rgba(${parseInt(r2,16)},${parseInt(g2,16)},${parseInt(b2,16)},${pulse})`)||glowCol);
+      gg.addColorStop(0, hexToRgba(glowCol, pulse));
       gg.addColorStop(1,'rgba(0,0,0,0)');
       ctx.fillStyle=gg;
       ctx.fillRect(sx-r,sy-r,r*2,r*2);
