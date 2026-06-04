@@ -45,21 +45,19 @@ canvas{display:block;position:absolute;inset:0}
 #radar-ring{position:absolute;top:50%;left:50%;width:0;height:0;pointer-events:none;z-index:9}
 
 /* ── BASE / UPGRADE SHOP ─────────────────────────── */
-#cottage-bg{position:absolute;inset:0;z-index:19;display:none}
-#cottage-bg.visible{display:block}
-#base{position:absolute;inset:0;background:transparent;z-index:20;overflow-y:auto;display:none;flex-direction:column;align-items:center;padding:32px 16px 40px}
+#base{position:absolute;inset:0;background:#050208;z-index:20;overflow-y:auto;display:none;flex-direction:column;align-items:center;padding:0 0 40px}
 #base.visible{display:flex}
-#shopkeeper-wrap{width:100%;max-width:800px;margin-bottom:20px;background:#0a0604cc;border:1px solid #2a1a08;clip-path:polygon(8px 0%,100% 0%,calc(100% - 8px) 100%,0% 100%);padding:16px 24px;display:flex;align-items:center;gap:16px}
-#sk-portrait{width:52px;height:52px;flex-shrink:0;border:1px solid #2a1808;background:#060304}
-#sk-dialogue{font-size:13px;color:#b8945a;line-height:1.6;font-style:italic}
-#sk-name{font-size:9px;letter-spacing:4px;color:#443322;margin-bottom:4px}
-#base h2{font-family:'Exo 2',sans-serif;font-size:clamp(24px,4vw,40px);font-weight:900;color:#f5a623;letter-spacing:6px;margin-bottom:4px;text-shadow:0 2px 20px #000a}
-#base .sub2{font-size:13px;color:#334433;letter-spacing:3px;margin-bottom:20px}
-#run-summary{display:flex;gap:32px;margin-bottom:20px;flex-wrap:wrap;justify-content:center;background:#060a06cc;padding:16px 24px;border:1px solid #1a2a1a;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%)}
+#scene-canvas{display:block;width:100%;max-width:800px;flex-shrink:0}
+#scene-bar{width:100%;max-width:800px;background:#0c0608;border:1px solid #2a1808;border-top:none;padding:12px 18px;display:flex;align-items:center;gap:14px;margin-bottom:18px}
+#sk-portrait{width:44px;height:44px;flex-shrink:0;border:1px solid #2a1508}
+#sk-text{flex:1}
+#sk-name{font-size:8px;letter-spacing:4px;color:#443322;margin-bottom:3px}
+#sk-dialogue{font-size:12px;color:#b8945a;line-height:1.5;font-style:italic}
+#run-summary{display:flex;gap:24px;margin-bottom:16px;flex-wrap:wrap;justify-content:center;background:#06080aee;padding:14px 20px;border:1px solid #1a2a1a;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);width:100%;max-width:800px}
 .sum-block{text-align:center}
 .sum-val{font-family:'Exo 2',sans-serif;font-size:22px;font-weight:700;color:#f5a623}
 .sum-lbl{font-size:10px;color:#445544;letter-spacing:2px}
-#bank-display{font-family:'Exo 2',sans-serif;font-size:18px;color:#f5a623;margin-bottom:20px;letter-spacing:2px;background:#060a06cc;padding:10px 24px;border:1px solid #1a3a1a}
+#bank-display{font-family:'Exo 2',sans-serif;font-size:18px;color:#f5a623;margin-bottom:18px;letter-spacing:2px;background:#06080aee;padding:10px 24px;border:1px solid #1a3a1a}
 #upg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;width:100%;max-width:800px;margin-bottom:28px}
 .upg-card{background:#060a06ee;border:1px solid #1a2a1a;padding:16px;display:flex;flex-direction:column;gap:8px;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%)}
 .upg-cat{font-size:9px;letter-spacing:4px;color:#334433}
@@ -130,16 +128,12 @@ canvas{display:block;position:absolute;inset:0}
   <div id="radar-ring"></div>
 </div>
 
-<!-- COTTAGE BACKGROUND -->
-<canvas id="cottage-bg"></canvas>
-
 <!-- BASE / UPGRADE SHOP -->
 <div id="base">
-  <h2>THE SURFACE</h2>
-  <div class="sub2">UMBRA DIRECTORATE — DEEP DRILL OPERATION</div>
-  <div id="shopkeeper-wrap">
-    <canvas id="sk-portrait" width="52" height="52"></canvas>
-    <div><div id="sk-name">MIRA — DRILL MERCHANT</div><div id="sk-dialogue">Back already? Let's see what the depths gave you.</div></div>
+  <canvas id="scene-canvas"></canvas>
+  <div id="scene-bar">
+    <canvas id="sk-portrait" width="44" height="44"></canvas>
+    <div id="sk-text"><div id="sk-name">MIRA — DRILL MERCHANT</div><div id="sk-dialogue">Back already? Let's see what the depths gave you.</div></div>
   </div>
   <div id="run-summary">
     <div class="sum-block"><div class="sum-val" id="s-depth">0m</div><div class="sum-lbl">MAX DEPTH</div></div>
@@ -1334,178 +1328,529 @@ const SK_LINES=[
 ];
 
 function drawCottage(){
-  const cnv=document.getElementById('cottage-bg');
-  cnv.width=window.innerWidth; cnv.height=window.innerHeight;
+  const cnv=document.getElementById('scene-canvas');
+  const cw=Math.min(cnv.offsetWidth||390,800);
+  const ch=Math.round(cw*0.62);
+  cnv.width=cw; cnv.height=ch;
   const cc=cnv.getContext('2d');
-  const cw=cnv.width, ch=cnv.height;
+  const cx=cw*0.5;
 
-  // Base wall tone
-  const bg=cc.createLinearGradient(0,0,0,ch);
-  bg.addColorStop(0,'#1c0e07'); bg.addColorStop(0.55,'#130905'); bg.addColorStop(1,'#0a0604');
-  cc.fillStyle=bg; cc.fillRect(0,0,cw,ch);
-
-  // Warm wooden floor (perspective lines)
-  const vpx=cw/2, vpy=ch*0.48;
-  cc.strokeStyle='#2a1508'; cc.lineWidth=1;
-  for(let i=0;i<=10;i++){
-    const bx=cw*i/10;
-    cc.beginPath(); cc.moveTo(bx,ch); cc.lineTo(vpx,vpy); cc.stroke();
-  }
-  for(let i=1;i<=5;i++){
-    const py=vpy+(ch-vpy)*(i/5);
-    const hw=(cw/2)*(i/5);
-    cc.beginPath(); cc.moveTo(cw/2-hw,py); cc.lineTo(cw/2+hw,py); cc.stroke();
+  // ── STONE BRICK WALL ──────────────────────────────
+  cc.fillStyle='#0e0c09'; cc.fillRect(0,0,cw,ch);
+  const bw=Math.max(28,Math.round(cw/14)), bh=Math.max(14,Math.round(ch/16));
+  for(let row=0;row<Math.ceil(ch/bh);row++){
+    for(let col=0;col<Math.ceil(cw/bw)+1;col++){
+      const ox=row%2===0?0:Math.round(bw*0.5);
+      const bx=col*bw-ox, by=row*bh;
+      const v=((bx*7+by*13)>>>0)%14;
+      cc.fillStyle=`rgb(${20+v},${17+v},${13+v})`;
+      cc.fillRect(bx+1,by+1,bw-2,bh-2);
+    }
   }
 
-  // Back wall panel
-  cc.fillStyle='#1e1008';
-  cc.fillRect(cw*0.08,0,cw*0.84,ch*0.52);
+  // ── AMBIENT LIGHT ─────────────────────────────────
+  // Fireplace glow (right wall)
+  let gl=cc.createRadialGradient(cw*0.92,ch*0.42,0,cw*0.92,ch*0.42,cw*0.55);
+  gl.addColorStop(0,'rgba(255,120,20,0.4)'); gl.addColorStop(0.5,'rgba(255,70,10,0.18)'); gl.addColorStop(1,'rgba(0,0,0,0)');
+  cc.fillStyle=gl; cc.fillRect(0,0,cw,ch);
+  // Moonlight (left)
+  gl=cc.createRadialGradient(cw*0.08,ch*0.18,0,cw*0.08,ch*0.18,cw*0.35);
+  gl.addColorStop(0,'rgba(80,100,180,0.22)'); gl.addColorStop(1,'rgba(0,0,0,0)');
+  cc.fillStyle=gl; cc.fillRect(0,0,cw,ch);
 
-  // Fireplace right — warm glow
-  const fg=cc.createRadialGradient(cw*0.87,ch*0.38,0,cw*0.87,ch*0.38,cw*0.45);
-  fg.addColorStop(0,'rgba(255,110,20,0.28)'); fg.addColorStop(1,'rgba(255,50,0,0)');
-  cc.fillStyle=fg; cc.fillRect(0,0,cw,ch);
-
-  // Fireplace arch
-  cc.fillStyle='#0e0806';
-  cc.beginPath();
-  cc.arc(cw*0.87,ch*0.38,cw*0.09,Math.PI,0);
-  cc.lineTo(cw*0.96,ch*0.52); cc.lineTo(cw*0.78,ch*0.52);
-  cc.closePath(); cc.fill();
-  cc.fillStyle='rgba(255,140,30,0.5)';
-  cc.beginPath(); cc.arc(cw*0.87,ch*0.41,cw*0.06,0,Math.PI*2); cc.fill();
-
-  // Window left with night sky
-  const wx=cw*0.1, wy=ch*0.06, ww=cw*0.14, wh=ch*0.22;
-  cc.fillStyle='#040810'; cc.fillRect(wx,wy,ww,wh);
-  cc.strokeStyle='#3a2510'; cc.lineWidth=3; cc.strokeRect(wx,wy,ww,wh);
-  cc.beginPath();
-  cc.moveTo(wx,wy+wh/2); cc.lineTo(wx+ww,wy+wh/2);
-  cc.moveTo(wx+ww/2,wy); cc.lineTo(wx+ww/2,wy+wh);
-  cc.stroke();
-  cc.fillStyle='#b0b8d8';
-  [[0.12,0.09],[0.15,0.14],[0.21,0.07],[0.18,0.22],[0.23,0.17]].forEach(([sx,sy])=>{
-    cc.beginPath(); cc.arc(cw*sx,ch*sy,1,0,Math.PI*2); cc.fill();
+  // ── WINDOW (left) ─────────────────────────────────
+  const wx=Math.round(cw*0.055), wy=Math.round(ch*0.07);
+  const ww=Math.round(cw*0.13), wh=Math.round(ch*0.27);
+  // Outer frame stone surround
+  cc.fillStyle='#221a10';
+  cc.fillRect(wx-5,wy-5,ww+10,wh+10);
+  // Night sky
+  cc.fillStyle='#04081a';
+  cc.fillRect(wx,wy,ww,wh);
+  // Stars
+  cc.fillStyle='#c8d0ee';
+  [[0.07,0.10],[0.10,0.16],[0.16,0.09],[0.13,0.24],[0.17,0.19],[0.09,0.28]].forEach(([rx,ry])=>{
+    const sx=wx+ww*rx/0.2, sy=wy+wh*ry/0.35;
+    if(sx>wx&&sx<wx+ww&&sy>wy&&sy<wy+wh){cc.beginPath();cc.arc(sx,sy,0.8,0,Math.PI*2);cc.fill();}
   });
-  // Moon
-  cc.fillStyle='#c0c8e0';
-  cc.beginPath(); cc.arc(cw*0.2,ch*0.12,5,0,Math.PI*2); cc.fill();
+  cc.fillStyle='#d8e0f8'; cc.beginPath(); cc.arc(wx+ww*0.7,wy+wh*0.25,ww*0.14,0,Math.PI*2); cc.fill();
+  cc.fillStyle='#c8d0ec'; cc.beginPath(); cc.arc(wx+ww*0.75,wy+wh*0.2,ww*0.06,0,Math.PI*2); cc.fill();
+  // Window bars
+  cc.strokeStyle='#2a1a0c'; cc.lineWidth=3;
+  cc.beginPath();
+  cc.moveTo(wx,wy+wh*0.5); cc.lineTo(wx+ww,wy+wh*0.5);
+  cc.moveTo(wx+ww*0.5,wy); cc.lineTo(wx+ww*0.5,wy+wh);
+  cc.stroke();
+  cc.strokeStyle='#3a2a14'; cc.lineWidth=2; cc.strokeRect(wx,wy,ww,wh);
 
-  // Shelves on back wall
-  const shelfX=cw*0.22, shelfW=cw*0.56;
-  cc.fillStyle='#3a2010';
-  [ch*0.09, ch*0.20, ch*0.31].forEach(sy=>{
-    cc.fillRect(shelfX,sy,shelfW,4);
-    const vcols=['#00eeff','#ff4400','#aa00ff','#00ff88','#ffaa00','#ff0066'];
+  // ── FIREPLACE (right) ─────────────────────────────
+  const fpx=Math.round(cw*0.885), fpy=Math.round(ch*0.55);
+  const fpw=Math.round(cw*0.1), fph=Math.round(ch*0.3);
+  // Mantelpiece
+  cc.fillStyle='#2a2015'; cc.fillRect(fpx-fpw*1.3,fpy-fph-4,fpw*2.6,8);
+  cc.fillStyle='#1e1a10'; cc.fillRect(fpx-fpw*1.1,fpy-fph+4,fpw*2.2,4);
+  // Stone arch opening
+  cc.fillStyle='#1a1610';
+  cc.beginPath();
+  cc.moveTo(fpx-fpw,fpy);
+  cc.lineTo(fpx-fpw,fpy-fph*0.6);
+  cc.arc(fpx,fpy-fph*0.6,fpw,Math.PI,0);
+  cc.lineTo(fpx+fpw,fpy);
+  cc.closePath(); cc.fill();
+  // Dark firebox
+  cc.fillStyle='#090705';
+  cc.beginPath();
+  cc.moveTo(fpx-fpw*0.82,fpy);
+  cc.lineTo(fpx-fpw*0.82,fpy-fph*0.52);
+  cc.arc(fpx,fpy-fph*0.52,fpw*0.82,Math.PI,0);
+  cc.lineTo(fpx+fpw*0.82,fpy);
+  cc.closePath(); cc.fill();
+  // Embers/glow at base
+  const embGl=cc.createRadialGradient(fpx,fpy-8,0,fpx,fpy-8,fpw*0.7);
+  embGl.addColorStop(0,'rgba(255,160,40,0.9)'); embGl.addColorStop(0.4,'rgba(255,80,10,0.5)'); embGl.addColorStop(1,'rgba(0,0,0,0)');
+  cc.fillStyle=embGl; cc.fillRect(fpx-fpw,fpy-fpw,fpw*2,fpw);
+  // Flames — three layered teardrop shapes
+  [['rgba(255,200,50,0.85)',0.55],['rgba(255,120,20,0.7)',0.72],['rgba(255,240,120,0.9)',0.38]].forEach(([col,hw],i)=>{
+    const flx=fpx+(i-1)*fpw*0.2, flyBase=fpy, flyTip=fpy-fph*(0.38+i*0.06);
+    cc.fillStyle=col;
+    cc.beginPath();
+    cc.moveTo(flx-fpw*hw*0.5,flyBase);
+    cc.bezierCurveTo(flx-fpw*hw*0.55,flyBase-fph*0.2,flx-fpw*hw*0.2,flyTip+fph*0.1,flx,flyTip);
+    cc.bezierCurveTo(flx+fpw*hw*0.2,flyTip+fph*0.1,flx+fpw*hw*0.55,flyBase-fph*0.2,flx+fpw*hw*0.5,flyBase);
+    cc.closePath(); cc.fill();
+  });
+
+  // ── SHELF UNIT (behind shopkeeper) ────────────────
+  const shX=Math.round(cw*0.2), shW=Math.round(cw*0.6);
+  // Shelf backing board
+  cc.fillStyle='#1c1208'; cc.fillRect(shX-2,0,shW+4,ch*0.5);
+  // Three shelves
+  const shYs=[ch*0.1,ch*0.22,ch*0.34];
+  const vcols=['#00eeff','#ff4422','#aa00ff','#00ff88','#ffaa00','#ff1166'];
+  shYs.forEach((sy,row)=>{
+    // Shelf board with depth
+    cc.fillStyle='#4a2e14'; cc.fillRect(shX-4,sy,shW+8,6);
+    cc.fillStyle='#3a2210'; cc.fillRect(shX-4,sy+6,shW+8,3);
+    cc.fillStyle='#5a3818'; cc.fillRect(shX-4,sy,shW+8,2);
+    // Six vials per shelf
     for(let j=0;j<6;j++){
-      const vx=shelfX+12+j*(shelfW/6), vy=sy-20, vc=vcols[j];
-      const vg=cc.createRadialGradient(vx+3,vy+9,0,vx+3,vy+9,14);
-      vg.addColorStop(0,vc+'55'); vg.addColorStop(1,'transparent');
-      cc.fillStyle=vg; cc.fillRect(vx-10,vy-8,24,30);
-      cc.fillStyle='#151520'; cc.fillRect(vx,vy+5,6,13);
-      cc.fillStyle=vc+'cc'; cc.fillRect(vx+1,vy+8,4,9);
-      cc.fillStyle='#5a3a18'; cc.fillRect(vx+1,vy+2,4,4);
+      const vx=shX+Math.round(j*(shW-20)/5)+10, vy=sy-24, vc=vcols[(j+row*2)%6];
+      // Glow halo
+      const vglow=cc.createRadialGradient(vx,vy+8,0,vx,vy+8,18);
+      vglow.addColorStop(0,vc+'44'); vglow.addColorStop(1,'transparent');
+      cc.fillStyle=vglow; cc.fillRect(vx-16,vy-6,32,36);
+      // Bottle — dark glass body (rounded with bezier)
+      cc.fillStyle='#0e0e1c';
+      cc.beginPath();
+      cc.moveTo(vx-4,vy+16); // bottom-left
+      cc.bezierCurveTo(vx-5,vy+19,vx+5,vy+19,vx+4,vy+16); // rounded bottom
+      cc.lineTo(vx+4,vy+6); // right side
+      cc.lineTo(vx+2,vy+3); // shoulder
+      cc.lineTo(vx+2,vy); // neck
+      cc.lineTo(vx-2,vy);
+      cc.lineTo(vx-2,vy+3);
+      cc.lineTo(vx-4,vy+6);
+      cc.closePath(); cc.fill();
+      // Colored liquid
+      cc.fillStyle=vc+'d0';
+      cc.beginPath();
+      cc.moveTo(vx-3,vy+15); cc.bezierCurveTo(vx-4,vy+18,vx+4,vy+18,vx+3,vy+15);
+      cc.lineTo(vx+3,vy+8); cc.lineTo(vx-3,vy+8); cc.closePath(); cc.fill();
+      // Bottle highlight (left edge shine)
+      cc.fillStyle='rgba(255,255,255,0.2)';
+      cc.fillRect(vx-4,vy+7,1.5,8);
+      // Cork
+      cc.fillStyle='#8a6030'; cc.fillRect(vx-2,vy-3,4,4);
+      cc.fillStyle='#6a4820'; cc.fillRect(vx-1,vy-3,1,4);
     }
   });
 
-  // Counter trapezoid (foreground)
-  cc.fillStyle='#1e0e06';
+  // ── COUNTER (foreground perspective) ──────────────
+  const ctrTop=ch*0.535;
+  // Counter face
+  const ctrGrad=cc.createLinearGradient(0,ctrTop,0,ch);
+  ctrGrad.addColorStop(0,'#2e1a0a'); ctrGrad.addColorStop(1,'#180e05');
+  cc.fillStyle=ctrGrad;
   cc.beginPath();
-  cc.moveTo(-10,ch); cc.lineTo(cw+10,ch);
-  cc.lineTo(cw*0.73,ch*0.57); cc.lineTo(cw*0.27,ch*0.57);
+  cc.moveTo(0,ch); cc.lineTo(cw,ch);
+  cc.lineTo(cw*0.76,ctrTop); cc.lineTo(cw*0.24,ctrTop);
   cc.closePath(); cc.fill();
-  cc.strokeStyle='#3a1e0a'; cc.lineWidth=2; cc.stroke();
-  cc.fillStyle='#2a1508';
+  // Wood grain lines on counter face
+  cc.strokeStyle='rgba(0,0,0,0.3)'; cc.lineWidth=1;
+  for(let g=1;g<5;g++){
+    const gy=ctrTop+g*(ch-ctrTop)/5;
+    const xl=cw*0.24+(cw*0.24)*(gy-ctrTop)/(ch-ctrTop);
+    cc.beginPath(); cc.moveTo(xl,gy); cc.lineTo(cw-xl,gy); cc.stroke();
+  }
+  // Counter top surface
+  cc.fillStyle='#3e2614';
   cc.beginPath();
-  cc.moveTo(cw*0.24,ch*0.51); cc.lineTo(cw*0.76,ch*0.51);
-  cc.lineTo(cw*0.73,ch*0.57); cc.lineTo(cw*0.27,ch*0.57);
+  cc.moveTo(cw*0.21,ctrTop-9); cc.lineTo(cw*0.79,ctrTop-9);
+  cc.lineTo(cw*0.76,ctrTop+4); cc.lineTo(cw*0.24,ctrTop+4);
+  cc.closePath(); cc.fill();
+  // Top edge highlight
+  cc.fillStyle='#5a3820';
+  cc.beginPath();
+  cc.moveTo(cw*0.21,ctrTop-9); cc.lineTo(cw*0.79,ctrTop-9);
+  cc.lineTo(cw*0.79,ctrTop-7); cc.lineTo(cw*0.21,ctrTop-7);
   cc.closePath(); cc.fill();
 
-  // Shopkeeper silhouette behind counter
-  const kx=cw/2, ky=ch*0.43;
-  const bd=cc.createLinearGradient(kx,ky-90,kx,ky);
-  bd.addColorStop(0,'#181018'); bd.addColorStop(1,'#0c080c');
-  cc.fillStyle=bd;
+  // ── LANTERN ───────────────────────────────────────
+  const lnx=cx-cw*0.14, lny=ctrTop-22;
+  const lnGlow=cc.createRadialGradient(lnx,lny,0,lnx,lny,50);
+  lnGlow.addColorStop(0,'rgba(255,200,60,0.7)'); lnGlow.addColorStop(0.4,'rgba(255,120,20,0.3)'); lnGlow.addColorStop(1,'rgba(0,0,0,0)');
+  cc.fillStyle=lnGlow; cc.fillRect(lnx-50,lny-50,100,80);
+  // Lantern frame
+  cc.fillStyle='#221408'; cc.strokeStyle='#4a3010'; cc.lineWidth=1.5;
+  cc.fillRect(lnx-8,lny-22,16,24); cc.strokeRect(lnx-8,lny-22,16,24);
+  // Glass
+  cc.fillStyle='rgba(255,200,70,0.45)'; cc.fillRect(lnx-6,lny-20,12,19);
+  // Flame
+  cc.fillStyle='rgba(255,240,100,0.9)';
   cc.beginPath();
-  cc.moveTo(kx-32,ch*0.57); cc.lineTo(kx+32,ch*0.57);
-  cc.lineTo(kx+22,ky-15); cc.lineTo(kx,ky-90); cc.lineTo(kx-22,ky-15);
-  cc.closePath(); cc.fill();
-  // Hood
-  cc.fillStyle='#140c14';
+  cc.moveTo(lnx,lny-18);
+  cc.bezierCurveTo(lnx-3,lny-12,lnx-2,lny-6,lnx,lny-4);
+  cc.bezierCurveTo(lnx+2,lny-6,lnx+3,lny-12,lnx,lny-18);
+  cc.fill();
+  // Base & hook
+  cc.fillStyle='#2e1c08'; cc.fillRect(lnx-9,lny+2,18,4); cc.strokeRect(lnx-9,lny+2,18,4);
+  cc.strokeStyle='#4a3010'; cc.lineWidth=1.5;
+  cc.beginPath(); cc.moveTo(lnx,lny-22); cc.lineTo(lnx,lny-28); cc.stroke();
+
+  // ── SHOPKEEPER (Mira) ─────────────────────────────
+  const kx=cx+cw*0.02;                   // slightly right of center
+  const headCY=ch*0.35;                  // head center Y
+  const hw=cw*0.075;                     // half-head width
+  const hh=hw*1.28;                      // head height (taller than wide)
+  const bodyBot=ctrTop+2;
+  const bodyTop=headCY+hh*0.6;
+
+  // Robe body (trapezoid getting wider at bottom)
+  const rg=cc.createLinearGradient(kx-hw*2,0,kx+hw*2,0);
+  rg.addColorStop(0,'#16102a'); rg.addColorStop(0.5,'#1e1535'); rg.addColorStop(1,'#120e22');
+  cc.fillStyle=rg;
   cc.beginPath();
-  cc.arc(kx,ky-72,24,Math.PI,0);
-  cc.lineTo(kx+20,ky-32); cc.lineTo(kx-20,ky-32);
+  cc.moveTo(kx-hw*2.1,bodyBot); cc.lineTo(kx+hw*2.1,bodyBot);
+  cc.lineTo(kx+hw*1.1,bodyTop); cc.lineTo(kx,bodyTop-hh*0.1);
+  cc.lineTo(kx-hw*1.1,bodyTop);
   cc.closePath(); cc.fill();
-  // Face shadow
-  cc.fillStyle='#080408';
-  cc.beginPath(); cc.ellipse(kx,ky-60,14,11,0,0,Math.PI*2); cc.fill();
-  // Glowing amber eyes
-  [-7,7].forEach(ex=>{
-    const eg=cc.createRadialGradient(kx+ex,ky-62,0,kx+ex,ky-62,6);
-    eg.addColorStop(0,'rgba(245,166,35,0.95)');
-    eg.addColorStop(0.6,'rgba(245,166,35,0.5)');
-    eg.addColorStop(1,'transparent');
-    cc.fillStyle=eg;
-    cc.beginPath(); cc.arc(kx+ex,ky-62,6,0,Math.PI*2); cc.fill();
-    cc.fillStyle='#f5a623';
-    cc.beginPath(); cc.arc(kx+ex,ky-62,2,0,Math.PI*2); cc.fill();
+  // Robe center fold line
+  cc.strokeStyle='#281e40'; cc.lineWidth=1.5;
+  cc.beginPath(); cc.moveTo(kx,bodyTop+4); cc.lineTo(kx,bodyBot); cc.stroke();
+  // Robe clasp buttons
+  cc.fillStyle='#5a4878';
+  for(let i=0;i<4;i++){
+    const by2=bodyTop+10+i*14;
+    cc.beginPath(); cc.arc(kx,by2,2.5,0,Math.PI*2); cc.fill();
+    cc.fillStyle='#7a68a8'; cc.beginPath(); cc.arc(kx,by2,1.2,0,Math.PI*2); cc.fill();
+    cc.fillStyle='#5a4878';
+  }
+  // Collar V-shape
+  cc.fillStyle='#2e2240';
+  cc.beginPath();
+  cc.moveTo(kx-hw*0.7,bodyTop+4); cc.lineTo(kx,bodyTop+hh*0.35);
+  cc.lineTo(kx+hw*0.7,bodyTop+4);
+  cc.lineTo(kx+hw*0.5,bodyTop); cc.lineTo(kx,bodyTop+hh*0.2);
+  cc.lineTo(kx-hw*0.5,bodyTop); cc.closePath(); cc.fill();
+  // Shoulders
+  cc.fillStyle='#1c163a';
+  cc.beginPath(); cc.ellipse(kx-hw*1.1,bodyTop+6,hw*0.7,hw*0.3,-0.15,0,Math.PI*2); cc.fill();
+  cc.beginPath(); cc.ellipse(kx+hw*1.1,bodyTop+6,hw*0.7,hw*0.3,0.15,0,Math.PI*2); cc.fill();
+  cc.fillStyle='#26203e';
+  cc.beginPath(); cc.ellipse(kx-hw*1.0,bodyTop+3,hw*0.45,hw*0.14,-0.15,Math.PI,0); cc.fill();
+  cc.beginPath(); cc.ellipse(kx+hw*1.0,bodyTop+3,hw*0.45,hw*0.14,0.15,Math.PI,0); cc.fill();
+  // Forearms on counter
+  cc.fillStyle='#1c1630';
+  cc.beginPath();
+  cc.moveTo(kx-hw*2.0,bodyBot); cc.lineTo(kx-hw*0.9,bodyTop+10);
+  cc.lineTo(kx-hw*0.6,bodyTop+14); cc.lineTo(kx-hw*1.4,bodyBot);
+  cc.closePath(); cc.fill();
+  cc.beginPath();
+  cc.moveTo(kx+hw*2.0,bodyBot); cc.lineTo(kx+hw*0.9,bodyTop+10);
+  cc.lineTo(kx+hw*0.6,bodyTop+14); cc.lineTo(kx+hw*1.4,bodyBot);
+  cc.closePath(); cc.fill();
+  // Hands (simplified: rounded palm + finger bumps)
+  [[-1,1],[1,-1]].forEach(([s,_])=>{
+    const hx2=kx+s*hw*1.65, hy2=ctrTop-5;
+    cc.fillStyle='#7a4e30';
+    cc.beginPath(); cc.ellipse(hx2,hy2,hw*0.34,hw*0.2,s*0.1,0,Math.PI*2); cc.fill();
+    // Finger bumps
+    cc.fillStyle='#6a4228';
+    for(let f=-1;f<=1;f++){
+      cc.beginPath(); cc.arc(hx2+f*hw*0.1-s*hw*0.02,hy2-hw*0.13,hw*0.08,Math.PI,0); cc.fill();
+    }
   });
-  // Hands resting on counter
-  cc.fillStyle='#1a1018';
-  cc.beginPath(); cc.ellipse(kx-22,ch*0.545,13,6,0.1,0,Math.PI*2); cc.fill();
-  cc.beginPath(); cc.ellipse(kx+22,ch*0.545,13,6,-0.1,0,Math.PI*2); cc.fill();
+  // Neck
+  cc.fillStyle='#7a4e30';
+  cc.fillRect(kx-hw*0.22,bodyTop-hh*0.12,hw*0.44,hh*0.14);
 
-  // Lantern on counter (left side)
-  const lx=kx-65, ly=ch*0.52;
-  const lg2=cc.createRadialGradient(lx,ly,0,lx,ly,35);
-  lg2.addColorStop(0,'rgba(255,185,45,0.55)'); lg2.addColorStop(1,'rgba(255,90,0,0)');
-  cc.fillStyle=lg2; cc.fillRect(lx-35,ly-35,70,70);
-  cc.fillStyle='#2a1a08'; cc.fillRect(lx-5,ly-14,10,16);
-  cc.fillStyle='rgba(255,210,70,0.85)'; cc.fillRect(lx-3,ly-11,6,11);
-  cc.strokeStyle='#3a2a10'; cc.lineWidth=1; cc.strokeRect(lx-5,ly-14,10,16);
+  // ── FACE (the important part) ──────────────────────
+  // Head base — warm olive-tan skin
+  const skinG=cc.createRadialGradient(kx-hw*0.1,headCY-hh*0.05,0,kx,headCY,hw*1.2);
+  skinG.addColorStop(0,'#c49460'); skinG.addColorStop(0.55,'#a87840'); skinG.addColorStop(1,'#7a5025');
+  cc.fillStyle=skinG;
+  cc.beginPath();
+  cc.moveTo(kx,headCY-hh);
+  cc.bezierCurveTo(kx+hw*0.9,headCY-hh,kx+hw,headCY-hh*0.2,kx+hw*0.75,headCY+hh*0.45);
+  cc.bezierCurveTo(kx+hw*0.5,headCY+hh*0.8,kx-hw*0.5,headCY+hh*0.8,kx-hw*0.75,headCY+hh*0.45);
+  cc.bezierCurveTo(kx-hw,headCY-hh*0.2,kx-hw*0.9,headCY-hh,kx,headCY-hh);
+  cc.closePath(); cc.fill();
 
-  // Dark vignette
-  const vig=cc.createRadialGradient(cw/2,ch*0.5,ch*0.15,cw/2,ch*0.5,ch*0.95);
-  vig.addColorStop(0,'transparent'); vig.addColorStop(1,'rgba(0,0,0,0.78)');
+  // Facial plane shading (sides darker, center lit by lantern)
+  cc.fillStyle='rgba(50,20,5,0.38)';
+  cc.beginPath(); cc.ellipse(kx-hw*0.62,headCY,hw*0.38,hh*0.5,0.2,0,Math.PI*2); cc.fill();
+  cc.beginPath(); cc.ellipse(kx+hw*0.62,headCY,hw*0.38,hh*0.5,-0.2,0,Math.PI*2); cc.fill();
+  cc.fillStyle='rgba(30,10,0,0.3)';
+  cc.beginPath(); cc.ellipse(kx,headCY-hh*0.35,hw*0.6,hh*0.28,0,0,Math.PI*2); cc.fill();
+
+  // Ears
+  cc.fillStyle='#b07838';
+  cc.beginPath(); cc.ellipse(kx-hw*0.96,headCY-hh*0.05,hw*0.16,hh*0.22,0.1,0,Math.PI*2); cc.fill();
+  cc.beginPath(); cc.ellipse(kx+hw*0.96,headCY-hh*0.05,hw*0.16,hh*0.22,-0.1,0,Math.PI*2); cc.fill();
+  cc.fillStyle='#8a5825';
+  cc.beginPath(); cc.ellipse(kx-hw*0.95,headCY-hh*0.03,hw*0.09,hh*0.13,0.1,0,Math.PI*2); cc.fill();
+  cc.beginPath(); cc.ellipse(kx+hw*0.95,headCY-hh*0.03,hw*0.09,hh*0.13,-0.1,0,Math.PI*2); cc.fill();
+
+  // Eyes
+  const eyeY=headCY-hh*0.06;
+  const eyeSep=hw*0.44;
+  [-1,1].forEach(side=>{
+    const ex2=kx+side*eyeSep;
+    // Socket shadow
+    cc.fillStyle='rgba(40,12,2,0.5)';
+    cc.beginPath(); cc.ellipse(ex2,eyeY,hw*0.28,hh*0.18,0,0,Math.PI*2); cc.fill();
+    // Sclera (eye white, slightly cream)
+    cc.fillStyle='#d8c8a0';
+    cc.beginPath(); cc.ellipse(ex2,eyeY,hw*0.22,hh*0.13,0,0,Math.PI*2); cc.fill();
+    // Iris — amber radial gradient
+    const irisG=cc.createRadialGradient(ex2,eyeY,0,ex2,eyeY,hw*0.15);
+    irisG.addColorStop(0,'#f5c040'); irisG.addColorStop(0.5,'#c88025'); irisG.addColorStop(1,'#7a4800');
+    cc.fillStyle=irisG;
+    cc.beginPath(); cc.ellipse(ex2,eyeY,hw*0.15,hh*0.115,0,0,Math.PI*2); cc.fill();
+    // Pupil
+    cc.fillStyle='#080404';
+    cc.beginPath(); cc.ellipse(ex2+side*hw*0.015,eyeY+hh*0.01,hw*0.07,hh*0.07,0,0,Math.PI*2); cc.fill();
+    // Catchlight
+    cc.fillStyle='rgba(255,250,220,0.8)';
+    cc.beginPath(); cc.arc(ex2+hw*0.05,eyeY-hh*0.04,hw*0.04,0,Math.PI*2); cc.fill();
+    // Upper eyelid shadow
+    cc.fillStyle='rgba(50,18,2,0.55)';
+    cc.beginPath();
+    cc.moveTo(ex2-hw*0.25,eyeY-hh*0.04);
+    cc.bezierCurveTo(ex2-hw*0.1,eyeY-hh*0.15,ex2+hw*0.1,eyeY-hh*0.15,ex2+hw*0.25,eyeY-hh*0.04);
+    cc.bezierCurveTo(ex2+hw*0.1,eyeY-hh*0.08,ex2-hw*0.1,eyeY-hh*0.08,ex2-hw*0.25,eyeY-hh*0.04);
+    cc.closePath(); cc.fill();
+    // Eyelid crease line
+    cc.strokeStyle='rgba(60,20,3,0.65)'; cc.lineWidth=1;
+    cc.beginPath();
+    cc.moveTo(ex2-hw*0.25,eyeY-hh*0.06);
+    cc.bezierCurveTo(ex2-hw*0.08,eyeY-hh*0.17,ex2+hw*0.08,eyeY-hh*0.17,ex2+hw*0.25,eyeY-hh*0.06);
+    cc.stroke();
+    // Lower lid thin line
+    cc.strokeStyle='rgba(80,30,5,0.35)'; cc.lineWidth=0.8;
+    cc.beginPath();
+    cc.moveTo(ex2-hw*0.22,eyeY+hh*0.08);
+    cc.bezierCurveTo(ex2-hw*0.06,eyeY+hh*0.14,ex2+hw*0.06,eyeY+hh*0.14,ex2+hw*0.22,eyeY+hh*0.08);
+    cc.stroke();
+    // Eyebrow (arched, slightly raised outer edge, slightly skeptical)
+    cc.fillStyle='#3a2210';
+    cc.beginPath();
+    cc.moveTo(ex2-hw*0.28,eyeY-hh*0.27+side*hh*0.04);
+    cc.bezierCurveTo(ex2-hw*0.12,eyeY-hh*0.35,ex2+hw*0.12,eyeY-hh*0.33,ex2+hw*0.26,eyeY-hh*0.24+side*hh*0.02);
+    cc.bezierCurveTo(ex2+hw*0.12,eyeY-hh*0.26,ex2-hw*0.12,eyeY-hh*0.28,ex2-hw*0.28,eyeY-hh*0.22+side*hh*0.04);
+    cc.closePath(); cc.fill();
+    // Brow hair texture (subtle dark strokes)
+    cc.strokeStyle='rgba(30,12,2,0.5)'; cc.lineWidth=0.7;
+    for(let h=0;h<4;h++){
+      cc.beginPath();
+      cc.moveTo(ex2-hw*0.2+h*hw*0.13,eyeY-hh*0.27+side*hh*0.04);
+      cc.lineTo(ex2-hw*0.22+h*hw*0.13,eyeY-hh*0.22+side*hh*0.04);
+      cc.stroke();
+    }
+  });
+
+  // Nose bridge and nostrils
+  const noseY=headCY+hh*0.09;
+  // Bridge shadow (thin line down center)
+  cc.strokeStyle='rgba(70,25,5,0.4)'; cc.lineWidth=1;
+  cc.beginPath(); cc.moveTo(kx,eyeY+hh*0.12); cc.lineTo(kx,noseY+hh*0.1); cc.stroke();
+  // Nostrils
+  cc.fillStyle='rgba(55,18,3,0.55)';
+  cc.beginPath(); cc.ellipse(kx-hw*0.14,noseY+hh*0.12,hw*0.1,hh*0.065,0.35,0,Math.PI*2); cc.fill();
+  cc.beginPath(); cc.ellipse(kx+hw*0.14,noseY+hh*0.12,hw*0.1,hh*0.065,-0.35,0,Math.PI*2); cc.fill();
+  // Nose tip (subtle highlight)
+  cc.fillStyle='rgba(200,140,60,0.25)';
+  cc.beginPath(); cc.ellipse(kx,noseY+hh*0.08,hw*0.12,hh*0.07,0,0,Math.PI*2); cc.fill();
+
+  // Mouth and subtle smile
+  const mouthY=headCY+hh*0.38;
+  // Upper lip M-curve
+  cc.fillStyle='#9a5838';
+  cc.beginPath();
+  cc.moveTo(kx-hw*0.32,mouthY);
+  cc.bezierCurveTo(kx-hw*0.18,mouthY-hh*0.07,kx-hw*0.06,mouthY-hh*0.05,kx,mouthY-hh*0.02);
+  cc.bezierCurveTo(kx+hw*0.06,mouthY-hh*0.05,kx+hw*0.18,mouthY-hh*0.07,kx+hw*0.32,mouthY);
+  cc.bezierCurveTo(kx+hw*0.18,mouthY+hh*0.04,kx-hw*0.18,mouthY+hh*0.04,kx-hw*0.32,mouthY);
+  cc.closePath(); cc.fill();
+  // Lower lip (fuller)
+  cc.fillStyle='#8a4c30';
+  cc.beginPath();
+  cc.moveTo(kx-hw*0.3,mouthY+hh*0.03);
+  cc.bezierCurveTo(kx-hw*0.12,mouthY+hh*0.12,kx+hw*0.12,mouthY+hh*0.12,kx+hw*0.3,mouthY+hh*0.03);
+  cc.bezierCurveTo(kx+hw*0.18,mouthY+hh*0.15,kx-hw*0.18,mouthY+hh*0.15,kx-hw*0.3,mouthY+hh*0.03);
+  cc.closePath(); cc.fill();
+  // Mouth crease / knowing smirk (slightly asymmetric)
+  cc.strokeStyle='rgba(60,20,5,0.7)'; cc.lineWidth=1.2;
+  cc.beginPath();
+  cc.moveTo(kx-hw*0.32,mouthY);
+  cc.bezierCurveTo(kx-hw*0.1,mouthY+hh*0.05,kx+hw*0.15,mouthY+hh*0.07,kx+hw*0.34,mouthY-hh*0.01);
+  cc.stroke();
+  // Smirk corner deepening (right side more)
+  cc.fillStyle='rgba(50,15,3,0.45)';
+  cc.beginPath(); cc.ellipse(kx+hw*0.32,mouthY,hw*0.06,hh*0.035,0.4,0,Math.PI*2); cc.fill();
+  // Laugh lines (nasolabial folds)
+  cc.strokeStyle='rgba(60,20,5,0.28)'; cc.lineWidth=1;
+  [-1,1].forEach(s=>{
+    cc.beginPath();
+    cc.moveTo(kx+s*hw*0.24,mouthY-hh*0.04);
+    cc.bezierCurveTo(kx+s*hw*0.32,headCY+hh*0.08,kx+s*hw*0.28,headCY-hh*0.05,kx+s*hw*0.22,headCY-hh*0.1);
+    cc.stroke();
+  });
+  // Forehead concern crease
+  cc.strokeStyle='rgba(55,18,3,0.25)'; cc.lineWidth=0.8;
+  cc.beginPath();
+  cc.moveTo(kx-hw*0.3,headCY-hh*0.44);
+  cc.bezierCurveTo(kx,headCY-hh*0.5,kx+hw*0.3,headCY-hh*0.44,kx+hw*0.38,headCY-hh*0.38);
+  cc.stroke();
+
+  // ── HOOD ──────────────────────────────────────────
+  // Main hood drape (goes around and behind head)
+  cc.fillStyle='#18102a';
+  cc.beginPath();
+  cc.moveTo(kx-hw*1.3,ch*0.57);
+  cc.lineTo(kx-hw*1.4,bodyTop+8);
+  cc.bezierCurveTo(kx-hw*1.6,headCY+hh*0.4,kx-hw*1.2,headCY-hh*1.0,kx,headCY-hh*1.15);
+  cc.bezierCurveTo(kx+hw*1.2,headCY-hh*1.0,kx+hw*1.6,headCY+hh*0.4,kx+hw*1.4,bodyTop+8);
+  cc.lineTo(kx+hw*1.3,ch*0.57);
+  cc.closePath(); cc.fill();
+  // Hood rim (the opening frame around face)
+  cc.strokeStyle='#281e3c'; cc.lineWidth=2;
+  cc.beginPath();
+  cc.moveTo(kx-hw*1.0,bodyTop+5);
+  cc.bezierCurveTo(kx-hw*1.15,headCY+hh*0.3,kx-hw*1.1,headCY-hh*0.85,kx,headCY-hh*1.0);
+  cc.bezierCurveTo(kx+hw*1.1,headCY-hh*0.85,kx+hw*1.15,headCY+hh*0.3,kx+hw*1.0,bodyTop+5);
+  cc.stroke();
+  // Hood fold highlights (cloth creases)
+  cc.strokeStyle='#22183a'; cc.lineWidth=1.5;
+  cc.beginPath();
+  cc.moveTo(kx-hw*0.8,headCY-hh*0.88);
+  cc.bezierCurveTo(kx-hw*0.95,headCY-hh*0.5,kx-hw*0.9,headCY+hh*0.1,kx-hw*0.85,bodyTop+6);
+  cc.stroke();
+  cc.beginPath();
+  cc.moveTo(kx+hw*0.7,headCY-hh*0.85);
+  cc.bezierCurveTo(kx+hw*0.88,headCY-hh*0.48,kx+hw*0.85,headCY+hh*0.12,kx+hw*0.82,bodyTop+6);
+  cc.stroke();
+  // Wispy silver-white hair at temples
+  cc.strokeStyle='rgba(200,200,220,0.7)'; cc.lineWidth=1;
+  cc.beginPath();
+  cc.moveTo(kx-hw*0.88,headCY-hh*0.18);
+  cc.bezierCurveTo(kx-hw*0.72,headCY-hh*0.32,kx-hw*0.55,headCY-hh*0.28,kx-hw*0.45,headCY-hh*0.18);
+  cc.stroke();
+  cc.strokeStyle='rgba(180,180,200,0.5)'; cc.lineWidth=0.8;
+  cc.beginPath();
+  cc.moveTo(kx-hw*0.85,headCY-hh*0.06);
+  cc.bezierCurveTo(kx-hw*0.68,headCY-hh*0.15,kx-hw*0.52,headCY-hh*0.11,kx-hw*0.44,headCY-hh*0.05);
+  cc.stroke();
+
+  // ── LIGHTING OVERLAY ──────────────────────────────
+  // Warm fireplace rim on right side of figure
+  const fireRim=cc.createLinearGradient(cx,0,cw,0);
+  fireRim.addColorStop(0,'rgba(0,0,0,0)'); fireRim.addColorStop(1,'rgba(255,100,20,0.14)');
+  cc.fillStyle=fireRim; cc.fillRect(0,0,cw,ch);
+  // Cool moonlight from left
+  const moonRim=cc.createLinearGradient(0,0,cw*0.3,0);
+  moonRim.addColorStop(0,'rgba(80,100,180,0.1)'); moonRim.addColorStop(1,'rgba(0,0,0,0)');
+  cc.fillStyle=moonRim; cc.fillRect(0,0,cw,ch);
+  // Deep corner vignette
+  const vig=cc.createRadialGradient(cx,ch*0.44,ch*0.08,cx,ch*0.44,ch*1.1);
+  vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(0.6,'rgba(0,0,0,0.25)'); vig.addColorStop(1,'rgba(0,0,0,0.9)');
   cc.fillStyle=vig; cc.fillRect(0,0,cw,ch);
+  // Dust motes (atmospheric)
+  cc.fillStyle='rgba(255,220,150,0.18)';
+  for(let m=0;m<18;m++){
+    const mx=(Math.sin(m*2.3)*0.5+0.5)*cw;
+    const my=(Math.cos(m*1.8+0.7)*0.5+0.5)*ch*0.52;
+    cc.beginPath(); cc.arc(mx,my,0.7,0,Math.PI*2); cc.fill();
+  }
 
-  // Shopkeeper portrait
   drawSkPortrait();
 }
 
 function drawSkPortrait(){
   const cnv=document.getElementById('sk-portrait');
-  const cc=cnv.getContext('2d');
-  const cw=52, ch=52;
-  cc.fillStyle='#0c0608'; cc.fillRect(0,0,cw,ch);
+  if(!cnv) return;
+  const pc=cnv.getContext('2d');
+  const pw=44, ph2=44;
+  pc.fillStyle='#0c0608'; pc.fillRect(0,0,pw,ph2);
+  const hcx=pw/2, hcy=ph2*0.44, hr=pw*0.28, hh2=hr*1.25;
   // Hood
-  cc.fillStyle='#180c18';
-  cc.beginPath(); cc.arc(cw/2,ch/2-2,18,Math.PI,0);
-  cc.lineTo(cw/2+14,ch/2+12); cc.lineTo(cw/2-14,ch/2+12);
-  cc.closePath(); cc.fill();
-  // Face
-  cc.fillStyle='#080408';
-  cc.beginPath(); cc.ellipse(cw/2,ch/2+2,10,8,0,0,Math.PI*2); cc.fill();
+  pc.fillStyle='#18102a';
+  pc.beginPath();
+  pc.moveTo(hcx-pw*0.42,ph2);
+  pc.bezierCurveTo(hcx-pw*0.5,hcy+hh2*0.35,hcx-pw*0.48,hcy-hh2*0.95,hcx,hcy-hh2*1.0);
+  pc.bezierCurveTo(hcx+pw*0.48,hcy-hh2*0.95,hcx+pw*0.5,hcy+hh2*0.35,hcx+pw*0.42,ph2);
+  pc.closePath(); pc.fill();
+  // Skin
+  const sg=pc.createRadialGradient(hcx-hr*0.1,hcy,0,hcx,hcy,hr*1.1);
+  sg.addColorStop(0,'#c49460'); sg.addColorStop(0.65,'#a07035'); sg.addColorStop(1,'#7a4820');
+  pc.fillStyle=sg;
+  pc.beginPath();
+  pc.moveTo(hcx,hcy-hh2);
+  pc.bezierCurveTo(hcx+hr*0.88,hcy-hh2,hcx+hr,hcy-hh2*0.18,hcx+hr*0.72,hcy+hh2*0.46);
+  pc.bezierCurveTo(hcx+hr*0.45,hcy+hh2*0.78,hcx-hr*0.45,hcy+hh2*0.78,hcx-hr*0.72,hcy+hh2*0.46);
+  pc.bezierCurveTo(hcx-hr,hcy-hh2*0.18,hcx-hr*0.88,hcy-hh2,hcx,hcy-hh2);
+  pc.closePath(); pc.fill();
+  // Side shading
+  pc.fillStyle='rgba(45,15,3,0.38)';
+  pc.beginPath(); pc.ellipse(hcx-hr*0.62,hcy,hr*0.4,hh2*0.48,0.18,0,Math.PI*2); pc.fill();
+  pc.beginPath(); pc.ellipse(hcx+hr*0.62,hcy,hr*0.4,hh2*0.48,-0.18,0,Math.PI*2); pc.fill();
   // Eyes
-  [-5,5].forEach(ex=>{
-    const eg=cc.createRadialGradient(cw/2+ex,ch/2+1,0,cw/2+ex,ch/2+1,4);
-    eg.addColorStop(0,'rgba(245,166,35,1)'); eg.addColorStop(1,'transparent');
-    cc.fillStyle=eg;
-    cc.beginPath(); cc.arc(cw/2+ex,ch/2+1,4,0,Math.PI*2); cc.fill();
-    cc.fillStyle='#f5a623';
-    cc.beginPath(); cc.arc(cw/2+ex,ch/2+1,1.5,0,Math.PI*2); cc.fill();
+  const ey=hcy-hh2*0.06, es=hr*0.42;
+  [-1,1].forEach(s=>{
+    const ex3=hcx+s*es;
+    pc.fillStyle='rgba(35,10,2,0.5)';
+    pc.beginPath(); pc.ellipse(ex3,ey,hr*0.28,hh2*0.18,0,0,Math.PI*2); pc.fill();
+    pc.fillStyle='#d8c8a0';
+    pc.beginPath(); pc.ellipse(ex3,ey,hr*0.21,hh2*0.13,0,0,Math.PI*2); pc.fill();
+    const ig=pc.createRadialGradient(ex3,ey,0,ex3,ey,hr*0.15);
+    ig.addColorStop(0,'#f5c040'); ig.addColorStop(0.5,'#c07820'); ig.addColorStop(1,'#7a4400');
+    pc.fillStyle=ig; pc.beginPath(); pc.ellipse(ex3,ey,hr*0.15,hh2*0.11,0,0,Math.PI*2); pc.fill();
+    pc.fillStyle='#060402'; pc.beginPath(); pc.ellipse(ex3,ey,hr*0.07,hh2*0.07,0,0,Math.PI*2); pc.fill();
+    pc.fillStyle='rgba(255,248,210,0.75)'; pc.beginPath(); pc.arc(ex3+hr*0.06,ey-hh2*0.04,hr*0.04,0,Math.PI*2); pc.fill();
+    // Brow
+    pc.fillStyle='#3a2010';
+    pc.beginPath(); pc.ellipse(ex3,ey-hh2*0.28,hr*0.22,hh2*0.05,s*0.2,0,Math.PI*2); pc.fill();
   });
-  // Border glow
-  cc.strokeStyle='#2a1808'; cc.lineWidth=1; cc.strokeRect(0.5,0.5,51,51);
+  // Nose bridge shadow
+  pc.strokeStyle='rgba(65,22,4,0.38)'; pc.lineWidth=0.8;
+  pc.beginPath(); pc.moveTo(hcx,ey+hh2*0.12); pc.lineTo(hcx,hcy+hh2*0.15); pc.stroke();
+  // Mouth smirk
+  pc.strokeStyle='rgba(60,20,5,0.72)'; pc.lineWidth=1;
+  pc.beginPath();
+  pc.moveTo(hcx-hr*0.3,hcy+hh2*0.36);
+  pc.bezierCurveTo(hcx-hr*0.1,hcy+hh2*0.42,hcx+hr*0.14,hcy+hh2*0.44,hcx+hr*0.31,hcy+hh2*0.36);
+  pc.stroke();
+  // Border
+  pc.strokeStyle='#2a1808'; pc.lineWidth=1; pc.strokeRect(0.5,0.5,43,43);
 }
 
 function showBase(){
   gameState='BASE';
   document.getElementById('hud').classList.add('hidden');
   document.getElementById('base').classList.add('visible');
-  const cbg=document.getElementById('cottage-bg');
-  cbg.classList.add('visible');
-  drawCottage();
+  document.getElementById('base').scrollTop=0;
+  // Small delay so CSS layout renders before we read offsetWidth
+  setTimeout(drawCottage,10);
 
   // Shopkeeper line
   const runs=parseInt(localStorage.getItem(SK.runs)||'0');
@@ -1801,7 +2146,6 @@ surfBtn.addEventListener('touchend',e=>{ e.preventDefault(); cancelSurfaceHold()
 surfBtn.addEventListener('touchcancel',cancelSurfaceHold);
 document.getElementById('dive-btn').addEventListener('click',()=>{
   document.getElementById('base').classList.remove('visible');
-  document.getElementById('cottage-bg').classList.remove('visible');
   startDive();
 });
 
