@@ -37,8 +37,9 @@ canvas{display:block;position:absolute;inset:0}
 #depth-layer{font-size:10px;letter-spacing:4px;color:#445544;display:block;margin-top:2px}
 #hud-right{position:absolute;top:16px;right:16px;text-align:right}
 #hud-coins{font-family:'Exo 2',sans-serif;font-size:24px;font-weight:700;color:#f5a623;letter-spacing:2px}
-#surface-btn{pointer-events:all;position:absolute;bottom:20px;right:16px;font-family:'Exo 2',sans-serif;font-size:11px;font-weight:700;letter-spacing:3px;padding:10px 22px;background:transparent;border:1px solid #334433;color:#334433;cursor:pointer;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);transition:all .2s}
-#surface-btn:hover{color:#f5a623;border-color:#f5a623;background:#f5a62311}
+#surface-btn{pointer-events:all;position:absolute;top:16px;left:50%;transform:translateX(-50%);font-family:'Exo 2',sans-serif;font-size:11px;font-weight:700;letter-spacing:3px;padding:10px 22px;background:transparent;border:1px solid #334433;color:#334433;cursor:pointer;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);transition:all .2s;white-space:nowrap;overflow:hidden}
+#surface-btn .sfill{position:absolute;inset:0;background:#f5a62322;transform:scaleX(0);transform-origin:left;transition:none;pointer-events:none}
+#surface-btn:hover{color:#f5a623;border-color:#f5a623}
 #layer-banner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Exo 2',sans-serif;font-size:clamp(18px,3vw,28px);font-weight:900;letter-spacing:8px;color:#f5a623;text-shadow:0 0 30px #f5a623;text-align:center;opacity:0;pointer-events:none;transition:opacity .4s;z-index:15}
 #layer-banner.show{opacity:1}
 #radar-ring{position:absolute;top:50%;left:50%;width:0;height:0;pointer-events:none;z-index:9}
@@ -117,7 +118,7 @@ canvas{display:block;position:absolute;inset:0}
     <div id="hud-coins">0</div>
     <div class="hud-label">COINS</div>
   </div>
-  <button id="surface-btn">SURFACE [R]</button>
+  <button id="surface-btn" tabindex="-1"><span class="sfill"></span>SURFACE [R]</button>
   <div id="layer-banner"></div>
   <div id="radar-ring"></div>
 </div>
@@ -1432,18 +1433,33 @@ function drawMenuBg(){
   ctx.closePath(); ctx.fill();
 }
 
+// ─── HOLD-TO-SURFACE ─────────────────────────────────────────────────────────
+let surfaceHoldTimer=null;
+const sfillEl=document.querySelector('#surface-btn .sfill');
+function startSurfaceHold(){
+  if(gameState!=='DIVING'||surfaceHoldTimer) return;
+  if(sfillEl){ sfillEl.style.transition='transform 0.5s linear'; sfillEl.style.transform='scaleX(1)'; }
+  surfaceHoldTimer=setTimeout(()=>{ surfaceHoldTimer=null; triggerSurface(); },500);
+}
+function cancelSurfaceHold(){
+  if(surfaceHoldTimer){ clearTimeout(surfaceHoldTimer); surfaceHoldTimer=null; }
+  if(sfillEl){ sfillEl.style.transition='none'; sfillEl.style.transform='scaleX(0)'; }
+}
+
 // ─── INPUT ────────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{
   keys[e.code]=true;
-  if(e.code==='KeyR'||e.code==='Escape'){
-    if(gameState==='DIVING') triggerSurface();
-  }
+  if((e.code==='KeyR'||e.code==='Escape')&&!e.repeat) startSurfaceHold();
   if(e.code==='KeyE') doRadar();
   if(e.code==='KeyD'||e.code==='ArrowRight') e.preventDefault();
   if(e.code==='KeyA'||e.code==='ArrowLeft') e.preventDefault();
   if(e.code==='Space') e.preventDefault();
+  if(e.code==='Escape') e.preventDefault();
 });
-document.addEventListener('keyup',e=>{ keys[e.code]=false; });
+document.addEventListener('keyup',e=>{
+  keys[e.code]=false;
+  if(e.code==='KeyR'||e.code==='Escape') cancelSurfaceHold();
+});
 
 window.addEventListener('mousemove',e=>{
   mouseX=e.clientX; mouseY=e.clientY;
@@ -1520,7 +1536,13 @@ canvas.addEventListener('touchend',e=>{
 
 // Buttons
 document.getElementById('play-btn').addEventListener('click',startDive);
-document.getElementById('surface-btn').addEventListener('click',()=>{ if(gameState==='DIVING') triggerSurface(); });
+const surfBtn=document.getElementById('surface-btn');
+surfBtn.addEventListener('mousedown',e=>{ e.preventDefault(); startSurfaceHold(); });
+surfBtn.addEventListener('mouseup',cancelSurfaceHold);
+surfBtn.addEventListener('mouseleave',cancelSurfaceHold);
+surfBtn.addEventListener('touchstart',e=>{ e.preventDefault(); startSurfaceHold(); },{passive:false});
+surfBtn.addEventListener('touchend',e=>{ e.preventDefault(); cancelSurfaceHold(); },{passive:false});
+surfBtn.addEventListener('touchcancel',cancelSurfaceHold);
 document.getElementById('dive-btn').addEventListener('click',()=>{
   document.getElementById('base').classList.remove('visible');
   startDive();
