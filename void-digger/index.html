@@ -194,11 +194,11 @@ const TDEF=[
   [24, 160, 1, null,      0], // FOSSIL
   [22, 350, 1, '#00eeff', 0], // CRYSTAL
   [18, 120, 1, '#88aaff', 0], // QUARTZ
-  [40, 0,   1, null,      0], // BASALT
+  [40, 60,  1, null,      0], // BASALT
   [55, 70,  1, null,      0], // OBSIDIAN
   [34, 380, 1, '#aa55ff', 0], // RUNE
   [48, 520, 1, null,      0], // ANCIENT
-  [80, 0,   1, null,      0], // ART_WALL
+  [80, 220, 1, null,      0], // ART_WALL
   [28, 0,   1, null,      0], // LAVA_ROCK
   [0,  0,   0, '#ff4400', 1], // LAVA
   [36, 700, 1, '#ff6600', 0], // MAGMA_X
@@ -206,7 +206,7 @@ const TDEF=[
   [44,1600, 1, '#cc00ff', 0], // VOID_X
   [4,  0,   0, '#00ff88', 0], // POWER_CELL
   [4, 1000, 0, '#f5a623', 0], // ARTIFACT
-  [2,  0,   1, null,      0], // ROOT
+  [2,  8,   1, null,      0], // ROOT
   [10, 0,   1, '#ffcc00', 0], // CHEST (value handled on break)
 ];
 
@@ -667,6 +667,15 @@ function drawTile(tile,sx,sy,tx,ty){
     ctx.fillRect(sx,sy,s,s);
     ctx.fillStyle=`rgba(0,220,255,${0.9*pulse})`;
     drawStar(ctx,sx+s/2,sy+s/2,6,s*0.42,s*0.18,6);
+    // Occasional sparkle flash
+    if(ph(tx,ty,55)<0.008*(0.5+0.5*Math.sin(t*3+p*4))){
+      const flen=s*0.35;
+      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=0.8;
+      ctx.beginPath();
+      ctx.moveTo(sx+s/2,sy+s/2-flen); ctx.lineTo(sx+s/2,sy+s/2+flen);
+      ctx.moveTo(sx+s/2-flen,sy+s/2); ctx.lineTo(sx+s/2+flen,sy+s/2);
+      ctx.stroke();
+    }
   }
   else if(tile===T.QUARTZ){
     ctx.strokeStyle='#e8f0f8'; ctx.lineWidth=1;
@@ -718,6 +727,11 @@ function drawTile(tile,sx,sy,tx,ty){
     else if(glyph===4){ ctx.moveTo(sx+4,sy+4); ctx.lineTo(sx+16,sy+10); ctx.lineTo(sx+4,sy+16); ctx.closePath(); }
     else{ ctx.rect(sx+4,sy+4,12,12); }
     ctx.stroke(); ctx.shadowBlur=0;
+    // Orbiting bright dot
+    const oa=t*2+p*6.28;
+    const odx=sx+s/2+Math.cos(oa)*7, ody=sy+s/2+Math.sin(oa)*7;
+    ctx.fillStyle=`rgba(160,180,255,${0.75*pulse})`;
+    ctx.beginPath(); ctx.arc(odx,ody,1.5,0,Math.PI*2); ctx.fill();
   }
   else if(tile===T.ANCIENT){
     ctx.strokeStyle='#3a2a10'; ctx.lineWidth=0.8;
@@ -749,12 +763,18 @@ function drawTile(tile,sx,sy,tx,ty){
   }
   else if(tile===T.LAVA){
     const pulse=(Math.sin(t*3+tx*0.5+ty*0.3)+1)*0.5;
-    ctx.fillStyle=`rgb(${180+Math.floor(pulse*40)},${20+Math.floor(pulse*20)},0)`;
+    ctx.fillStyle=`rgb(${175+Math.floor(pulse*45)},${18+Math.floor(pulse*22)},0)`;
     ctx.fillRect(sx,sy,s,s);
-    // Bubbles
-    if(Math.sin(t*4+p*10)>0.8){
-      ctx.fillStyle='rgba(255,120,0,0.6)';
-      ctx.beginPath(); ctx.arc(sx+4+Math.floor(p*12),sy+4+Math.floor(p2*12),2,0,Math.PI*2); ctx.fill();
+    // 3 bubble spots at different phases
+    for(let b=0;b<3;b++){
+      const bv=Math.sin(t*4+p*10+b*2.1);
+      if(bv>0.72){
+        const bsize=1.5+b*0.8+(bv-0.72)*5;
+        const bx=sx+3+Math.floor(ph(tx+b,ty,88)*(s-6));
+        const by2=sy+3+Math.floor(ph(tx,ty+b,88)*(s-6));
+        ctx.fillStyle=`rgba(255,${120+b*20},0,${0.5+bv*0.3})`;
+        ctx.beginPath(); ctx.arc(bx,by2,Math.min(bsize,4),0,Math.PI*2); ctx.fill();
+      }
     }
   }
   else if(tile===T.MAGMA_X){
@@ -767,6 +787,18 @@ function drawTile(tile,sx,sy,tx,ty){
   else if(tile===T.VOID_STONE){
     ctx.fillStyle='rgba(60,80,180,0.12)';
     ctx.fillRect(sx,sy,s,1); ctx.fillRect(sx,sy,1,s);
+    // Occasional electric arc to adjacent void tile
+    if(ph(tx,ty,99)<0.018){
+      const arcSeed=Math.floor(t*3);
+      const adx=ph(tx,ty+arcSeed,55)<0.5?1:-1;
+      const ex2=sx+s*0.5+adx*s, ey2=sy+s*0.5;
+      ctx.strokeStyle='rgba(80,0,255,0.65)'; ctx.lineWidth=0.8;
+      ctx.beginPath();
+      ctx.moveTo(sx+s/2,sy+s/2);
+      ctx.lineTo(sx+s/2+adx*(s*0.3)+(ph(tx,arcSeed,77)-0.5)*8, sy+s/2+(ph(arcSeed,ty,88)-0.5)*10);
+      ctx.lineTo(ex2,ey2);
+      ctx.stroke();
+    }
   }
   else if(tile===T.VOID_X){
     const pulse=0.6+0.4*Math.sin(t*1.4+p*6.28);
@@ -1308,7 +1340,7 @@ function drawMech(){
 // ─── LAYER BACKGROUND ────────────────────────────────────────────────────────
 function drawBackground(){
   const layer=getLayer(Math.floor(player.y/TS));
-  const pct=(player.y/TS-LAYERS[layer].start)/(LAYERS[layer].end-LAYERS[layer].start+1);
+  const depth=Math.floor(player.y/TS);
   let bg1,bg2;
   switch(layer){
     case 0: bg1='#040a0a'; bg2='#050a06'; break;
@@ -1324,19 +1356,155 @@ function drawBackground(){
   ctx.fillStyle=grd;
   ctx.fillRect(0,0,W,H);
 
-  // Layer-specific atmosphere
-  if(layer===4){ // Magma — heat shimmer dots
-    ctx.fillStyle='rgba(200,60,0,0.03)';
-    for(let i=0;i<30;i++){
-      const px2=Math.floor(ph(i,Math.floor(t*2),77)*W);
-      const py2=Math.floor(ph(i,Math.floor(t*2+1),77)*H);
-      ctx.beginPath(); ctx.arc(px2,py2,2+Math.sin(t*3+i)*2,0,Math.PI*2); ctx.fill();
+  // Parallax X offset (slow drift against camera)
+  const px=((camX*0.18)%W+W)%W;
+
+  if(layer===0){ // ── TOPSOIL ────────────────────────────────
+    // Sky hint near surface
+    if(depth<30){
+      const skyA=Math.max(0,(30-depth)/30)*0.35;
+      const sg=ctx.createLinearGradient(0,0,0,H*0.45);
+      sg.addColorStop(0,`rgba(10,22,8,${skyA})`);
+      sg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=sg; ctx.fillRect(0,0,W,H*0.45);
+      // Stars only very close to surface
+      if(depth<12){
+        const starA=(12-depth)/12*0.5;
+        ctx.fillStyle=`rgba(200,220,180,${starA})`;
+        [[W*0.15,H*0.06],[W*0.42,H*0.12],[W*0.71,H*0.04],[W*0.88,H*0.09]].forEach(([sx2,sy2])=>{
+          ctx.fillRect(sx2,sy2,1,1);
+        });
+      }
     }
-  }
-  if(layer===5){ // Void — sparks
-    ctx.fillStyle='rgba(100,0,255,0.6)';
+    // Faint background root silhouettes
+    ctx.strokeStyle='rgba(20,10,3,0.22)'; ctx.lineWidth=1.2;
+    for(let i=0;i<5;i++){
+      const rx=(px+i*(W/4.2))%W;
+      const wave=Math.sin(t*0.18+i*1.4)*14;
+      ctx.beginPath();
+      ctx.moveTo(rx,0);
+      ctx.bezierCurveTo(rx+wave,H*0.25,rx-wave*0.7,H*0.55,rx+wave*0.4,H);
+      ctx.stroke();
+    }
+    // Soft soil darkening at bottom
+    const soilG=ctx.createLinearGradient(0,H*0.7,0,H);
+    soilG.addColorStop(0,'rgba(0,0,0,0)');
+    soilG.addColorStop(1,'rgba(30,12,4,0.18)');
+    ctx.fillStyle=soilG; ctx.fillRect(0,H*0.7,W,H*0.3);
+
+  } else if(layer===1){ // ── CLAY & STONE ─────────────────────
+    // Rock-strata horizontal bands
+    for(let i=0;i<3;i++){
+      const bandY=(H*(0.2+i*0.3)+camY*0.08)%H;
+      ctx.fillStyle='rgba(28,18,10,0.13)';
+      ctx.fillRect(0,bandY,W,16+i*4);
+    }
+    // Drip streaks
+    ctx.lineWidth=0.8;
+    for(let i=0;i<5;i++){
+      const dx=(px+i*(W/4.8))%W;
+      const dLen=H*(0.08+0.06*Math.sin(t*0.6+i*1.1));
+      const dy=(camY*0.12+i*73)%H;
+      ctx.strokeStyle=`rgba(40,30,20,${0.12+0.07*Math.sin(t*0.4+i)})`;
+      ctx.beginPath(); ctx.moveTo(dx,dy); ctx.lineTo(dx,dy+dLen); ctx.stroke();
+    }
+
+  } else if(layer===2){ // ── CRYSTAL CAVERNS ──────────────────
+    // Distant crystal formation silhouettes
+    ctx.fillStyle='rgba(0,55,75,0.16)';
+    for(let i=0;i<6;i++){
+      const fx=(px+i*(W/5.1))%W;
+      const fy=H*(0.55+ph(i,0,33)*0.4);
+      const fw=14+Math.floor(ph(i,1,33)*18);
+      // Stalactite cluster (triangle group)
+      ctx.beginPath();
+      ctx.moveTo(fx,fy);
+      ctx.lineTo(fx+fw*0.5,fy-H*0.14); ctx.lineTo(fx+fw,fy);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(fx+fw*0.25,fy);
+      ctx.lineTo(fx+fw*0.65,fy-H*0.09); ctx.lineTo(fx+fw*0.85,fy);
+      ctx.fill();
+    }
+    // Ambient teal pulse at bottom
+    const tealG=ctx.createRadialGradient(W/2,H,0,W/2,H,W*0.7);
+    const tealA=0.03+0.02*Math.sin(t*0.9);
+    tealG.addColorStop(0,`rgba(0,180,200,${tealA})`);
+    tealG.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=tealG; ctx.fillRect(0,0,W,H);
+
+  } else if(layer===3){ // ── ANCIENT DEPTHS ───────────────────
+    // Floating dust motes
+    ctx.fillStyle='rgba(100,80,40,0.28)';
+    for(let i=0;i<12;i++){
+      const mx=(px*0.6+ph(i,0,22)*W)%W;
+      const my=((t*8+i*55)%(H+20))-10;
+      ctx.beginPath(); ctx.arc(mx,my,0.8,0,Math.PI*2); ctx.fill();
+    }
+    // Machinery/arch silhouettes at edges
+    ctx.fillStyle='rgba(10,8,4,0.35)';
+    ctx.fillRect(0,H*0.3,18,H*0.7);
+    ctx.fillRect(W-18,H*0.4,18,H*0.6);
+    ctx.fillRect(8,H*0.28,32,10);
+    ctx.fillRect(W-40,H*0.38,32,10);
+    // Arch crossbar
+    ctx.fillStyle='rgba(8,6,3,0.28)';
+    ctx.fillRect(0,H*0.28,W*0.12,8);
+    ctx.fillRect(W*0.88,H*0.38,W*0.12,8);
+
+  } else if(layer===4){ // ── MAGMA ────────────────────────────
+    // Rising heat columns
+    for(let i=0;i<5;i++){
+      const hx=(px+i*(W/4.3))%W;
+      const hy=H*0.5+Math.sin(t*0.7+i*1.3)*H*0.15;
+      const hg=ctx.createRadialGradient(hx,H,0,hx,H,H*0.55);
+      hg.addColorStop(0,'rgba(160,30,0,0.06)');
+      hg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=hg; ctx.fillRect(hx-80,0,160,H);
+    }
+    // Red ambient glow at bottom
+    const magmaG=ctx.createLinearGradient(0,H*0.65,0,H);
+    magmaG.addColorStop(0,'rgba(0,0,0,0)');
+    magmaG.addColorStop(1,'rgba(90,8,0,0.09)');
+    ctx.fillStyle=magmaG; ctx.fillRect(0,H*0.65,W,H*0.35);
+    // Occasional heat shimmer dots
+    ctx.fillStyle='rgba(200,60,0,0.04)';
+    for(let i=0;i<20;i++){
+      const hpx2=Math.floor(ph(i,Math.floor(t*2),77)*W);
+      const hpy2=Math.floor(ph(i,Math.floor(t*2+1),77)*H);
+      ctx.beginPath(); ctx.arc(hpx2,hpy2,1+Math.sin(t*3+i)*1.5,0,Math.PI*2); ctx.fill();
+    }
+
+  } else if(layer===5){ // ── THE VOID ─────────────────────────
+    // Electric arc tendrils — shift shape every ~0.33s
+    const seed=Math.floor(t*3);
+    ctx.strokeStyle='rgba(120,0,255,0.38)'; ctx.lineWidth=1;
+    for(let i=0;i<3;i++){
+      const tx0=(px*0.5+ph(i,seed,11)*W)%W;
+      const ty0=ph(i,seed,22)*H;
+      ctx.beginPath(); ctx.moveTo(tx0,ty0);
+      for(let s=0;s<4;s++){
+        const nx=tx0+(ph(i+s,seed,33+s)-0.5)*90;
+        const ny=ty0+(ph(i+s,seed,44+s)-0.5)*90;
+        ctx.lineTo(nx,ny);
+      }
+      ctx.stroke();
+    }
+    // Void ripple rings
+    for(let i=0;i<2;i++){
+      const phase=((t*0.3+i*0.5)%1);
+      const rr=phase*W*0.5;
+      const ra=(1-phase)*0.12;
+      ctx.strokeStyle=`rgba(80,0,200,${ra})`;
+      ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.arc(W*0.5,H*0.5,rr,0,Math.PI*2);
+      ctx.stroke();
+    }
+    // Static sparks
+    ctx.fillStyle='rgba(130,0,255,0.7)';
     for(let i=0;i<8;i++){
-      if(Math.random()<0.05){
+      if(Math.random()<0.04){
         ctx.fillRect(Math.floor(Math.random()*W),Math.floor(Math.random()*H),1,1);
       }
     }
@@ -1411,21 +1579,7 @@ function drawDrillTarget(){
 }
 
 function drawDrillLine(){
-  if(!(mouseDown||mobileDrill)) return;
-  const sx=player.x-camX, sy=player.y-camY;
-  const ex=sx+Math.cos(player.drillAngle)*82, ey=sy+Math.sin(player.drillAngle)*82;
-  const dCol=DRILL_COLORS[Math.min(upgLvl('drillPower'),DRILL_COLORS.length-1)];
-  ctx.save();
-  // Outer glow
-  ctx.strokeStyle=dCol+'28'; ctx.lineWidth=6;
-  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
-  // Mid beam
-  ctx.strokeStyle=dCol+'77'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
-  // Core
-  ctx.strokeStyle=dCol+'dd'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
-  ctx.restore();
+  // removed — drill beam was distracting; corner brackets + particles give enough feedback
 }
 
 function drawRadarBlips(){
