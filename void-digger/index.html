@@ -308,6 +308,7 @@ let player={
 
 // ─── PARTICLES ──────────────────────────────────────────────────────────────
 const parts=[];
+const breakFlashes=[];
 
 // ─── INPUT ──────────────────────────────────────────────────────────────────
 const keys={};
@@ -569,29 +570,84 @@ function drawTile(tile,sx,sy,tx,ty){
     ctx.fillRect(sx,sy+4,s,s-4);
     ctx.fillStyle='#4a7c3f';
     ctx.fillRect(sx,sy,s,4);
+    // Blade highlights
+    ctx.fillStyle='#5fa04f';
+    for(let i=0;i<4;i++){
+      const bx=sx+2+Math.floor(ph(tx+i,ty,5)*14);
+      ctx.fillRect(bx,sy,1,3);
+    }
   }
   else if(tile===T.DIRT){
-    ctx.fillStyle='#3d2008';
-    for(let i=0;i<4;i++){
-      const dx=Math.floor(ph(tx+i,ty,9)*s),dy=Math.floor(ph(tx,ty+i,9)*s);
-      ctx.fillRect(sx+dx,sy+dy,2,2);
+    // Subtle per-tile color variation
+    const v=Math.floor(ph(tx,ty,77)*14)-7;
+    ctx.fillStyle=`rgb(${92+v},${51+v},${23+Math.floor(v*0.4)})`;
+    ctx.fillRect(sx,sy,s,s);
+    // Darker clumps
+    ctx.fillStyle=`rgba(0,0,0,0.18)`;
+    for(let i=0;i<3;i++){
+      const cx=sx+3+Math.floor(ph(tx+i,ty,8)*(s-6));
+      const cy2=sy+3+Math.floor(ph(tx,ty+i,8)*(s-6));
+      const r=2+Math.floor(ph(tx+i,ty+i,6)*3);
+      ctx.beginPath(); ctx.arc(cx,cy2,r,0,Math.PI*2); ctx.fill();
+    }
+    // Small root hint on some tiles
+    if(p3<0.3){
+      ctx.strokeStyle='rgba(30,14,4,0.55)'; ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(sx+Math.floor(p*s),sy);
+      ctx.quadraticCurveTo(sx+Math.floor(p2*s),sy+s*0.5,sx+Math.floor(p3*s),sy+s);
+      ctx.stroke();
     }
   }
   else if(tile===T.CLAY){
-    ctx.fillStyle='#6b3010';
-    for(let gy=0;gy<s;gy+=5) ctx.fillRect(sx,sy+gy,s,1);
+    // Alternating grain lines
+    for(let gy=0;gy<s;gy+=5){
+      ctx.fillStyle=gy%10===0?'#7a3a0e':'#9a5020';
+      ctx.fillRect(sx,sy+gy,s,1);
+    }
+    // Diagonal pressure line
+    ctx.strokeStyle='rgba(80,30,8,0.45)'; ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(sx+Math.floor(p*s*0.6),sy);
+    ctx.lineTo(sx+s-Math.floor(p2*s*0.4),sy+s);
+    ctx.stroke();
+    // Lumpy inclusion
+    const ix=sx+3+Math.floor(p3*(s-8)), iy=sy+3+Math.floor(p*(s-8));
+    ctx.fillStyle='rgba(60,22,4,0.35)';
+    ctx.beginPath(); ctx.ellipse(ix,iy,3,2,p*Math.PI,0,Math.PI*2); ctx.fill();
   }
   else if(tile===T.STONE){
-    ctx.fillStyle='#2a2d38';
-    for(let i=0;i<5;i++){
-      const bx=sx+Math.floor(ph(tx+i,ty,3)*14),by=sy+Math.floor(ph(tx,ty+i,3)*14),br=1+Math.floor(ph(tx+i,ty+i,3)*3);
-      ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fill();
+    // Color variation patches
+    ctx.fillStyle='rgba(0,0,0,0.22)';
+    for(let i=0;i<3;i++){
+      const px=sx+Math.floor(ph(tx+i,ty,44)*(s-6));
+      const py=sy+Math.floor(ph(tx,ty+i,44)*(s-6));
+      ctx.fillRect(px,py,4+Math.floor(ph(tx+i,ty+i,33)*5),3);
     }
+    // Angled micro-cracks
+    ctx.strokeStyle='rgba(20,22,30,0.7)'; ctx.lineWidth=0.8;
+    ctx.beginPath();
+    ctx.moveTo(sx+Math.floor(p*(s-4)),sy+2);
+    ctx.lineTo(sx+Math.floor(p2*(s-4))+2,sy+s-4);
+    ctx.stroke();
+    // Granite glint
+    ctx.fillStyle='rgba(200,210,230,0.4)';
+    ctx.fillRect(sx+Math.floor(p3*(s-5))+1,sy+Math.floor(p*(s-5))+1,2,2);
   }
   else if(tile===T.IRON){
-    ctx.strokeStyle='#8b5a0a'; ctx.lineWidth=1.5;
+    // Brighter, thicker veins
+    ctx.strokeStyle='#c88020'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(sx+3,sy+3); ctx.lineTo(sx+s-3,sy+s-3); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(sx+s-3,sy+3); ctx.lineTo(sx+3,sy+s-3); ctx.stroke();
+    // Nugget dots around intersect
+    ctx.fillStyle='#a07030';
+    for(let i=0;i<3;i++){
+      const ox=(ph(tx+i,ty,22)-0.5)*8, oy=(ph(tx,ty+i,22)-0.5)*8;
+      ctx.beginPath(); ctx.arc(sx+s/2+ox,sy+s/2+oy,1.5,0,Math.PI*2); ctx.fill();
+    }
+    // Metallic shimmer
+    ctx.fillStyle='rgba(255,230,150,0.28)';
+    ctx.fillRect(sx+3,sy+2,s-8,2);
   }
   else if(tile===T.FOSSIL){
     ctx.strokeStyle='#fff8ee'; ctx.lineWidth=1.5;
@@ -619,21 +675,35 @@ function drawTile(tile,sx,sy,tx,ty){
     ctx.beginPath(); ctx.moveTo(sx+10,sy+2); ctx.lineTo(sx+s,sy+s); ctx.stroke();
   }
   else if(tile===T.BASALT){
-    ctx.strokeStyle='#0a0a18'; ctx.lineWidth=1;
     const hx=s/2, hy=s/2;
     for(let a=0;a<6;a++){
       const a1=a*Math.PI/3, a2=(a+1)*Math.PI/3;
+      // Dark crack
+      ctx.strokeStyle='#060614'; ctx.lineWidth=1.5;
       ctx.beginPath();
       ctx.moveTo(sx+hx+Math.cos(a1)*7,sy+hy+Math.sin(a1)*7);
       ctx.lineTo(sx+hx+Math.cos(a2)*7,sy+hy+Math.sin(a2)*7);
       ctx.stroke();
+      // Bright edge on alternating segments
+      if(a%2===0){
+        ctx.strokeStyle='rgba(60,60,100,0.55)'; ctx.lineWidth=0.8;
+        ctx.beginPath();
+        ctx.moveTo(sx+hx+Math.cos(a1)*7,sy+hy+Math.sin(a1)*7);
+        ctx.lineTo(sx+hx+Math.cos(a2)*7,sy+hy+Math.sin(a2)*7);
+        ctx.stroke();
+      }
     }
   }
   else if(tile===T.OBSIDIAN){
-    ctx.fillStyle='rgba(80,40,120,0.18)';
+    ctx.fillStyle='rgba(80,40,120,0.2)';
     ctx.fillRect(sx,sy,s,3); ctx.fillRect(sx,sy,3,s);
-    ctx.fillStyle='rgba(160,100,220,0.08)';
+    ctx.fillStyle='rgba(160,100,220,0.1)';
     ctx.fillRect(sx+s-3,sy,3,s); ctx.fillRect(sx,sy+s-3,s,3);
+    // Glass-like diagonal sheen
+    ctx.fillStyle='rgba(200,150,255,0.12)';
+    ctx.beginPath();
+    ctx.moveTo(sx+2,sy+2); ctx.lineTo(sx+s-4,sy+2); ctx.lineTo(sx+2,sy+s-4);
+    ctx.closePath(); ctx.fill();
   }
   else if(tile===T.RUNE){
     const glyph=Math.floor(p*6);
@@ -664,11 +734,18 @@ function drawTile(tile,sx,sy,tx,ty){
   }
   else if(tile===T.LAVA_ROCK){
     const pulse=0.5+0.5*Math.sin(t*1.2+p*6.28);
-    ctx.strokeStyle=`rgba(200,80,0,${0.3*pulse})`; ctx.lineWidth=1;
+    // Primary vein
+    ctx.strokeStyle=`rgba(200,80,0,${0.35*pulse})`; ctx.lineWidth=1.5;
     ctx.beginPath();
     ctx.moveTo(sx+3,sy+5+Math.floor(p*4));
     ctx.lineTo(sx+10,sy+8+Math.floor(p2*4));
     ctx.lineTo(sx+s-3,sy+6+Math.floor(p3*4)); ctx.stroke();
+    // Secondary micro-vein
+    ctx.strokeStyle=`rgba(255,110,0,${0.22*pulse})`; ctx.lineWidth=0.8;
+    ctx.beginPath();
+    ctx.moveTo(sx+2,sy+s-4);
+    ctx.lineTo(sx+Math.floor(p2*s*0.7)+2,sy+s/2);
+    ctx.lineTo(sx+s-2,sy+Math.floor(p3*6)+2); ctx.stroke();
   }
   else if(tile===T.LAVA){
     const pulse=(Math.sin(t*3+tx*0.5+ty*0.3)+1)*0.5;
@@ -761,6 +838,15 @@ function drawTile(tile,sx,sy,tx,ty){
     ctx.fillRect(sx+3,sy+1,2,s-2);
     ctx.fillRect(sx+s-5,sy+1,2,s-2);
   }
+  // Edge bevel — applies to all solid tiles for depth/3-D feel
+  if(tile!==T.AIR&&tile!==T.ROOT&&tile!==T.LAVA){
+    ctx.fillStyle='rgba(255,255,255,0.11)';
+    ctx.fillRect(sx,sy,s,1);   // top highlight
+    ctx.fillRect(sx,sy,1,s);   // left highlight
+    ctx.fillStyle='rgba(0,0,0,0.38)';
+    ctx.fillRect(sx,sy+s-1,s,1); // bottom shadow
+    ctx.fillRect(sx+s-1,sy,1,s); // right shadow
+  }
 }
 
 function drawStar(ctx,cx,cy,spikes,outer,inner,spikes2){
@@ -783,16 +869,39 @@ function addPart(x,y,vx,vy,life,size,col,grav){
 function emitBreak(tx,ty,tile){
   const wx=(tx+0.5)*TS, wy=(ty+0.5)*TS;
   const col=TILE_COLS[tile]||'#888';
+  // Chips — tile-colored debris
   for(let i=0;i<10;i++){
-    const a=Math.random()*Math.PI*2,sp=30+Math.random()*80;
+    const a=Math.random()*Math.PI*2, sp=40+Math.random()*90;
     addPart(wx,wy,Math.cos(a)*sp,Math.sin(a)*sp,0.5+Math.random()*0.6,2+Math.random()*3,col,120);
   }
+  // Sparks — bright white-yellow
+  for(let i=0;i<5;i++){
+    const a=Math.random()*Math.PI*2, sp=80+Math.random()*100;
+    addPart(wx,wy,Math.cos(a)*sp,Math.sin(a)*sp,0.1+Math.random()*0.2,1.5,'#fffacc',60);
+  }
+  // Dust puffs — large, slow, near-transparent
+  for(let i=0;i<3;i++){
+    const a=Math.random()*Math.PI*2, sp=15+Math.random()*25;
+    addPart(wx,wy,Math.cos(a)*sp,Math.sin(a)*sp-10,0.35+Math.random()*0.25,8+Math.random()*5,col+'44',0);
+  }
+  // Flash at break point
+  breakFlashes.push({x:wx, y:wy, t:0.1, col});
 }
 function emitDrillStream(wx,wy,angle,tile){
   const col=TILE_COLS[tile]||'#888';
-  const a=angle+((Math.random()-0.5)*0.6);
-  const sp=20+Math.random()*40;
-  addPart(wx,wy,Math.cos(a+Math.PI)*sp,Math.sin(a+Math.PI)*sp-10,0.15+Math.random()*0.2,1+Math.random()*2,col,60);
+  // Chip: flies backward from drill
+  const a=angle+Math.PI+(Math.random()-0.5)*0.7;
+  const sp=25+Math.random()*50;
+  addPart(wx,wy,Math.cos(a)*sp,Math.sin(a)*sp-5,0.2+Math.random()*0.25,1.5+Math.random()*2,col,80);
+  // Spark: bright, fires near-forward
+  if(Math.random()<0.5){
+    const sa=angle+(Math.random()-0.5)*0.5;
+    addPart(wx,wy,Math.cos(sa)*65,Math.sin(sa)*65,0.07+Math.random()*0.1,1.5,'#fff8cc',40);
+  }
+  // Dust puff: large, near-transparent, drifts
+  if(Math.random()<0.25){
+    addPart(wx,wy,(Math.random()-0.5)*12,-6,0.28+Math.random()*0.15,7,col+'22',0);
+  }
 }
 function emitThruster(wx,wy,facing){
   // wx/wy are world coords
@@ -1241,19 +1350,43 @@ function drawDrillProgress(){
   for(let ty=Math.max(0,ty0);ty<=Math.min(WH-1,ty1);ty++){
     for(let tx2=Math.max(0,tx0);tx2<=Math.min(WW-1,tx1);tx2++){
       const p=drill[ty*WW+tx2];
-      if(p<0.1) continue;
+      if(p<0.08) continue;
       const sx=tx2*TS-camX, sy=ty*TS-camY;
-      ctx.strokeStyle=`rgba(255,255,255,${p*0.7})`;
-      ctx.lineWidth=1;
       const cx=sx+TS/2, cy=sy+TS/2;
-      // Crack lines
-      for(let c=0;c<3;c++){
-        const a=ph(tx2,ty,c)*Math.PI*2;
-        ctx.beginPath();
-        ctx.moveTo(cx,cy);
-        ctx.lineTo(cx+Math.cos(a)*TS*0.5*p,cy+Math.sin(a)*TS*0.5*p);
-        ctx.stroke();
+      const numCracks=p<0.35?1:p<0.65?2:3;
+      ctx.save();
+      // Stress shadow at high progress
+      if(p>0.7){
+        ctx.fillStyle=`rgba(0,0,0,${(p-0.7)*0.55})`;
+        ctx.fillRect(sx+1,sy+1,TS-2,TS-2);
       }
+      for(let c=0;c<numCracks;c++){
+        const a=ph(tx2,ty,c)*Math.PI*2;
+        const len=TS*0.52*p;
+        const ex=cx+Math.cos(a)*len, ey=cy+Math.sin(a)*len;
+        // Dark underline for depth
+        ctx.strokeStyle=`rgba(0,0,0,${p*0.55})`;
+        ctx.lineWidth=2.5;
+        ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ex,ey); ctx.stroke();
+        // Bright crack
+        ctx.strokeStyle=`rgba(220,200,180,${p*0.9})`;
+        ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ex,ey); ctx.stroke();
+        // Branch crack (when p > 0.32)
+        if(p>0.32){
+          const mid=0.5+ph(tx2,ty,c+10)*0.25;
+          const mx=cx+Math.cos(a)*len*mid, my=cy+Math.sin(a)*len*mid;
+          const ba=a+(ph(tx2+c,ty,7)-0.5)*1.4;
+          const bl=len*(0.35+ph(tx2,ty+c,11)*0.2);
+          ctx.strokeStyle=`rgba(190,170,150,${p*0.55})`;
+          ctx.lineWidth=0.8;
+          ctx.beginPath();
+          ctx.moveTo(mx,my);
+          ctx.lineTo(mx+Math.cos(ba)*bl,my+Math.sin(ba)*bl);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
     }
   }
 }
@@ -1261,22 +1394,38 @@ function drawDrillProgress(){
 function drawDrillTarget(){
   if(drillTX<0) return;
   const sx=drillTX*TS-camX, sy=drillTY*TS-camY;
-  ctx.strokeStyle='rgba(255,200,50,0.5)';
-  ctx.lineWidth=1;
-  ctx.strokeRect(sx+1,sy+1,TS-2,TS-2);
+  const dCol=DRILL_COLORS[Math.min(upgLvl('drillPower'),DRILL_COLORS.length-1)];
+  const alpha=0.4+0.3*Math.sin(t*8);
+  const L=7;
+  ctx.save();
+  ctx.strokeStyle=dCol+(Math.round(alpha*255).toString(16).padStart(2,'0'));
+  ctx.lineWidth=1.5;
+  // 4 corner L-brackets
+  const corners=[[sx+1,sy+1,1,1],[sx+TS-1,sy+1,-1,1],[sx+TS-1,sy+TS-1,-1,-1],[sx+1,sy+TS-1,1,-1]];
+  for(const [px,py,dx,dy] of corners){
+    ctx.beginPath();
+    ctx.moveTo(px,py+dy*L); ctx.lineTo(px,py); ctx.lineTo(px+dx*L,py);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawDrillLine(){
   if(!(mouseDown||mobileDrill)) return;
   const sx=player.x-camX, sy=player.y-camY;
-  ctx.strokeStyle='rgba(245,166,35,0.25)';
-  ctx.lineWidth=1;
-  ctx.setLineDash([3,6]);
-  ctx.beginPath();
-  ctx.moveTo(sx,sy);
-  ctx.lineTo(sx+Math.cos(player.drillAngle)*80,sy+Math.sin(player.drillAngle)*80);
-  ctx.stroke();
-  ctx.setLineDash([]);
+  const ex=sx+Math.cos(player.drillAngle)*82, ey=sy+Math.sin(player.drillAngle)*82;
+  const dCol=DRILL_COLORS[Math.min(upgLvl('drillPower'),DRILL_COLORS.length-1)];
+  ctx.save();
+  // Outer glow
+  ctx.strokeStyle=dCol+'28'; ctx.lineWidth=6;
+  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
+  // Mid beam
+  ctx.strokeStyle=dCol+'77'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
+  // Core
+  ctx.strokeStyle=dCol+'dd'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
+  ctx.restore();
 }
 
 function drawRadarBlips(){
@@ -1467,10 +1616,26 @@ function render(){
   drawArtifactScanner();
   drawRadarBlips();
   drawParticles();
+  drawBreakFlashes();
   drawEnemies();
   drawDrillLine();
   drawMech();
   drawLighting();
+}
+
+function drawBreakFlashes(){
+  for(let i=breakFlashes.length-1;i>=0;i--){
+    const f=breakFlashes[i];
+    f.t-=1/60;
+    if(f.t<=0){ breakFlashes.splice(i,1); continue; }
+    const alpha=f.t/0.1;
+    const sx=f.x-camX, sy=f.y-camY;
+    ctx.save();
+    ctx.shadowColor=f.col; ctx.shadowBlur=28*alpha;
+    ctx.fillStyle=`rgba(255,240,180,${alpha*0.85})`;
+    ctx.beginPath(); ctx.arc(sx,sy,TS*0.45*alpha,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
 }
 
 // ─── HUD UPDATES ─────────────────────────────────────────────────────────────
@@ -1534,7 +1699,7 @@ function updateHUD(){
 function startDive(){
   generateWorld();
   drill.fill(0);
-  parts.length=0;
+  parts.length=0; breakFlashes.length=0;
   player.x=WW*TS/2; player.y=TS*10;
   player.vx=0; player.vy=0;
   player.maxEnergy=200+upgEff('energyCore');
