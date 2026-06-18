@@ -41,6 +41,8 @@ class Agent{
     this.skin=SKIN_TONES[(Math.random()*SKIN_TONES.length)|0];
     this.hair=HAIR_COLORS[(Math.random()*HAIR_COLORS.length)|0];
     this.walkPhase=Math.random()*Math.PI*2;
+    this._stuckTicks=0; this._lastDist=Infinity;
+    this.job=null;
   }
 
   remember(s){ this.memory.push(s); if(this.memory.length>6) this.memory.shift(); }
@@ -127,6 +129,15 @@ class Agent{
     // rather than letting the weighted system possibly keep grinding on something else
     if(this.energy<8 && this.task && this.task.label!=='resting' && this.task.label!=='sleeping') this.task=null;
 
+    // once tenure is met, a small per-tick chance to step down from a job and free the
+    // slot for new applicants — a soft decay valve rather than an instant kick, and only
+    // when not actively mid-shift so a working agent isn't yanked off their own task
+    if(this.job && World.tick-this.job.startTick>=MIN_TENURE_TICKS && !(this.task&&this.task.isJobTask) && Math.random()<0.002){
+      const st=this.job.siteRef;
+      if(st&&st.workers){ const idx=st.workers.indexOf(this.id); if(idx>=0) st.workers.splice(idx,1); }
+      this.job=null;
+    }
+
     // pick a task if none
     if(!this.task){ this.chooseTask(); }
     const t=this.task;
@@ -140,13 +151,18 @@ class Agent{
     if(t.target && !t._arrived){
       const dx=t.target.x-this.x, dy=t.target.y-this.y;
       const d=Math.hypot(dx,dy);
-      if(d<(t.arrive||14)){ t._arrived=true; if(t.onArrive) t.onArrive(this); }
+      if(d<(t.arrive||14)){ t._arrived=true; if(t.onArrive) t.onArrive(this); this._stuckTicks=0; this._lastDist=Infinity; }
       else {
         const sp=this.speed*(0.6+this.energy/200);
         this.vx+=(dx/d)*sp*0.16; this.vy+=(dy/d)*sp*0.16;
         this.energy-=0.018;
+        // stuck watchdog: catches targets reachable() couldn't filter (e.g. peninsulas) —
+        // if distance-to-target hasn't meaningfully decreased for a long while, give up
+        if(d>this._lastDist-0.4) this._stuckTicks++; else this._stuckTicks=0;
+        this._lastDist=d;
+        if(this._stuckTicks>180){ this.task=null; this._stuckTicks=0; this._lastDist=Infinity; return; }
       }
-    } else { t._arrived=true; }
+    } else { t._arrived=true; this._stuckTicks=0; this._lastDist=Infinity; }
 
     // task progress timer (after arrival / for stay tasks)
     if(t._arrived || t.stay){
@@ -168,6 +184,7 @@ class Agent{
 
   die(){
     this.dead=true;
+    if(this.job&&this.job.siteRef&&this.job.siteRef.workers){ const idx=this.job.siteRef.workers.indexOf(this.id); if(idx>=0) this.job.siteRef.workers.splice(idx,1); }
     Mesh.broadcast(this.x,this.y,'grief',0.9,Factions[this.faction].color);
     Mesh.grief=Math.min(1,Mesh.grief+0.25);
     // bonded partner grieves hardest

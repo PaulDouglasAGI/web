@@ -86,6 +86,7 @@ const Renderer={
       else if(m.type==='garden'){ ctx.beginPath(); ctx.arc(sx,sy,3*z,0,7); ctx.fill(); }
       else { ctx.fillRect(sx-1.5*z,sy-1.5*z,3*z,3*z); }
       ctx.globalAlpha=1;
+      if(UI.selected===m){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,10*z,0,7); ctx.stroke(); }
     }
 
     // resource node glows

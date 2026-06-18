@@ -18,24 +18,72 @@ const SITE_DEFS={
   hut:    { levels:[
               {needWood:7,  needStone:4,  buildDur:170, cap:3},
               {needWood:10, needStone:6,  buildDur:200, cap:5},
-              {needWood:8,  needStone:8,  buildDur:130, cap:5, restMult:1.4}
+              {needWood:8,  needStone:8,  buildDur:130, cap:5, restMult:1.4},
+              {needWood:12, needStone:9,  buildDur:220, cap:7, restMult:1.4},
+              {needWood:10, needStone:11, buildDur:160, cap:7, restMult:1.8}
             ] },
   well:   { levels:[
-              {needWood:3,  needStone:9,  buildDur:170, max:40, regen:0.00012},
-              {needWood:5,  needStone:12, buildDur:200, max:70, regen:0.00012},
-              {needWood:6,  needStone:10, buildDur:140, max:70, regen:0.00022}
+              {needWood:3,  needStone:9,  buildDur:170, max:40,  regen:0.00012},
+              {needWood:5,  needStone:12, buildDur:200, max:70,  regen:0.00012},
+              {needWood:6,  needStone:10, buildDur:140, max:70,  regen:0.00022},
+              {needWood:7,  needStone:13, buildDur:210, max:100, regen:0.00022},
+              {needWood:8,  needStone:11, buildDur:150, max:100, regen:0.00034}
             ] },
   farm:   { levels:[
-              {needWood:5,  needStone:1,  buildDur:120, yieldAmt:4, growTicks:900},
-              {needWood:8,  needStone:2,  buildDur:150, yieldAmt:7, growTicks:900},
-              {needWood:6,  needStone:3,  buildDur:100, yieldAmt:7, growTicks:600}
+              {needWood:5,  needStone:1,  buildDur:120, yieldAmt:4,  growTicks:900},
+              {needWood:8,  needStone:2,  buildDur:150, yieldAmt:7,  growTicks:900},
+              {needWood:6,  needStone:3,  buildDur:100, yieldAmt:7,  growTicks:600},
+              {needWood:9,  needStone:3,  buildDur:160, yieldAmt:10, growTicks:600},
+              {needWood:7,  needStone:4,  buildDur:110, yieldAmt:10, growTicks:420}
             ] },
   granary:{ levels:[
               {needWood:10, needStone:10, buildDur:240, cap:1, auraR:260},
               {needWood:14, needStone:14, buildDur:280, cap:2, auraR:340},
-              {needWood:12, needStone:12, buildDur:200, cap:2, auraR:340}
+              {needWood:12, needStone:12, buildDur:200, cap:2, auraR:340},
+              {needWood:16, needStone:16, buildDur:260, cap:3, auraR:420},
+              {needWood:14, needStone:14, buildDur:210, cap:3, auraR:420}
+            ] },
+  // ── functional/operational structures — agents can take a job here (see
+  // workAtStructure/doJob in behaviors.js); `cap` is worker-slot count, `effRate`
+  // is the per-level magnitude of whatever ambient effect that type provides.
+  workshop:{ levels:[
+              {needWood:8,  needStone:6,  buildDur:200, cap:1, effRate:0.05},
+              {needWood:11, needStone:9,  buildDur:230, cap:1, effRate:0.09},
+              {needWood:9,  needStone:11, buildDur:170, cap:2, effRate:0.09},
+              {needWood:13, needStone:13, buildDur:240, cap:2, effRate:0.14},
+              {needWood:11, needStone:15, buildDur:180, cap:2, effRate:0.20}
+            ] },
+  market: { levels:[
+              {needWood:9,  needStone:5,  buildDur:200, cap:1, effRate:0.06},
+              {needWood:12, needStone:7,  buildDur:230, cap:1, effRate:0.10},
+              {needWood:10, needStone:9,  buildDur:170, cap:2, effRate:0.10},
+              {needWood:14, needStone:10, buildDur:240, cap:2, effRate:0.16},
+              {needWood:12, needStone:12, buildDur:180, cap:2, effRate:0.22}
+            ] },
+  shrineHall:{ levels:[
+              {needWood:6,  needStone:9,  buildDur:210, cap:1, effRate:0.05},
+              {needWood:8,  needStone:12, buildDur:240, cap:1, effRate:0.08},
+              {needWood:7,  needStone:14, buildDur:180, cap:2, effRate:0.08},
+              {needWood:10, needStone:16, buildDur:250, cap:2, effRate:0.13},
+              {needWood:9,  needStone:18, buildDur:190, cap:2, effRate:0.18}
+            ] },
+  loreHall:{ levels:[
+              {needWood:9,  needStone:7,  buildDur:210, cap:1, effRate:0.05},
+              {needWood:12, needStone:9,  buildDur:240, cap:1, effRate:0.08},
+              {needWood:10, needStone:11, buildDur:180, cap:2, effRate:0.08},
+              {needWood:14, needStone:13, buildDur:250, cap:2, effRate:0.13},
+              {needWood:12, needStone:15, buildDur:190, cap:2, effRate:0.18}
+            ] },
+  huntingLodge:{ levels:[
+              {needWood:10, needStone:4,  buildDur:200, cap:1, effRate:0.15},
+              {needWood:13, needStone:6,  buildDur:230, cap:1, effRate:0.22},
+              {needWood:11, needStone:8,  buildDur:170, cap:2, effRate:0.22},
+              {needWood:15, needStone:9,  buildDur:240, cap:2, effRate:0.32},
+              {needWood:13, needStone:11, buildDur:180, cap:2, effRate:0.45}
             ] }
 };
+const FUNCTIONAL_TYPES=['workshop','market','shrineHall','loreHall','huntingLodge'];
+const FUNCTIONAL_LABEL={workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE'};
 function mkSite(x,y,type,gather){
   const lvl=SITE_DEFS[type].levels[0];
   const s={x,y,type,level:0,maxLevel:SITE_DEFS[type].levels.length,
@@ -43,6 +91,8 @@ function mkSite(x,y,type,gather){
     matsWood:0,matsStone:0,progress:0,built:false,faction:null,gather};
   if(type==='well') Object.assign(s,{amount:0,max:0,regen:0});
   if(type==='farm') Object.assign(s,{stage:'empty',stageT:0,growTicks:lvl.growTicks,yieldAmt:lvl.yieldAmt});
+  if(type==='granary') Object.assign(s,{workers:[]});
+  if(FUNCTIONAL_TYPES.includes(type)) Object.assign(s,{capacity:lvl.cap, effRate:lvl.effRate, workers:[]});
   return s;
 }
 // called when a site's progress reaches 1 — applies the level just finished,
@@ -56,6 +106,7 @@ function applySiteLevel(s,ag){
   else if(s.type==='well'){ s.max=def.max; s.amount=s.level===1?s.max:Math.min(s.max,(s.amount||0)+def.max*0.4); s.regen=def.regen; ag.inv.beauty+=1; }
   else if(s.type==='farm'){ s.growTicks=def.growTicks; s.yieldAmt=def.yieldAmt; s.stage='empty'; s.stageT=0; }
   else if(s.type==='granary'){ s.capacity=def.cap; s.auraR=def.auraR; ag.inv.beauty+=4*s.level; raiseResonance(0.02*s.level); }
+  else if(FUNCTIONAL_TYPES.includes(s.type)){ s.capacity=def.cap; s.effRate=def.effRate; ag.inv.beauty+=2*s.level; }
   ag.remember('raised a '+s.type+' to level '+s.level);
   Mesh.broadcast(s.x,s.y,'discovery',0.7,Factions[ag.faction].color); raiseResonance(0.02);
   if(s.level<s.maxLevel){
@@ -82,6 +133,8 @@ const World={
   fires:[],                            // fire areas (warmth/social at night)
   gathers:[],                          // gathering spots (social hubs)
   rng:null,
+
+  tick:0,                              // monotonic tick counter, used for job-tenure timing
 
   // Time: dayT in [0,1). dayLen ticks per day.
   dayLen:5400, dayTick:0, dayT:0.22,
@@ -238,6 +291,20 @@ const World={
     return this.tiles[r*this.cols+c];
   },
   walkable(wx,wy){ const t=this.tileAt(wx,wy); return t!==TILE.WATER; },
+  // cheap straight-line sample (capped at 10 points) rejecting a target if open
+  // water lies between (ax,ay) and (bx,by) — not real pathfinding (can't route
+  // around a peninsula), just a proactive filter against the shoreline-stuck case.
+  // Kept cheap since this runs inside nearestX scans and wander/frontier retries.
+  reachable(ax,ay,bx,by){
+    const d=Math.hypot(bx-ax,by-ay);
+    if(d<1) return true;
+    const steps=Math.max(2,Math.min(10,Math.ceil(d/(this.ts*1.5))));
+    for(let i=1;i<steps;i++){
+      const t=i/steps;
+      if(this.tileAt(ax+(bx-ax)*t, ay+(by-ay)*t)===TILE.WATER) return false;
+    }
+    return true;
+  },
 
   // nearest node of a given resource type with stock (built wells duck-type as water nodes)
   nearestNode(x,y,type){
@@ -245,12 +312,14 @@ const World={
     for(const nd of this.nodes){
       if(nd.type!==type) continue;
       if(nd.amount<0.25) continue;
+      if(!this.reachable(x,y,nd.x,nd.y)) continue;
       const d=(nd.x-x)**2+(nd.y-y)**2;
       if(d<bd){bd=d;best=nd;}
     }
     if(type==='water'){
       for(const s of this.sites){
         if(s.type!=='well'||!s.built||s.amount<0.25) continue;
+        if(!this.reachable(x,y,s.x,s.y)) continue;
         const d=(s.x-x)**2+(s.y-y)**2;
         if(d<bd){bd=d;best=s;}
       }
@@ -259,13 +328,14 @@ const World={
   },
   nearestOf(list,x,y){
     let best=null,bd=Infinity;
-    for(const o of list){ const d=(o.x-x)**2+(o.y-y)**2; if(d<bd){bd=d;best=o;} }
+    for(const o of list){ if(!this.reachable(x,y,o.x,o.y)) continue; const d=(o.x-x)**2+(o.y-y)**2; if(d<bd){bd=d;best=o;} }
     return best;
   },
   nearestSite(x,y,filter){
     let best=null,bd=Infinity;
     for(const s of this.sites){
       if(filter && !filter(s)) continue;
+      if(!this.reachable(x,y,s.x,s.y)) continue;
       const d=(s.x-x)**2+(s.y-y)**2;
       if(d<bd){ bd=d; best=s; }
     }
@@ -306,6 +376,17 @@ const World={
       const farms=this.sites.filter(s=>s.type==='farm'&&built(s)).length;
       const hasGranarySite=this.sites.some(s=>s.type==='granary'&&s.gather===gi);
       if(!hasGranarySite && huts>=6 && wells>=1 && farms>=2) this.placeSite(g.x,g.y,40,90,'granary',gi,60);
+
+      const hasWorkshopSite=this.sites.some(s=>s.type==='workshop'&&s.gather===gi);
+      if(!hasWorkshopSite && huts>=4 && wells>=1) this.placeSite(g.x,g.y,40,100,'workshop',gi,60);
+      const hasMarketSite=this.sites.some(s=>s.type==='market'&&s.gather===gi);
+      if(!hasMarketSite && huts>=5 && farms>=1) this.placeSite(g.x,g.y,40,100,'market',gi,60);
+      const hasShrineHallSite=this.sites.some(s=>s.type==='shrineHall'&&s.gather===gi);
+      if(!hasShrineHallSite && huts>=6) this.placeSite(g.x,g.y,40,100,'shrineHall',gi,60);
+      const hasLoreHallSite=this.sites.some(s=>s.type==='loreHall'&&s.gather===gi);
+      if(!hasLoreHallSite && huts>=7 && wells>=1) this.placeSite(g.x,g.y,40,100,'loreHall',gi,60);
+      const hasHuntingLodgeSite=this.sites.some(s=>s.type==='huntingLodge'&&s.gather===gi);
+      if(!hasHuntingLodgeSite && huts>=5 && farms>=2) this.placeSite(g.x,g.y,40,100,'huntingLodge',gi,60);
     }
   },
 
@@ -331,6 +412,7 @@ const World={
   },
 
   update(){
+    this.tick++;
     // Time of day
     this.dayTick++;
     if(this.dayTick>=this.dayLen){ this.dayTick=0; this.dayCount++; this.seasonProgress++;
@@ -366,7 +448,8 @@ const World={
         let foodSec=0, restMult=1;
         for(const s of this.sites){
           if(s.gather!==gi || !s.built) continue;
-          if(s.type==='granary') foodSec+=(s.capacity||1)*0.4;
+          if(s.type==='granary'){ foodSec+=(s.capacity||1)*0.4; if((s.workers||[]).length>0) foodSec+=0.15*s.workers.length; }
+          if(s.type==='huntingLodge' && (s.workers||[]).length>0) foodSec+=(s.effRate||0.1)*s.workers.length;
           if(s.type==='hut' && s.restMult) restMult=Math.max(restMult,s.restMult);
         }
         g.foodSec=foodSec; g.restMult=restMult;

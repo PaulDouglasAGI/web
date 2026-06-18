@@ -77,6 +77,7 @@ const UI={
     for(const s of World.sites){ const d=dist2(s.x,s.y,wx,wy); if(d<bd){ bd=d; best=s; kind='site'; } }
     for(const nd of World.nodes){ const d=dist2(nd.x,nd.y,wx,wy); if(d<bd){ bd=d; best=nd; kind='node'; } }
     for(const an of World.animals){ if(!an.alive) continue; const d=dist2(an.x,an.y,wx,wy); if(d<bd){ bd=d; best=an; kind='animal'; } }
+    for(const m of Marks){ const d=dist2(m.x,m.y,wx,wy); if(d<bd){ bd=d; best=m; kind='mark'; } }
     if(best && bd<tol*tol) this.select(best,kind);
     else this.deselect();
   },
@@ -98,6 +99,7 @@ const UI={
     if(this.selKind==='site') this.renderSitePanel(o);
     else if(this.selKind==='node') this.renderNodePanel(o);
     else if(this.selKind==='animal') this.renderAnimalPanel(o);
+    else if(this.selKind==='mark') this.renderMarkPanel(o);
     else this.renderAgentPanel(o);
   },
 
@@ -136,7 +138,7 @@ const UI={
 
   renderSitePanel(s){
     this.setExtras(false);
-    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY'};
+    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY',workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE'};
     this.el.pName.textContent=SITE_LABEL[s.type]||s.type.toUpperCase();
     if(s.faction!=null){ this.el.pFaction.textContent=Factions[s.faction].name; this.el.pFaction.style.color=Factions[s.faction].color; }
     else { this.el.pFaction.textContent='unclaimed'; this.el.pFaction.style.color='#9aa6a2'; }
@@ -162,6 +164,19 @@ const UI={
     this.setStatLabels('stock','—','—','—');
     setBar(this.el.barEnergy, nd.max? nd.amount/nd.max : 0);
     setBar(this.el.barHunger,0); setBar(this.el.barSocial,0); setBar(this.el.barJoy,0);
+  },
+
+  renderMarkPanel(m){
+    this.setExtras(false);
+    const MARK_LABEL={shrine:'SHRINE',garden:'GARDEN PLOT',mark:'LEFT MARK'};
+    this.el.pName.textContent=MARK_LABEL[m.type]||m.type.toUpperCase();
+    const fc=Factions[m.faction];
+    this.el.pFaction.textContent=fc.name;
+    this.el.pFaction.style.color=fc.color;
+    this.el.pAge.textContent='age '+Math.floor(m.age/World.dayLen)+' days';
+    this.el.pAction.textContent='a trace left behind';
+    this.setStatLabels('—','—','—','—');
+    setBar(this.el.barEnergy,0); setBar(this.el.barHunger,0); setBar(this.el.barSocial,0); setBar(this.el.barJoy,0);
   },
 
   renderAnimalPanel(an){

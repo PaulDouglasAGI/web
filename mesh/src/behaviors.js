@@ -36,7 +36,7 @@ function wanderPoint(a,radius){
   for(let i=0;i<8;i++){
     const ang=Math.random()*Math.PI*2, r=radius*(0.4+Math.random()*0.6);
     const x=a.x+Math.cos(ang)*r, y=a.y+Math.sin(ang)*r;
-    if(World.walkable(x,y) && x>10 && y>10 && x<World.w-10 && y<World.h-10) return {x,y};
+    if(World.walkable(x,y) && x>10 && y>10 && x<World.w-10 && y<World.h-10 && World.reachable(a.x,a.y,x,y)) return {x,y};
   }
   return {x:a.x,y:a.y};
 }
@@ -66,8 +66,16 @@ function frontierPoint(a){
   const r=200+Math.random()*340;
   let x=a.x+Math.cos(ang)*r, y=a.y+Math.sin(ang)*r;
   x=Math.max(20,Math.min(World.w-20,x)); y=Math.max(20,Math.min(World.h-20,y));
-  if(!World.walkable(x,y)){ return wanderPoint(a,260); }
+  if(!World.walkable(x,y) || !World.reachable(a.x,a.y,x,y)){ return wanderPoint(a,260); }
   return {x,y};
+}
+
+// ── functional structure jobs ──────────────────────────────────────────────
+const MIN_TENURE_TICKS=World.seasonLen*World.dayLen;
+const JOB_SITE_TYPES=['granary','workshop','market','shrineHall','loreHall','huntingLodge'];
+function jobSlots(s){ return s.type==='granary' ? 2 : (s.capacity||1); }
+function openFunctionalSite(a){
+  return World.nearestSite(a.x,a.y, s=> JOB_SITE_TYPES.includes(s.type) && s.built && (s.workers||[]).length<jobSlots(s));
 }
 
 const Behaviors=[
@@ -141,6 +149,31 @@ const Behaviors=[
   { id:'seekResource', label:'seeking a resource', glyph:'?', cat:'trade',
     weight:a=> { const need=neededResource(a); return need?14:0; },
     make:a=> { const need=neededResource(a); const nd=need?World.nearestNode(a.x,a.y,need==='wood'||need==='stone'||need==='food'||need==='water'?need:'food'):null; return nd?gotoNode(a,'seeking '+need,'?','trade',nd,need):null; } },
+  { id:'workAtStructure', label:'seeking work', glyph:'⚙', cat:'trade',
+    weight:a=> { if(a.job) return 0; return openFunctionalSite(a) ? 14 : 0; },
+    make:a=> { const st=openFunctionalSite(a); if(!st) return null;
+      return { label:'seeking work',glyph:'⚙',cat:'trade', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:60,
+        onArrive(ag){
+          if(ag.job || (st.workers||[]).length>=jobSlots(st)) return;
+          st.workers=st.workers||[]; st.workers.push(ag.id);
+          ag.job={siteRef:st,startTick:World.tick};
+          ag.remember('took up work at a '+st.type);
+        } }; } },
+  { id:'doJob', label:'working', glyph:'⚙', cat:'trade',
+    weight:a=> { if(!a.job) return 0; const tenured=World.tick-a.job.startTick>=MIN_TENURE_TICKS; return tenured?16:500; },
+    make:a=> { const st=a.job.siteRef;
+      if(!st || !st.built || !(st.workers||[]).includes(a.id)){ a.job=null; return null; }
+      return { label:'working at the '+st.type,glyph:'⚙',cat:'trade', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:160, isJobTask:true,
+        onTick(ag){
+          if(!ag.job || ag.job.siteRef!==st) return;
+          if(st.type==='workshop' && Math.random()<(st.effRate||0.05)) ag.inv.tools=(ag.inv.tools||0)+1;
+          if(st.type==='market' && ag.task._t%40===0) raiseResonance((st.effRate||0.05)*0.5);
+          if(st.type==='shrineHall' && ag.task._t%40===0){ raiseResonance((st.effRate||0.05)*0.4); Mesh.grief=Math.max(0,Mesh.grief-(st.effRate||0.05)*0.6); }
+          if(st.type==='loreHall' && ag.task._t%50===0){
+            const pupil=nearestAgent(ag, o=>o!==ag && o.skills<3 && dist2(o.x,o.y,st.x,st.y)<140*140);
+            if(pupil){ pupil.skills+=1; pupil.remember('learned at the lore hall'); }
+          }
+        } }; } },
 
   // ── SOCIAL ─────────────────────────────────────────────────────────────────
   { id:'seekFriend', label:'seeking a friend', glyph:'♥', cat:'social',
@@ -183,7 +216,12 @@ const Behaviors=[
     make:a=> stayPut(a,'resting','·','inner',160,ag=>{ ag.energy=Math.min(100,ag.energy+0.5*ag.settlementBonus().restMult); },'sit') },
   { id:'sleep', label:'sleeping', glyph:'z', cat:'inner',
     weight:a=> World.isNight()? (100-a.energy)*0.9+40 : 0,
-    make:a=> stayPut(a,'sleeping','z','inner',300,ag=>{ ag.energy=Math.min(100,ag.energy+0.7*ag.settlementBonus().restMult); ag.social=Math.min(100,ag.social+0.05); },'lie') },
+    make:a=> {
+      const hut=World.nearestSite(a.x,a.y, s=>s.type==='hut'&&s.built);
+      if(!hut) return stayPut(a,'sleeping','z','inner',300,ag=>{ ag.energy=Math.min(100,ag.energy+0.7*ag.settlementBonus().restMult); ag.social=Math.min(100,ag.social+0.05); },'lie');
+      return { label:'sleeping',glyph:'z',cat:'inner', pose:'lie', target:{x:hut.x,y:hut.y}, arrive:16, dur:300,
+        onTick(ag){ ag.energy=Math.min(100,ag.energy+0.7*ag.settlementBonus().restMult); ag.social=Math.min(100,ag.social+0.05); } };
+    } },
   { id:'wander', label:'wandering', glyph:'~', cat:'inner',
     weight:a=> 10,
     make:a=> gotoPoint(a,'wandering','~','inner', wanderPoint(a,220).x, wanderPoint(a,220).y, 80) },
