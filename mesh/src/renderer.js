@@ -241,13 +241,17 @@ const Renderer={
       if(UI.selected===an){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,r*2.2,0,7); ctx.stroke(); }
     }
 
-    // ── SETTLEMENT TIER LABELS ───────────────────────────────────────────--
-    if(z>0.7){
-      for(const g of World.gathers){
-        if(!g.tier) continue;
-        const sx=this.sx(g.x), sy=this.sy(g.y);
-        if(sx<-60||sx>W+60||sy<-40||sy>H+40) continue;
-        const top=g.tier===SETTLEMENT_TIERS.length-1;
+    // ── SETTLEMENT MARKERS + TIER LABELS ─────────────────────────────────--
+    for(const g of World.gathers){
+      const sx=this.sx(g.x), sy=this.sy(g.y);
+      if(sx<-60||sx>W+60||sy<-40||sy>H+40) continue;
+      const top=g.tier===SETTLEMENT_TIERS.length-1;
+      const mr=Math.max(3,5*z);
+      ctx.strokeStyle= top ? 'rgba(255,233,176,0.55)' : 'rgba(210,225,218,0.4)';
+      ctx.lineWidth=Math.max(1,1.2*z);
+      ctx.beginPath(); ctx.arc(sx,sy,mr,0,7); ctx.stroke();
+      if(UI.selected===g){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,mr*2,0,7); ctx.stroke(); }
+      if(z>0.7 && g.tier>0){
         ctx.fillStyle= top ? 'rgba(255,233,176,0.95)' : 'rgba(210,225,218,0.7)';
         ctx.font=(top?11*z:8*z)+'px "Exo 2",sans-serif'; ctx.textAlign='center';
         ctx.fillText(SETTLEMENT_TIERS[g.tier].name, sx, sy-34*z);

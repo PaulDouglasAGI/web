@@ -60,12 +60,16 @@ const UI={
 
     // touch
     let pinchD=0;
-    cnv.addEventListener('touchstart',e=>{ if(e.touches.length===1) start(e.touches[0].clientX,e.touches[0].clientY); else if(e.touches.length===2) pinchD=this.touchDist(e); },{passive:false});
+    cnv.addEventListener('touchstart',e=>{ if(e.touches.length===1) start(e.touches[0].clientX,e.touches[0].clientY); else if(e.touches.length===2){ dragging=false; pinchD=this.touchDist(e); } },{passive:false});
     cnv.addEventListener('touchmove',e=>{ e.preventDefault();
       if(e.touches.length===1) move(e.touches[0].clientX,e.touches[0].clientY);
       else if(e.touches.length===2){ const d=this.touchDist(e); if(pinchD>0){ const cx=(e.touches[0].clientX+e.touches[1].clientX)/2, cy=(e.touches[0].clientY+e.touches[1].clientY)/2; this.zoomAt(cx,cy,d/pinchD); } pinchD=d; }
     },{passive:false});
-    cnv.addEventListener('touchend',e=>{ if(e.touches.length===0) end(); pinchD=0; });
+    cnv.addEventListener('touchend',e=>{
+      if(e.touches.length===0) end();
+      else { dragging=false; }
+      pinchD=0;
+    });
   },
   touchDist(e){ const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY; return Math.hypot(dx,dy); },
 
@@ -78,6 +82,7 @@ const UI={
     for(const nd of World.nodes){ const d=dist2(nd.x,nd.y,wx,wy); if(d<bd){ bd=d; best=nd; kind='node'; } }
     for(const an of World.animals){ if(!an.alive) continue; const d=dist2(an.x,an.y,wx,wy); if(d<bd){ bd=d; best=an; kind='animal'; } }
     for(const m of Marks){ const d=dist2(m.x,m.y,wx,wy); if(d<bd){ bd=d; best=m; kind='mark'; } }
+    for(const g of World.gathers){ const d=dist2(g.x,g.y,wx,wy); if(d<bd){ bd=d; best=g; kind='settlement'; } }
     if(best && bd<tol*tol) this.select(best,kind);
     else this.deselect();
   },
@@ -91,6 +96,9 @@ const UI={
   setExtras(show){
     const d=show?'':'none';
     this.el.pBondRow.style.display=d; this.el.pInv.style.display=d;
+  },
+  setMemSection(show){
+    const d=show?'':'none';
     this.el.pMemLabel.style.display=d; this.el.pMem.style.display=d;
   },
 
@@ -100,11 +108,13 @@ const UI={
     else if(this.selKind==='node') this.renderNodePanel(o);
     else if(this.selKind==='animal') this.renderAnimalPanel(o);
     else if(this.selKind==='mark') this.renderMarkPanel(o);
+    else if(this.selKind==='settlement') this.renderSettlementPanel(o);
     else this.renderAgentPanel(o);
   },
 
   renderAgentPanel(a){
     this.setExtras(true);
+    this.setMemSection(true);
     this.setStatLabels('energy','hunger','social','joy');
     const fc=Factions[a.faction];
     this.el.pName.textContent=a.name;
@@ -143,6 +153,36 @@ const UI={
     if(s.faction!=null){ this.el.pFaction.textContent=Factions[s.faction].name; this.el.pFaction.style.color=Factions[s.faction].color; }
     else { this.el.pFaction.textContent='unclaimed'; this.el.pFaction.style.color='#9aa6a2'; }
     this.el.pAge.textContent= s.level>0 ? ('level '+s.level+' / '+s.maxLevel) : 'not yet built';
+
+    const isJobSite = s.built && (s.type==='granary' || FUNCTIONAL_TYPES.includes(s.type));
+    if(isJobSite){
+      const slots=jobSlots(s), workers=(s.workers||[]).length;
+      const hasLog = FUNCTIONAL_TYPES.includes(s.type) && s.type!=='huntingLodge';
+      let summary;
+      if(s.type==='workshop') summary=workers+'/'+slots+' working · '+(s.toolsGranted||0)+' tools forged';
+      else if(s.type==='market') summary=workers+'/'+slots+' working · resonance +'+(s.resonanceGiven||0).toFixed(2);
+      else if(s.type==='shrineHall') summary=workers+'/'+slots+' working · grief eased '+(s.griefEased||0).toFixed(2);
+      else if(s.type==='loreHall') summary=workers+'/'+slots+' working · '+(s.pupilsTaught||0)+' taught';
+      else summary=workers+'/'+slots+' staffed · feeding aura +'+(s.contrib||0).toFixed(2); // granary / huntingLodge
+      this.el.pAction.textContent=summary;
+      this.setStatLabels('staffed','—','—','—');
+      setBar(this.el.barEnergy, slots? workers/slots : 0);
+      setBar(this.el.barHunger,0); setBar(this.el.barSocial,0); setBar(this.el.barJoy,0);
+      this.setMemSection(hasLog);
+      if(hasLog){
+        this.el.pMem.innerHTML='';
+        const log=s.log||[];
+        for(let i=log.length-1;i>=0;i--){
+          const line=document.createElement('div');
+          line.className='mem-line';
+          line.textContent=log[i];
+          this.el.pMem.appendChild(line);
+        }
+      }
+      return;
+    }
+
+    this.setMemSection(false);
     if(s.level>=s.maxLevel) this.el.pAction.textContent='fully raised';
     else if(s.matsWood>=s.needWood && s.matsStone>=s.needStone) this.el.pAction.textContent='ready to build — awaiting hands';
     else this.el.pAction.textContent='gathering materials';
@@ -155,6 +195,7 @@ const UI={
 
   renderNodePanel(nd){
     this.setExtras(false);
+    this.setMemSection(false);
     const NODE_LABEL={berry:'BERRY BUSH',wood:'TIMBER STAND',stone:'STONE OUTCROP',water:'FRESH WATER SPRING',fish:'FISHING SPOT',herb:'WILD HERBS'};
     this.el.pName.textContent=NODE_LABEL[nd.sub]||nd.type.toUpperCase();
     this.el.pFaction.textContent='resource · '+nd.type;
@@ -168,6 +209,7 @@ const UI={
 
   renderMarkPanel(m){
     this.setExtras(false);
+    this.setMemSection(false);
     const MARK_LABEL={shrine:'SHRINE',garden:'GARDEN PLOT',mark:'LEFT MARK'};
     this.el.pName.textContent=MARK_LABEL[m.type]||m.type.toUpperCase();
     const fc=Factions[m.faction];
@@ -181,6 +223,7 @@ const UI={
 
   renderAnimalPanel(an){
     this.setExtras(false);
+    this.setMemSection(false);
     this.el.pName.textContent=an.kind.toUpperCase();
     this.el.pFaction.textContent='wildlife';
     this.el.pFaction.style.color='#c2b08a';
@@ -188,6 +231,38 @@ const UI={
     this.el.pAction.textContent=an.alive?'alive':'hidden';
     this.setStatLabels('—','—','—','—');
     setBar(this.el.barEnergy,0); setBar(this.el.barHunger,0); setBar(this.el.barSocial,0); setBar(this.el.barJoy,0);
+  },
+
+  renderSettlementPanel(g){
+    this.setExtras(false);
+    this.setMemSection(false);
+    const gi=World.gathers.indexOf(g);
+    const pop=Agents.filter(a=>!a.dead && World.nearestOf(World.gathers,a.x,a.y)===g).length;
+    const sites=World.sites.filter(s=>s.gather===gi);
+    const built=sites.filter(s=>s.built);
+    const counts={}; for(const s of built) counts[s.type]=(counts[s.type]||0)+1;
+
+    let housing=26; for(const s of built) if(s.type==='hut') housing+=s.capacity||3;
+
+    let jobsFilled=0, jobsTotal=0;
+    for(const s of built){
+      if(s.type==='granary' || FUNCTIONAL_TYPES.includes(s.type)){
+        jobsTotal+=jobSlots(s);
+        jobsFilled+=(s.workers||[]).length;
+      }
+    }
+
+    this.el.pName.textContent=SETTLEMENT_TIERS[g.tier].name;
+    this.el.pFaction.textContent='settlement · '+pop+' souls';
+    this.el.pFaction.style.color='#9fc9b8';
+    const builtSummary=Object.keys(counts).map(t=>counts[t]+' '+t).join(', ')||'nothing built yet';
+    this.el.pAge.textContent=builtSummary;
+    this.el.pAction.textContent='jobs '+jobsFilled+'/'+jobsTotal+' filled · food sec '+(g.foodSec||0).toFixed(2);
+    this.setStatLabels('housing','jobs','tier','food sec');
+    setBar(this.el.barEnergy, housing? Math.min(1,pop/housing) : 0);
+    setBar(this.el.barHunger, jobsTotal? jobsFilled/jobsTotal : 0);
+    setBar(this.el.barSocial, g.tier/(SETTLEMENT_TIERS.length-1));
+    setBar(this.el.barJoy, Math.min(1,(g.foodSec||0)/2));
   },
 
   zoomAt(px,py,factor){

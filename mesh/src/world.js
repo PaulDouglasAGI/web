@@ -84,6 +84,8 @@ const SITE_DEFS={
 };
 const FUNCTIONAL_TYPES=['workshop','market','shrineHall','loreHall','huntingLodge'];
 const FUNCTIONAL_LABEL={workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE'};
+// small rolling activity log on a site — visible proof of what a staffed building is actually doing
+function siteLog(s,msg){ s.log=s.log||[]; s.log.push(msg); if(s.log.length>6) s.log.shift(); }
 function mkSite(x,y,type,gather){
   const lvl=SITE_DEFS[type].levels[0];
   const s={x,y,type,level:0,maxLevel:SITE_DEFS[type].levels.length,
@@ -91,8 +93,8 @@ function mkSite(x,y,type,gather){
     matsWood:0,matsStone:0,progress:0,built:false,faction:null,gather};
   if(type==='well') Object.assign(s,{amount:0,max:0,regen:0});
   if(type==='farm') Object.assign(s,{stage:'empty',stageT:0,growTicks:lvl.growTicks,yieldAmt:lvl.yieldAmt});
-  if(type==='granary') Object.assign(s,{workers:[]});
-  if(FUNCTIONAL_TYPES.includes(type)) Object.assign(s,{capacity:lvl.cap, effRate:lvl.effRate, workers:[]});
+  if(type==='granary') Object.assign(s,{workers:[],log:[],contrib:0});
+  if(FUNCTIONAL_TYPES.includes(type)) Object.assign(s,{capacity:lvl.cap, effRate:lvl.effRate, workers:[],log:[],contrib:0});
   return s;
 }
 // called when a site's progress reaches 1 — applies the level just finished,
@@ -448,8 +450,8 @@ const World={
         let foodSec=0, restMult=1;
         for(const s of this.sites){
           if(s.gather!==gi || !s.built) continue;
-          if(s.type==='granary'){ foodSec+=(s.capacity||1)*0.4; if((s.workers||[]).length>0) foodSec+=0.15*s.workers.length; }
-          if(s.type==='huntingLodge' && (s.workers||[]).length>0) foodSec+=(s.effRate||0.1)*s.workers.length;
+          if(s.type==='granary'){ s.contrib=(s.capacity||1)*0.4+((s.workers||[]).length>0?0.15*s.workers.length:0); foodSec+=s.contrib; }
+          if(s.type==='huntingLodge'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; foodSec+=s.contrib; }
           if(s.type==='hut' && s.restMult) restMult=Math.max(restMult,s.restMult);
         }
         g.foodSec=foodSec; g.restMult=restMult;

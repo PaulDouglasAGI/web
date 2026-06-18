@@ -158,6 +158,7 @@ const Behaviors=[
           st.workers=st.workers||[]; st.workers.push(ag.id);
           ag.job={siteRef:st,startTick:World.tick};
           ag.remember('took up work at a '+st.type);
+          siteLog(st, ag.name+' took up work here');
         } }; } },
   { id:'doJob', label:'working', glyph:'⚙', cat:'trade',
     weight:a=> { if(!a.job) return 0; const tenured=World.tick-a.job.startTick>=MIN_TENURE_TICKS; return tenured?16:500; },
@@ -166,12 +167,31 @@ const Behaviors=[
       return { label:'working at the '+st.type,glyph:'⚙',cat:'trade', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:160, isJobTask:true,
         onTick(ag){
           if(!ag.job || ag.job.siteRef!==st) return;
-          if(st.type==='workshop' && Math.random()<(st.effRate||0.05)) ag.inv.tools=(ag.inv.tools||0)+1;
-          if(st.type==='market' && ag.task._t%40===0) raiseResonance((st.effRate||0.05)*0.5);
-          if(st.type==='shrineHall' && ag.task._t%40===0){ raiseResonance((st.effRate||0.05)*0.4); Mesh.grief=Math.max(0,Mesh.grief-(st.effRate||0.05)*0.6); }
+          if(st.type==='workshop' && Math.random()<(st.effRate||0.05)){
+            ag.inv.tools=(ag.inv.tools||0)+1;
+            st.toolsGranted=(st.toolsGranted||0)+1;
+            siteLog(st,'forged a tool for '+ag.name);
+          }
+          if(st.type==='market' && ag.task._t%40===0){
+            const amt=(st.effRate||0.05)*0.5;
+            raiseResonance(amt);
+            st.resonanceGiven=(st.resonanceGiven||0)+amt;
+            siteLog(st, ag.name+' brought the market to life');
+          }
+          if(st.type==='shrineHall' && ag.task._t%40===0){
+            const amt=(st.effRate||0.05)*0.4, eased=(st.effRate||0.05)*0.6;
+            raiseResonance(amt); Mesh.grief=Math.max(0,Mesh.grief-eased);
+            st.resonanceGiven=(st.resonanceGiven||0)+amt;
+            st.griefEased=(st.griefEased||0)+eased;
+            siteLog(st, ag.name+' led a gathering at the shrine hall');
+          }
           if(st.type==='loreHall' && ag.task._t%50===0){
             const pupil=nearestAgent(ag, o=>o!==ag && o.skills<3 && dist2(o.x,o.y,st.x,st.y)<140*140);
-            if(pupil){ pupil.skills+=1; pupil.remember('learned at the lore hall'); }
+            if(pupil){
+              pupil.skills+=1; pupil.remember('learned at the lore hall');
+              st.pupilsTaught=(st.pupilsTaught||0)+1;
+              siteLog(st, ag.name+' taught '+pupil.name);
+            }
           }
         } }; } },
 
