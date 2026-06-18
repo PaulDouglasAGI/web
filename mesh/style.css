@@ -1,0 +1,30 @@
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:#05060a;font-family:'Rajdhani',sans-serif;}
+canvas{display:block;position:absolute;inset:0;cursor:grab;}
+canvas.dragging{cursor:grabbing;}
+
+/* Back link */
+#back{position:absolute;top:14px;left:18px;z-index:30;font-family:'Exo 2',sans-serif;font-size:10px;font-weight:700;letter-spacing:3px;color:#3a4a5a;text-decoration:none;transition:color .2s;text-shadow:0 0 12px rgba(0,0,0,0.8);}
+#back:hover{color:#9fd6c8;}
+
+/* Ambient UI */
+#ui{position:absolute;inset:0;pointer-events:none;z-index:20;}
+#clock{position:absolute;top:16px;right:20px;text-align:right;}
+#season{font-family:'Exo 2',sans-serif;font-weight:900;font-size:13px;letter-spacing:5px;color:#cfe0d8;text-shadow:0 0 18px rgba(120,200,180,0.4);}
+#timeofday{font-size:10px;letter-spacing:4px;color:#6a7e88;margin-top:2px;}
+
+#resonance-wrap{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);text-align:center;}
+#resonance-glyph{width:30px;height:30px;margin:0 auto 5px;border-radius:50%;background:radial-gradient(circle at 50% 50%,rgba(255,220,170,0.9),rgba(255,180,120,0.15) 60%,transparent 75%);box-shadow:0 0 26px rgba(255,200,150,0.5);transition:box-shadow .6s,background .6s;}
+#resonance-label{font-size:8px;letter-spacing:5px;color:#5a6e74;}
+
+#pop{position:absolute;top:16px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:#5a6e74;font-family:'Exo 2',sans-serif;}
+
+/* Inspector */
+#inspector{position:absolute;z-index:25;pointer-events:none;padding:8px 12px;background:rgba(8,12,16,0.72);border:1px solid rgba(120,160,150,0.22);border-radius:3px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);opacity:0;transition:opacity .25s;transform:translate(-50%,-130%);white-space:nowrap;}
+#inspector.show{opacity:1;}
+#insp-name{font-family:'Exo 2',sans-serif;font-weight:700;font-size:12px;letter-spacing:2px;color:#e8f0ec;}
+#insp-faction{font-size:9px;letter-spacing:3px;margin-top:1px;}
+#insp-action{font-size:10px;color:#9aa8a4;margin-top:3px;font-style:italic;}
+
+#hint{position:absolute;bottom:14px;right:18px;z-index:20;font-size:9px;letter-spacing:3px;color:#2e3a40;pointer-events:none;transition:opacity 1s;}
+#hint.fade{opacity:0;}

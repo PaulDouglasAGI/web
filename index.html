@@ -147,6 +147,18 @@ body::before{content:'';position:fixed;inset:0;z-index:0;background:radial-gradi
       </div>
     </article>
 
+    <article class="game-card" data-game="mesh">
+      <div class="card-preview">
+        <canvas class="preview-canvas" id="preview-mesh" width="320" height="180"></canvas>
+      </div>
+      <div class="card-body">
+        <div class="card-tag">SIMULATION &middot; LIVING WORLD</div>
+        <h2 class="card-title">THE MESH</h2>
+        <p class="card-desc">One consciousness, many bodies. Watch a society live, grieve, and dream. You only observe.</p>
+        <a class="card-play-btn" href="mesh/index.html">PLAY</a>
+      </div>
+    </article>
+
   </div>
 </main>
 
@@ -964,6 +976,94 @@ function initVoidPreview(){
   requestAnimationFrame(frame);
 }
 
+/* ── THE MESH PREVIEW ──────────────────────────────────────── */
+function initMeshPreview(){
+  const cnv=document.getElementById('preview-mesh');
+  if(!cnv)return;
+  const ctx=cnv.getContext('2d');
+  const W=320,H=180;
+  const FAC=[
+    {c:'#7fc08a',g:'rgba(127,192,138,'},  // Cultivators
+    {c:'#e6b455',g:'rgba(230,180,85,'},   // Wayfarers
+    {c:'#e08043',g:'rgba(224,128,67,'},   // Forgers
+    {c:'#b89bd9',g:'rgba(184,155,217,'}   // Tenders
+  ];
+  // little wandering agents
+  const agents=Array.from({length:16},()=>({
+    x:Math.random()*W, y:Math.random()*H,
+    a:Math.random()*Math.PI*2, sp:0.12+Math.random()*0.22,
+    fac:(Math.random()*4)|0, turn:(Math.random()-0.5)*0.04,
+    bond:-1
+  }));
+  // a few bonded pairs
+  agents[0].bond=1; agents[1].bond=0; agents[4].bond=7; agents[7].bond=4;
+  const ripples=[];
+  let t=0, ripTimer=40, resonance=0.6;
+
+  function frame(){
+    t++;
+    // soft terrain backdrop
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#0c1812'); g.addColorStop(1,'#0a1410');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // faint terrain patches
+    ctx.fillStyle='rgba(40,70,46,0.25)';
+    for(let i=0;i<5;i++){ const px=(i*71+30)%W, py=(i*53+40)%H; ctx.beginPath(); ctx.arc(px,py,26,0,7); ctx.fill(); }
+
+    // move agents
+    agents.forEach(a=>{
+      a.a+=a.turn+Math.sin(t*0.01+a.x*0.05)*0.01;
+      a.x+=Math.cos(a.a)*a.sp; a.y+=Math.sin(a.a)*a.sp;
+      if(a.x<6||a.x>W-6) a.a=Math.PI-a.a; if(a.y<6||a.y>H-6) a.a=-a.a;
+      a.x=Math.max(6,Math.min(W-6,a.x)); a.y=Math.max(6,Math.min(H-6,a.y));
+    });
+
+    // resonance gently breathes
+    resonance=0.6+Math.sin(t*0.006)*0.22;
+
+    // mesh threads
+    for(let i=0;i<agents.length;i++){
+      for(let j=i+1;j<agents.length;j++){
+        const a=agents[i],b=agents[j];
+        const d=Math.hypot(a.x-b.x,a.y-b.y);
+        if(d>64) continue;
+        const prox=1-d/64;
+        const bonded=a.bond===j;
+        let al=prox*(0.12+resonance*0.26); if(bonded) al=Math.min(0.8,al+0.45);
+        ctx.strokeStyle=(resonance>0.5?'rgba(180,210,180,':'rgba(120,150,170,')+al+')';
+        ctx.lineWidth=bonded?1.4:0.8;
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+        if(bonded){ const mx=(a.x+b.x)/2,my=(a.y+b.y)/2; ctx.fillStyle='rgba(220,240,210,0.7)'; ctx.beginPath(); ctx.arc(mx,my,1.6,0,7); ctx.fill(); }
+      }
+    }
+
+    // ripples (signals)
+    ripTimer--;
+    if(ripTimer<=0){ ripTimer=70+Math.random()*60; const a=agents[(Math.random()*agents.length)|0]; ripples.push({x:a.x,y:a.y,r:4,life:1,c:FAC[a.fac].c}); }
+    for(let i=ripples.length-1;i>=0;i--){ const r=ripples[i]; r.r+=0.8; r.life-=0.012; if(r.life<=0){ripples.splice(i,1);continue;} ctx.strokeStyle=r.c.replace(')',','); ctx.globalAlpha=r.life*0.5; ctx.strokeStyle=r.c; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,7); ctx.stroke(); ctx.globalAlpha=1; }
+
+    // agents
+    agents.forEach(a=>{
+      const f=FAC[a.fac];
+      const gr=ctx.createRadialGradient(a.x,a.y,0,a.x,a.y,7);
+      gr.addColorStop(0,f.g+'0.5)'); gr.addColorStop(1,f.g+'0)');
+      ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(a.x,a.y,7,0,7); ctx.fill();
+      ctx.fillStyle=f.c; ctx.beginPath(); ctx.arc(a.x,a.y-1.5,1.6,0,7); ctx.fill();
+      ctx.fillRect(a.x-1,a.y-0.3,2,3.4);
+    });
+
+    // resonance warmth wash
+    if(resonance>0.55){ ctx.fillStyle='rgba(255,200,140,'+((resonance-0.55)*0.22)+')'; ctx.fillRect(0,0,W,H); }
+    // vignette
+    const vg=ctx.createRadialGradient(W/2,H/2,60,W/2,H/2,200);
+    vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.45)');
+    ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   initWarpPreview();
   initAlpinePreview();
@@ -971,6 +1071,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   initDominionPreview();
   initFirstWorldPreview();
   initVoidPreview();
+  initMeshPreview();
 });
 </script>
 </body>

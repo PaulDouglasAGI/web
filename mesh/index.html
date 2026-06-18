@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>THE MESH — Umbra Directorate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;700;900&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<a id="back" href="../">← CATALOG</a>
+
+<canvas id="world"></canvas>
+
+<!-- Ambient UI -->
+<div id="ui">
+  <div id="clock">
+    <div id="season">SPRING</div>
+    <div id="timeofday">DAWN</div>
+  </div>
+  <div id="resonance-wrap">
+    <div id="resonance-glyph"></div>
+    <div id="resonance-label">RESONANCE</div>
+  </div>
+  <div id="pop">— souls</div>
+</div>
+
+<!-- Agent inspector (appears when zoomed in near an agent) -->
+<div id="inspector">
+  <div id="insp-name">—</div>
+  <div id="insp-faction">—</div>
+  <div id="insp-action">—</div>
+</div>
+
+<div id="hint">drag to pan · scroll to zoom</div>
+
+<!-- Engine — classic scripts, ordered by dependency -->
+<script src="src/world.js"></script>
+<script src="src/factions.js"></script>
+<script src="src/economy.js"></script>
+<script src="src/behaviors.js"></script>
+<script src="src/mesh.js"></script>
+<script src="src/agents.js"></script>
+<script src="src/events.js"></script>
+<script src="src/renderer.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
