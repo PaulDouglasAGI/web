@@ -12,7 +12,7 @@ const Renderer={
     1:[120,128,96], // shore
     2:[64,92,54],   // plain
     3:[36,68,40],   // forest
-    4:[92,84,68],   // hill
+    4:[84,90,70],   // hill — muted green-gray, less "desert tan" now that hills are rarer
     5:[70,66,72],   // ruin
     6:[80,60,46],   // fire area
     7:[78,98,60]    // gathering spot
@@ -97,6 +97,7 @@ const Renderer={
       const g=ctx.createRadialGradient(sx,sy,0,sx,sy,9*z);
       g.addColorStop(0,col+a+')'); g.addColorStop(1,col+'0)');
       ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,9*z,0,7); ctx.fill();
+      if(UI.selected===nd){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,13*z,0,7); ctx.stroke(); }
     }
 
     // ── MESH THREADS ──────────────────────────────────────────────────────--
@@ -161,23 +162,24 @@ const Renderer={
     for(const s of World.sites){
       const sx=this.sx(s.x), sy=this.sy(s.y);
       if(sx<-30||sx>W+30||sy<-40||sy>H+30) continue;
+      const lvlScale=1+0.16*Math.max(0,s.level-1); // level 2+ literally renders bigger
       if(s.built){
         if(s.type==='farm'){
           const stageCol={empty:'#5c4a32',planted:'#6b8c4a',growing:'#4a7a3a',ready:'#d4a73a'}[s.stage]||'#5c4a32';
-          const fw=16*z, fh=10*z;
+          const fw=16*z*lvlScale, fh=10*z*lvlScale;
           ctx.fillStyle=stageCol;
           ctx.fillRect(sx-fw/2, sy-fh/2, fw, fh);
           ctx.strokeStyle='rgba(40,30,20,0.5)'; ctx.lineWidth=Math.max(0.5,0.8*z);
           ctx.strokeRect(sx-fw/2, sy-fh/2, fw, fh);
         } else if(s.type==='well'){
-          const r=8*z;
+          const r=8*z*lvlScale;
           ctx.fillStyle='#6a6256';
           ctx.beginPath(); ctx.arc(sx,sy,r,0,7); ctx.fill();
           ctx.fillStyle= s.amount>0.5*s.max ? 'rgba(90,160,210,0.85)' : 'rgba(70,90,100,0.5)';
           ctx.beginPath(); ctx.arc(sx,sy,r*0.6,0,7); ctx.fill();
         } else if(s.type==='granary'){
           const fc=Factions[s.faction!=null?s.faction:0];
-          const hw=14*z, hh=11*z;
+          const hw=14*z*lvlScale, hh=11*z*lvlScale;
           ctx.fillStyle='#4a3a28';
           ctx.fillRect(sx-hw*0.7, sy-hh*0.1, hw*1.4, hh*1.2);
           ctx.fillStyle=fc.color;
@@ -186,13 +188,24 @@ const Renderer={
           ctx.closePath(); ctx.fill();
         } else {
           const fc=Factions[s.faction!=null?s.faction:0];
-          const hw=10*z, hh=8*z;
+          const hw=10*z*lvlScale, hh=8*z*lvlScale;
           ctx.fillStyle='#3a2c1e';
           ctx.fillRect(sx-hw*0.65, sy-hh*0.15, hw*1.3, hh*1.15);
           ctx.fillStyle=fc.color;
           ctx.beginPath();
           ctx.moveTo(sx-hw*0.8, sy-hh*0.2); ctx.lineTo(sx, sy-hh*1.4); ctx.lineTo(sx+hw*0.8, sy-hh*0.2);
           ctx.closePath(); ctx.fill();
+        }
+        if(z>1.1){
+          ctx.fillStyle='rgba(210,225,218,0.8)';
+          ctx.font=(7*z)+'px "Exo 2",sans-serif'; ctx.textAlign='center';
+          const tag=s.level<s.maxLevel ? ('Lv'+s.level+' · '+Math.round(s.matsWood)+'/'+s.needWood+'w·'+Math.round(s.matsStone)+'/'+s.needStone+'s') : ('Lv'+s.level+' MAX');
+          ctx.fillText(tag, sx, sy+15*z*lvlScale);
+          ctx.textAlign='left';
+        }
+        if(s.level<s.maxLevel && s.progress>0){
+          ctx.fillStyle='rgba(230,180,100,0.65)';
+          ctx.fillRect(sx-10*z*lvlScale, sy+17*z*lvlScale, 20*z*lvlScale*s.progress, 2*z);
         }
       } else {
         const r=9*z;
@@ -211,6 +224,7 @@ const Renderer={
           ctx.textAlign='left';
         }
       }
+      if(UI.selected===s){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,18*z*lvlScale,0,7); ctx.stroke(); }
     }
 
     // ── ANIMALS ───────────────────────────────────────────────────────────--
@@ -223,6 +237,7 @@ const Renderer={
       ctx.beginPath(); ctx.ellipse(sx,sy,r*1.3,r*0.8,0,0,7); ctx.fill();
       ctx.fillStyle='#6a4e34';
       ctx.beginPath(); ctx.arc(sx-r*1.1,sy-r*0.3,r*0.55,0,7); ctx.fill();
+      if(UI.selected===an){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,r*2.2,0,7); ctx.stroke(); }
     }
 
     // ── SETTLEMENT TIER LABELS ───────────────────────────────────────────--

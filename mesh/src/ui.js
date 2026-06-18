@@ -19,13 +19,19 @@ const UI={
     this.el.pFaction=document.getElementById('panel-faction');
     this.el.pAge=document.getElementById('panel-age');
     this.el.pAction=document.getElementById('panel-action');
+    this.el.pBondRow=document.getElementById('panel-bond-row');
     this.el.pBond=document.getElementById('panel-bond');
     this.el.pInv=document.getElementById('panel-inv');
+    this.el.pMemLabel=document.getElementById('panel-mem-label');
     this.el.pMem=document.getElementById('panel-mem');
     this.el.barEnergy=document.getElementById('bar-energy');
     this.el.barHunger=document.getElementById('bar-hunger');
     this.el.barSocial=document.getElementById('bar-social');
     this.el.barJoy=document.getElementById('bar-joy');
+    this.el.statLabel1=document.getElementById('stat-label-1');
+    this.el.statLabel2=document.getElementById('stat-label-2');
+    this.el.statLabel3=document.getElementById('stat-label-3');
+    this.el.statLabel4=document.getElementById('stat-label-4');
     this.el.panelClose.addEventListener('click',e=>{ e.stopPropagation(); this.deselect(); });
 
     this.el.speedBtns=Array.from(document.querySelectorAll('#speed-ctl button'));
@@ -66,16 +72,38 @@ const UI={
   handleTap(px,py){
     const wx=Renderer.worldX(px), wy=Renderer.worldY(py);
     const tol=26/Camera.zoom;
-    let best=null,bd=Infinity;
-    for(const a of Agents){ const d=dist2(a.x,a.y,wx,wy); if(d<bd){ bd=d; best=a; } }
-    if(best && bd<tol*tol) this.select(best);
+    let best=null,bd=Infinity,kind=null;
+    for(const a of Agents){ const d=dist2(a.x,a.y,wx,wy); if(d<bd){ bd=d; best=a; kind='agent'; } }
+    for(const s of World.sites){ const d=dist2(s.x,s.y,wx,wy); if(d<bd){ bd=d; best=s; kind='site'; } }
+    for(const nd of World.nodes){ const d=dist2(nd.x,nd.y,wx,wy); if(d<bd){ bd=d; best=nd; kind='node'; } }
+    for(const an of World.animals){ if(!an.alive) continue; const d=dist2(an.x,an.y,wx,wy); if(d<bd){ bd=d; best=an; kind='animal'; } }
+    if(best && bd<tol*tol) this.select(best,kind);
     else this.deselect();
   },
-  select(agent){ this.selected=agent; this.el.panel.classList.add('show'); this.renderPanel(); },
-  deselect(){ this.selected=null; this.el.panel.classList.remove('show'); },
+  select(obj,kind){ this.selected=obj; this.selKind=kind||'agent'; this.el.panel.classList.add('show'); this.renderPanel(); },
+  deselect(){ this.selected=null; this.selKind=null; this.el.panel.classList.remove('show'); },
+
+  setStatLabels(l1,l2,l3,l4){
+    this.el.statLabel1.textContent=l1; this.el.statLabel2.textContent=l2;
+    this.el.statLabel3.textContent=l3; this.el.statLabel4.textContent=l4;
+  },
+  setExtras(show){
+    const d=show?'':'none';
+    this.el.pBondRow.style.display=d; this.el.pInv.style.display=d;
+    this.el.pMemLabel.style.display=d; this.el.pMem.style.display=d;
+  },
 
   renderPanel(){
-    const a=this.selected; if(!a) return;
+    const o=this.selected; if(!o) return;
+    if(this.selKind==='site') this.renderSitePanel(o);
+    else if(this.selKind==='node') this.renderNodePanel(o);
+    else if(this.selKind==='animal') this.renderAnimalPanel(o);
+    else this.renderAgentPanel(o);
+  },
+
+  renderAgentPanel(a){
+    this.setExtras(true);
+    this.setStatLabels('energy','hunger','social','joy');
     const fc=Factions[a.faction];
     this.el.pName.textContent=a.name;
     this.el.pFaction.textContent=fc.name;
@@ -106,6 +134,47 @@ const UI={
     }
   },
 
+  renderSitePanel(s){
+    this.setExtras(false);
+    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY'};
+    this.el.pName.textContent=SITE_LABEL[s.type]||s.type.toUpperCase();
+    if(s.faction!=null){ this.el.pFaction.textContent=Factions[s.faction].name; this.el.pFaction.style.color=Factions[s.faction].color; }
+    else { this.el.pFaction.textContent='unclaimed'; this.el.pFaction.style.color='#9aa6a2'; }
+    this.el.pAge.textContent= s.level>0 ? ('level '+s.level+' / '+s.maxLevel) : 'not yet built';
+    if(s.level>=s.maxLevel) this.el.pAction.textContent='fully raised';
+    else if(s.matsWood>=s.needWood && s.matsStone>=s.needStone) this.el.pAction.textContent='ready to build — awaiting hands';
+    else this.el.pAction.textContent='gathering materials';
+    this.setStatLabels('wood','stone','build','—');
+    setBar(this.el.barEnergy, s.needWood? s.matsWood/s.needWood : 1);
+    setBar(this.el.barHunger, s.needStone? s.matsStone/s.needStone : 1);
+    setBar(this.el.barSocial, s.level>=s.maxLevel?1:(s.progress||0));
+    setBar(this.el.barJoy, 0);
+  },
+
+  renderNodePanel(nd){
+    this.setExtras(false);
+    const NODE_LABEL={berry:'BERRY BUSH',wood:'TIMBER STAND',stone:'STONE OUTCROP',water:'FRESH WATER SPRING',fish:'FISHING SPOT',herb:'WILD HERBS'};
+    this.el.pName.textContent=NODE_LABEL[nd.sub]||nd.type.toUpperCase();
+    this.el.pFaction.textContent='resource · '+nd.type;
+    this.el.pFaction.style.color='#9fc9b8';
+    this.el.pAge.textContent= nd.amount>=nd.max*0.99 ? 'plentiful' : (nd.amount<0.25 ? 'depleted — regrowing' : 'recovering');
+    this.el.pAction.textContent='stock '+Math.round(nd.amount*100/nd.max)+'%';
+    this.setStatLabels('stock','—','—','—');
+    setBar(this.el.barEnergy, nd.max? nd.amount/nd.max : 0);
+    setBar(this.el.barHunger,0); setBar(this.el.barSocial,0); setBar(this.el.barJoy,0);
+  },
+
+  renderAnimalPanel(an){
+    this.setExtras(false);
+    this.el.pName.textContent=an.kind.toUpperCase();
+    this.el.pFaction.textContent='wildlife';
+    this.el.pFaction.style.color='#c2b08a';
+    this.el.pAge.textContent=an.alive?'roaming free':'resting, will return';
+    this.el.pAction.textContent=an.alive?'alive':'hidden';
+    this.setStatLabels('—','—','—','—');
+    setBar(this.el.barEnergy,0); setBar(this.el.barHunger,0); setBar(this.el.barSocial,0); setBar(this.el.barJoy,0);
+  },
+
   zoomAt(px,py,factor){
     const wx=Renderer.worldX(px), wy=Renderer.worldY(py);
     Camera.zoom=Math.max(Camera.minZoom,Math.min(Camera.maxZoom,Camera.zoom*factor));
@@ -134,7 +203,7 @@ const UI={
     }
 
     if(this.selected){
-      if(this.selected.dead) this.deselect();
+      if(this.selKind==='agent' && this.selected.dead) this.deselect();
       else this.renderPanel();
     }
   }

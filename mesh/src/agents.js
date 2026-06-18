@@ -99,10 +99,17 @@ class Agent{
   }
   fallback(){ const p=wanderPoint(this,200); const t=gotoPoint(this,'wandering','~','inner',p.x,p.y,80); t._t=0; return t; }
 
+  // nearest settlement's granary food-security / hut rest-bonus auras (0 / 1 if none built yet)
+  settlementBonus(){
+    const g=World.nearestOf(World.gathers,this.x,this.y);
+    return g?{foodSec:g.foodSec||0,restMult:g.restMult||1}:{foodSec:0,restMult:1};
+  }
+
   // ── per-tick update ─────────────────────────────────────────────────────--
   update(){
-    // needs
-    this.hunger=Math.min(100,this.hunger+0.012);
+    // needs — a granary's food-security aura slows hunger growth for everyone near it
+    const bonus=this.settlementBonus();
+    this.hunger=Math.min(100,this.hunger+Math.max(0.004,0.012-bonus.foodSec*0.0015));
     this.social=Math.min(100,this.social+0.01);
     if(this.meshMuted>0) this.meshMuted--;
     // mesh overwhelm
@@ -111,9 +118,14 @@ class Agent{
     this.joy=Math.max(0,Math.min(1, this.joy + (Mesh.resonance-0.5)*0.002 - (this.hunger>70?0.002:0)));
     if(this.hunger>92||this.energy<4){ this.joy=Math.max(0,this.joy-0.003); }
 
-    // aging & mortality
+    // aging & mortality — softened: dying of old age stays rare, and starvation/exhaustion
+    // is caught by the emergency rest override below before energy can spiral this low
     this.age+=1/World.dayLen;
-    if((this.age>60 && Math.random()<0.000018*(this.age-55)) || this.energy<-20){ this.die(); return; }
+    if((this.age>60 && Math.random()<0.000018*(this.age-55)) || this.energy<-30){ this.die(); return; }
+
+    // emergency override: force a re-roll toward rest/sleep before energy bottoms out,
+    // rather than letting the weighted system possibly keep grinding on something else
+    if(this.energy<8 && this.task && this.task.label!=='resting' && this.task.label!=='sleeping') this.task=null;
 
     // pick a task if none
     if(!this.task){ this.chooseTask(); }

@@ -41,7 +41,7 @@ const Events={
         break; }
       case 'birth':
         this.banner='A NEW LIFE BEGINS';
-        if(Agents.length<140) birthAgent();
+        if(Agents.length<World.housingCapacity()) birthAgent();
         break;
       case 'surge':
         this.banner='A MESH SURGE — EUPHORIA';
@@ -84,9 +84,10 @@ const Events={
     if(this.timer>=this.interval){ this.trigger(); this.schedule(); }
     if(this.activeT>0){ this.activeT--; if(this.activeT<=0){ this.active=null; this.banner=''; } }
 
-    // organic births when society thrives
-    if(Mesh.resonance>0.7 && Agents.length<120 && Math.random()<0.0008) birthAgent();
-    // collapse safety: if very few agents, repopulate gently
-    if(Agents.length<24 && Math.random()<0.02) birthAgent();
+    // organic births when society thrives — gated by how much housing has actually been built
+    const cap=World.housingCapacity();
+    if(Mesh.resonance>0.6 && Agents.length<cap && Math.random()<0.0014) birthAgent();
+    // collapse safety: if very few agents, repopulate gently (never above the housing cap)
+    if(Agents.length<Math.min(24,cap) && Math.random()<0.02) birthAgent();
   }
 };

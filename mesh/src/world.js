@@ -10,20 +10,59 @@ function makeRNG(seed){
 // ── Tile types ───────────────────────────────────────────────────────────────
 const TILE={ WATER:0, SHORE:1, PLAIN:2, FOREST:3, HILL:4, RUIN:5, FIRE:6, GATHER:7 };
 
-// ── Buildable structure types ──────────────────────────────────────────────--
+// ── Buildable structure types — each has a ladder of levels. Level 1 is the
+// initial build; level 2 makes it bigger (more capacity/yield/storage), level
+// 3 makes it faster (quicker regen/growth). Re-using the same mats/progress
+// fields for every level keeps deliverMaterials/construct generic. ────────--
 const SITE_DEFS={
-  hut:    {needWood:7,  needStone:4,  buildDur:170},
-  well:   {needWood:3,  needStone:9,  buildDur:170},
-  farm:   {needWood:5,  needStone:1,  buildDur:120},
-  granary:{needWood:10, needStone:10, buildDur:240}
+  hut:    { levels:[
+              {needWood:7,  needStone:4,  buildDur:170, cap:3},
+              {needWood:10, needStone:6,  buildDur:200, cap:5},
+              {needWood:8,  needStone:8,  buildDur:130, cap:5, restMult:1.4}
+            ] },
+  well:   { levels:[
+              {needWood:3,  needStone:9,  buildDur:170, max:40, regen:0.00012},
+              {needWood:5,  needStone:12, buildDur:200, max:70, regen:0.00012},
+              {needWood:6,  needStone:10, buildDur:140, max:70, regen:0.00022}
+            ] },
+  farm:   { levels:[
+              {needWood:5,  needStone:1,  buildDur:120, yieldAmt:4, growTicks:900},
+              {needWood:8,  needStone:2,  buildDur:150, yieldAmt:7, growTicks:900},
+              {needWood:6,  needStone:3,  buildDur:100, yieldAmt:7, growTicks:600}
+            ] },
+  granary:{ levels:[
+              {needWood:10, needStone:10, buildDur:240, cap:1, auraR:260},
+              {needWood:14, needStone:14, buildDur:280, cap:2, auraR:340},
+              {needWood:12, needStone:12, buildDur:200, cap:2, auraR:340}
+            ] }
 };
 function mkSite(x,y,type,gather){
-  const def=SITE_DEFS[type];
-  const s={x,y,type,needWood:def.needWood,needStone:def.needStone,buildDur:def.buildDur,
+  const lvl=SITE_DEFS[type].levels[0];
+  const s={x,y,type,level:0,maxLevel:SITE_DEFS[type].levels.length,
+    needWood:lvl.needWood,needStone:lvl.needStone,buildDur:lvl.buildDur,
     matsWood:0,matsStone:0,progress:0,built:false,faction:null,gather};
   if(type==='well') Object.assign(s,{amount:0,max:0,regen:0});
-  if(type==='farm') Object.assign(s,{stage:'empty',stageT:0});
+  if(type==='farm') Object.assign(s,{stage:'empty',stageT:0,growTicks:lvl.growTicks,yieldAmt:lvl.yieldAmt});
   return s;
+}
+// called when a site's progress reaches 1 — applies the level just finished,
+// and (if more levels remain) sets up the mats/progress needed for the next one
+function applySiteLevel(s,ag){
+  s.level++;
+  s.built=true;
+  if(s.faction==null) s.faction=ag.faction;
+  const def=SITE_DEFS[s.type].levels[s.level-1];
+  if(s.type==='hut'){ s.capacity=def.cap; if(def.restMult) s.restMult=def.restMult; ag.inv.beauty+=2*s.level; }
+  else if(s.type==='well'){ s.max=def.max; s.amount=s.level===1?s.max:Math.min(s.max,(s.amount||0)+def.max*0.4); s.regen=def.regen; ag.inv.beauty+=1; }
+  else if(s.type==='farm'){ s.growTicks=def.growTicks; s.yieldAmt=def.yieldAmt; s.stage='empty'; s.stageT=0; }
+  else if(s.type==='granary'){ s.capacity=def.cap; s.auraR=def.auraR; ag.inv.beauty+=4*s.level; raiseResonance(0.02*s.level); }
+  ag.remember('raised a '+s.type+' to level '+s.level);
+  Mesh.broadcast(s.x,s.y,'discovery',0.7,Factions[ag.faction].color); raiseResonance(0.02);
+  if(s.level<s.maxLevel){
+    const next=SITE_DEFS[s.type].levels[s.level];
+    s.needWood=next.needWood; s.needStone=next.needStone; s.buildDur=next.buildDur;
+    s.matsWood=0; s.matsStone=0; s.progress=0;
+  }
 }
 
 // ── Settlement tier ladder (per gathering spot, gated by built structures) ──-
@@ -88,8 +127,7 @@ const World={
       let t;
       if(v<0.16) t=TILE.WATER;
       else if(v<0.22) t=TILE.SHORE;
-      else if(v<0.62) t=TILE.PLAIN;
-      else if(v<0.82) t=TILE.HILL;
+      else if(v<0.78) t=TILE.PLAIN;       // raised from 0.62 — most of the map should read as open grass, not hill
       else t=TILE.HILL;
       this.tiles[i]=t;
     }
@@ -309,11 +347,13 @@ const World={
     for(const s of this.sites){
       if(s.type==='well' && s.built && s.amount<s.max) s.amount=Math.min(s.max,s.amount+s.regen*seasonRegen*16);
     }
-    // Farm lifecycle — crops grow whether or not anyone is watching
+    // Farm lifecycle — crops grow whether or not anyone is watching. Higher
+    // farm levels shorten growTicks (the "faster" payoff for leveling up).
     for(const s of this.sites){
       if(s.type!=='farm' || !s.built) continue;
-      if(s.stage==='planted'){ s.stageT+=seasonRegen; if(s.stageT>900){ s.stage='growing'; s.stageT=0; } }
-      else if(s.stage==='growing'){ s.stageT+=seasonRegen; if(s.stageT>900){ s.stage='ready'; s.stageT=0; } }
+      const grow=s.growTicks||900;
+      if(s.stage==='planted'){ s.stageT+=seasonRegen; if(s.stageT>grow){ s.stage='growing'; s.stageT=0; } }
+      else if(s.stage==='growing'){ s.stageT+=seasonRegen; if(s.stageT>grow){ s.stage='ready'; s.stageT=0; } }
     }
 
     if(this.dayTick%30===0) this.checkStructureUnlocks();
@@ -321,10 +361,31 @@ const World={
       for(let gi=0;gi<this.gathers.length;gi++){
         const g=this.gathers[gi], nt=this.tierOf(gi);
         if(nt>g.tier){ g.tier=nt; this.onTierUp(gi,nt); }
+        // food-security (granaries) & rest-bonus (huts) auras for this settlement —
+        // cheap to recompute since sites are already tagged with their gather index
+        let foodSec=0, restMult=1;
+        for(const s of this.sites){
+          if(s.gather!==gi || !s.built) continue;
+          if(s.type==='granary') foodSec+=(s.capacity||1)*0.4;
+          if(s.type==='hut' && s.restMult) restMult=Math.max(restMult,s.restMult);
+        }
+        g.foodSec=foodSec; g.restMult=restMult;
       }
     }
 
     this.updateAnimals();
+  },
+
+  // dynamic population ceiling driven by what's actually been built — replaces
+  // the old hardcoded birth caps so growth is gated by housing, not a fixed number
+  housingCapacity(){
+    let cap=26; // base camp capacity, even before any hut is built
+    for(const s of this.sites){
+      if(!s.built) continue;
+      if(s.type==='hut') cap+=s.capacity||3;
+      if(s.type==='granary') cap+=(s.capacity||1)*4;
+    }
+    return cap;
   },
 
   // 0=deep night .. 1=midday brightness

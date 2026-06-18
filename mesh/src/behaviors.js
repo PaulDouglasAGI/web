@@ -40,6 +40,25 @@ function wanderPoint(a,radius){
   }
   return {x:a.x,y:a.y};
 }
+// pick the best site for an agent to haul materials to: prefers sites the agent
+// can actually help (carrying a resource that site still needs) and, among those,
+// the site closest to completion — otherwise wood/stone keeps getting routed to
+// whichever freshly-opened site is nearest, starving an almost-finished one forever
+function deliverySiteFor(a){
+  let best=null,bestScore=-Infinity;
+  for(const s of World.sites){
+    if(s.level>=s.maxLevel) continue;
+    const needW=s.needWood-s.matsWood, needS=s.needStone-s.matsStone;
+    if(needW<=0 && needS<=0) continue;
+    const canHelp=(a.inv.wood>0&&needW>0)||(a.inv.stone>0&&needS>0);
+    if(!canHelp) continue;
+    const d=Math.sqrt(dist2(a.x,a.y,s.x,s.y));
+    const completion=(s.matsWood+s.matsStone)/(s.needWood+s.needStone);
+    const score=completion*600-d;
+    if(score>bestScore){ bestScore=score; best=s; }
+  }
+  return best;
+}
 // point toward unexplored edge (exploration)
 function frontierPoint(a){
   const cx=World.w/2, cy=World.h/2;
@@ -107,7 +126,7 @@ const Behaviors=[
     weight:a=> { const f=World.nearestSite(a.x,a.y,s=>s.type==='farm'&&s.built&&s.stage==='ready'); return f ? 28+(a.faction===0?12:0) : 0; },
     make:a=> { const f=World.nearestSite(a.x,a.y,s=>s.type==='farm'&&s.built&&s.stage==='ready'); if(!f) return null;
       return { label:'harvesting',glyph:'⊞',cat:'survival', pose:'kneel', target:{x:f.x,y:f.y}, arrive:12, dur:80,
-        onArrive(ag){ ag.inv.food+=4; f.stage='empty'; f.stageT=0; ag.hunger=Math.max(0,ag.hunger-10); ag.remember('harvested a farm'); } }; } },
+        onArrive(ag){ ag.inv.food+=(f.yieldAmt||4); f.stage='empty'; f.stageT=0; ag.hunger=Math.max(0,ag.hunger-10); ag.remember('harvested a farm'); } }; } },
 
   // ── TRADE & ECONOMY ────────────────────────────────────────────────────────
   { id:'barter', label:'bartering', glyph:'⇄', cat:'trade',
@@ -161,10 +180,10 @@ const Behaviors=[
   // ── INNER LIFE ───────────────────────────────────────────────────────────--
   { id:'rest', label:'resting', glyph:'·', cat:'inner',
     weight:a=> (100-a.energy)*0.7 + (World.isNight()?20:0),
-    make:a=> stayPut(a,'resting','·','inner',160,ag=>{ ag.energy=Math.min(100,ag.energy+0.5); },'sit') },
+    make:a=> stayPut(a,'resting','·','inner',160,ag=>{ ag.energy=Math.min(100,ag.energy+0.5*ag.settlementBonus().restMult); },'sit') },
   { id:'sleep', label:'sleeping', glyph:'z', cat:'inner',
     weight:a=> World.isNight()? (100-a.energy)*0.9+40 : 0,
-    make:a=> stayPut(a,'sleeping','z','inner',300,ag=>{ ag.energy=Math.min(100,ag.energy+0.7); ag.social=Math.min(100,ag.social+0.05); },'lie') },
+    make:a=> stayPut(a,'sleeping','z','inner',300,ag=>{ ag.energy=Math.min(100,ag.energy+0.7*ag.settlementBonus().restMult); ag.social=Math.min(100,ag.social+0.05); },'lie') },
   { id:'wander', label:'wandering', glyph:'~', cat:'inner',
     weight:a=> 10,
     make:a=> gotoPoint(a,'wandering','~','inner', wanderPoint(a,220).x, wanderPoint(a,220).y, 80) },
@@ -201,9 +220,9 @@ const Behaviors=[
   // ── CREATIVE & EXPRESSIVE ──────────────────────────────────────────────────
   { id:'deliverMaterials', label:'hauling materials', glyph:'▦', cat:'creative',
     weight:a=> { if(a.inv.wood<=0 && a.inv.stone<=0) return 0;
-      const st=World.nearestSite(a.x,a.y, s=>!s.built && (s.matsWood<s.needWood||s.matsStone<s.needStone));
+      const st=deliverySiteFor(a);
       return st ? 18+(a.faction===2?10:0) : 0; },
-    make:a=> { const st=World.nearestSite(a.x,a.y, s=>!s.built && (s.matsWood<s.needWood||s.matsStone<s.needStone));
+    make:a=> { const st=deliverySiteFor(a);
       if(!st) return null;
       return { label:'hauling materials',glyph:'▦',cat:'creative', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:50,
         onArrive(ag){
@@ -211,26 +230,18 @@ const Behaviors=[
           if(ag.inv.stone>0 && st.matsStone<st.needStone){ const n=Math.min(ag.inv.stone,st.needStone-st.matsStone); ag.inv.stone-=n; st.matsStone+=n; ag.remember('delivered stone to a build site'); }
         } }; } },
   { id:'construct', label:'raising a structure', glyph:'⌗', cat:'creative',
-    weight:a=> { const st=World.nearestSite(a.x,a.y, s=>!s.built && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
+    weight:a=> { const st=World.nearestSite(a.x,a.y, s=>s.level<s.maxLevel && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
       if(!st) return 0;
       // nudge (not force) toward whichever incomplete type a settlement most needs next
       const nudge=(st.type==='well'||st.type==='granary') ? 1.25 : (st.type==='farm' ? 1.1 : 1);
       return (24+(a.faction===2?16:0))*nudge; },
-    make:a=> { const st=World.nearestSite(a.x,a.y, s=>!s.built && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
+    make:a=> { const st=World.nearestSite(a.x,a.y, s=>s.level<s.maxLevel && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
       if(!st) return null;
       return { label:'raising a '+st.type,glyph:'⌗',cat:'creative', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:200,
         onTick(ag){
-          if(st.built) return;
+          if(st.level>=st.maxLevel) return;
           st.progress=Math.min(1,st.progress+1/st.buildDur);
-          if(st.progress>=1){
-            st.built=true; st.faction=ag.faction;
-            if(st.type==='hut'){ ag.inv.beauty+=2; }
-            else if(st.type==='well'){ st.max=40; st.amount=40; st.regen=0.00012; ag.inv.beauty+=1; }
-            else if(st.type==='farm'){ st.stage='empty'; st.stageT=0; }
-            else if(st.type==='granary'){ ag.inv.beauty+=4; raiseResonance(0.02); }
-            ag.remember('completed a '+st.type);
-            Mesh.broadcast(st.x,st.y,'discovery',0.7,Factions[ag.faction].color); raiseResonance(0.02);
-          }
+          if(st.progress>=1) applySiteLevel(st,ag);
         } }; } },
   { id:'craftTools', label:'forging tools', glyph:'⚒', cat:'creative',
     weight:a=> (a.inv.wood>0&&a.inv.stone>0) ? (a.faction===2?26:10):0,
