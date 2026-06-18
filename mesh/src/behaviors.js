@@ -8,9 +8,9 @@ function pick(arr){ return arr[(Math.random()*arr.length)|0]; }
 function dist2(ax,ay,bx,by){ const dx=ax-bx,dy=ay-by; return dx*dx+dy*dy; }
 
 // ── task constructors ────────────────────────────────────────────────────────
-function gotoNode(a,label,glyph,cat,node,collect){
+function gotoNode(a,label,glyph,cat,node,collect,pose){
   if(!node) return null;
-  return { label,glyph,cat, target:{x:node.x,y:node.y}, node, arrive:14, dur:60,
+  return { label,glyph,cat, pose:pose||'work', target:{x:node.x,y:node.y}, node, arrive:14, dur:60,
     onArrive(ag){
       if(node.amount>0.2){
         node.amount-=0.34;
@@ -20,15 +20,15 @@ function gotoNode(a,label,glyph,cat,node,collect){
       }
     } };
 }
-function gotoPoint(a,label,glyph,cat,x,y,dur){
-  return { label,glyph,cat, target:{x,y}, arrive:12, dur:dur||40, onArrive(){} };
+function gotoPoint(a,label,glyph,cat,x,y,dur,pose){
+  return { label,glyph,cat, pose, target:{x,y}, arrive:12, dur:dur||40, onArrive(){} };
 }
-function stayPut(a,label,glyph,cat,dur,onTick){
-  return { label,glyph,cat, target:null, stay:true, dur:dur||120, onTick };
+function stayPut(a,label,glyph,cat,dur,onTick,pose){
+  return { label,glyph,cat, pose, target:null, stay:true, dur:dur||120, onTick };
 }
-function gotoAgent(a,label,glyph,cat,other,onArrive,dur){
+function gotoAgent(a,label,glyph,cat,other,onArrive,dur,pose){
   if(!other) return null;
-  return { label,glyph,cat, targetAgent:other, target:{x:other.x,y:other.y}, arrive:16, dur:dur||90, onArrive };
+  return { label,glyph,cat, pose, targetAgent:other, target:{x:other.x,y:other.y}, arrive:16, dur:dur||90, onArrive };
 }
 
 // random reachable point near agent
@@ -55,10 +55,10 @@ const Behaviors=[
   // ── SURVIVAL & WORK ────────────────────────────────────────────────────────
   { id:'eat', label:'eating', glyph:'❦', cat:'survival',
     weight:a=> a.inv.food>0 ? a.hunger*0.9 : 0,
-    make:a=> stayPut(a,'eating','❦','survival',70,ag=>{ if(ag.task._t===1 && ag.inv.food>0){ ag.inv.food-=1; ag.hunger=Math.max(0,ag.hunger-55); ag.joy=Math.min(1,ag.joy+0.1);} }) },
+    make:a=> stayPut(a,'eating','❦','survival',70,ag=>{ if(ag.task._t===1 && ag.inv.food>0){ ag.inv.food-=1; ag.hunger=Math.max(0,ag.hunger-55); ag.joy=Math.min(1,ag.joy+0.1);} },'sit') },
   { id:'drink', label:'drinking', glyph:'≈', cat:'survival',
     weight:a=> a.inv.water>0 ? (100-a.energy)*0.4 : 0,
-    make:a=> stayPut(a,'drinking','≈','survival',50,ag=>{ if(ag.task._t===1 && ag.inv.water>0){ ag.inv.water-=1; ag.energy=Math.min(100,ag.energy+30);} }) },
+    make:a=> stayPut(a,'drinking','≈','survival',50,ag=>{ if(ag.task._t===1 && ag.inv.water>0){ ag.inv.water-=1; ag.energy=Math.min(100,ag.energy+30);} },'sit') },
   { id:'gatherFood', label:'foraging', glyph:'✿', cat:'survival',
     weight:a=> a.hunger>30 || a.inv.food<1 ? 24+a.hunger*0.6 : 8,
     make:a=> gotoNode(a,'foraging','✿','survival',World.nearestNode(a.x,a.y,'food'),'food') },
@@ -79,13 +79,35 @@ const Behaviors=[
     make:a=> gotoNode(a,'collecting herbs','❧','survival',World.nearestNode(a.x,a.y,'herb'),'herb') },
   { id:'preserve', label:'preserving food', glyph:'⊞', cat:'survival',
     weight:a=> (World.season>=2 && a.inv.food>2) ? 26 : 0,
-    make:a=> stayPut(a,'preserving food','⊞','survival',120) },
+    make:a=> stayPut(a,'preserving food','⊞','survival',120,null,'work') },
   { id:'shelter', label:'mending shelter', glyph:'⌂', cat:'survival',
     weight:a=> (World.isNight()||World.season===3) && a.inv.wood>0 ? 14 : 5,
     make:a=> stayPut(a,'mending shelter','⌂','survival',140) },
-  { id:'plant', label:'planting seeds', glyph:'⊥', cat:'survival',
-    weight:a=> (World.season<=1 && a.faction===0) ? 22 : 4,
-    make:a=> stayPut(a,'planting seeds','⊥','survival',110) },
+  { id:'hunt', label:'hunting', glyph:'➳', cat:'survival',
+    weight:a=> { if(!World.animals.some(an=>an.alive)) return 0; return a.inv.food<2 ? 16 : 3; },
+    make:a=> {
+      const an=World.nearestOf(World.animals.filter(x=>x.alive), a.x, a.y);
+      if(!an) return null;
+      return { label:'hunting',glyph:'➳',cat:'hunt_chase', pose:'work', target:an, animal:an, arrive:16, dur:300,
+        onTick(ag){
+          if(!an.alive){ ag.task=null; return; }
+          const d=Math.hypot(an.x-ag.x,an.y-ag.y);
+          if(d<26 && Math.random()<0.02){
+            an.alive=false; an.respawnAt=900+((Math.random()*600)|0);
+            ag.inv.food+=2; ag.hunger=Math.max(0,ag.hunger-30); ag.remember('made a catch'); ag.task=null;
+          }
+        } };
+    } },
+  { id:'plantSeeds', label:'planting seeds', glyph:'⊥', cat:'survival',
+    weight:a=> { const f=World.nearestSite(a.x,a.y,s=>s.type==='farm'&&s.built&&s.stage==='empty'); return f ? 20+(a.faction===0?10:0) : 0; },
+    make:a=> { const f=World.nearestSite(a.x,a.y,s=>s.type==='farm'&&s.built&&s.stage==='empty'); if(!f) return null;
+      return { label:'planting seeds',glyph:'⊥',cat:'survival', pose:'kneel', target:{x:f.x,y:f.y}, arrive:12, dur:90,
+        onArrive(ag){ f.stage='planted'; f.stageT=0; ag.remember('planted a farm'); } }; } },
+  { id:'harvestFarm', label:'harvesting', glyph:'⊞', cat:'survival',
+    weight:a=> { const f=World.nearestSite(a.x,a.y,s=>s.type==='farm'&&s.built&&s.stage==='ready'); return f ? 28+(a.faction===0?12:0) : 0; },
+    make:a=> { const f=World.nearestSite(a.x,a.y,s=>s.type==='farm'&&s.built&&s.stage==='ready'); if(!f) return null;
+      return { label:'harvesting',glyph:'⊞',cat:'survival', pose:'kneel', target:{x:f.x,y:f.y}, arrive:12, dur:80,
+        onArrive(ag){ ag.inv.food+=4; f.stage='empty'; f.stageT=0; ag.hunger=Math.max(0,ag.hunger-10); ag.remember('harvested a farm'); } }; } },
 
   // ── TRADE & ECONOMY ────────────────────────────────────────────────────────
   { id:'barter', label:'bartering', glyph:'⇄', cat:'trade',
@@ -110,22 +132,22 @@ const Behaviors=[
       }) },
   { id:'sitBeside', label:'sitting together', glyph:'◡', cat:'social',
     weight:a=> a.social>40?18:6,
-    make:a=> gotoAgent(a,'sitting together','◡','social', nearestAgent(a,o=>o!==a), ag=>{ ag.social=Math.max(0,ag.social-30); }, 160) },
+    make:a=> gotoAgent(a,'sitting together','◡','social', nearestAgent(a,o=>o!==a), ag=>{ ag.social=Math.max(0,ag.social-30); }, 160, 'sit') },
   { id:'teach', label:'teaching', glyph:'✺', cat:'social',
     weight:a=> a.skills>2 ? 12+(a.faction===3?6:0):3,
-    make:a=> gotoAgent(a,'teaching','✺','social', nearestAgent(a,o=>o!==a&&o.skills<a.skills), ag=>{ const o=ag.task.targetAgent; if(o){o.skills+=1; o.remember('learned a skill');} ag.remember('taught'); raiseResonance(0.003); }) },
+    make:a=> gotoAgent(a,'teaching','✺','social', nearestAgent(a,o=>o!==a&&o.skills<a.skills), ag=>{ const o=ag.task.targetAgent; if(o){o.skills+=1; o.remember('learned a skill');} ag.remember('taught'); raiseResonance(0.003); }, 90, 'sit') },
   { id:'learn', label:'learning', glyph:'✺', cat:'social',
     weight:a=> a.skills<3?10:4,
-    make:a=> gotoAgent(a,'learning','✺','social', nearestAgent(a,o=>o!==a&&o.skills>a.skills), ag=>{ ag.skills+=1; ag.remember('learned'); }) },
+    make:a=> gotoAgent(a,'learning','✺','social', nearestAgent(a,o=>o!==a&&o.skills>a.skills), ag=>{ ag.skills+=1; ag.remember('learned'); }, 90, 'sit') },
   { id:'help', label:'offering help', glyph:'✛', cat:'social',
     weight:a=> a.joy>0.5 ? 12+(a.faction===3?8:0):5,
     make:a=> gotoAgent(a,'offering help','✛','social', nearestAgent(a,o=>o!==a&&(o.hunger>55||o.energy<30)), ag=>{ const o=ag.task.targetAgent; if(o){ if(ag.inv.food>0&&o.hunger>55){ag.inv.food-=1;o.inv.food+=1;} o.joy=Math.min(1,o.joy+0.12);} raiseResonance(0.006); }) },
   { id:'celebrate', label:'celebrating', glyph:'✦', cat:'social',
     weight:a=> Mesh.resonance>0.66 ? 20:4,
-    make:a=> { const g=World.nearestOf(World.gathers,a.x,a.y); return g?gotoPoint(a,'celebrating','✦','social',g.x,g.y,120):null; } },
+    make:a=> { const g=World.nearestOf(World.gathers,a.x,a.y); return g?gotoPoint(a,'celebrating','✦','social',g.x,g.y,120,'sit'):null; } },
   { id:'story', label:'telling a story', glyph:'❝', cat:'social',
     weight:a=> World.isNight()? 16:5,
-    make:a=> { const f=World.nearestOf(World.fires,a.x,a.y); return f?gotoPoint(a,'telling a story','❝','social',f.x,f.y,170):null; } },
+    make:a=> { const f=World.nearestOf(World.fires,a.x,a.y); return f?gotoPoint(a,'telling a story','❝','social',f.x,f.y,170,'sit'):null; } },
   { id:'disagree', label:'disagreeing', glyph:'≠', cat:'social',
     weight:a=> Mesh.dissonance>0.4 ? 12:3,
     make:a=> gotoAgent(a,'disagreeing','≠','social', nearestAgent(a,o=>o!==a&&o.faction!==a.faction), ag=>{ lowerResonance(0.003); }) },
@@ -139,16 +161,16 @@ const Behaviors=[
   // ── INNER LIFE ───────────────────────────────────────────────────────────--
   { id:'rest', label:'resting', glyph:'·', cat:'inner',
     weight:a=> (100-a.energy)*0.7 + (World.isNight()?20:0),
-    make:a=> stayPut(a,'resting','·','inner',160,ag=>{ ag.energy=Math.min(100,ag.energy+0.5); }) },
+    make:a=> stayPut(a,'resting','·','inner',160,ag=>{ ag.energy=Math.min(100,ag.energy+0.5); },'sit') },
   { id:'sleep', label:'sleeping', glyph:'z', cat:'inner',
     weight:a=> World.isNight()? (100-a.energy)*0.9+40 : 0,
-    make:a=> stayPut(a,'sleeping','z','inner',300,ag=>{ ag.energy=Math.min(100,ag.energy+0.7); ag.social=Math.min(100,ag.social+0.05); }) },
+    make:a=> stayPut(a,'sleeping','z','inner',300,ag=>{ ag.energy=Math.min(100,ag.energy+0.7); ag.social=Math.min(100,ag.social+0.05); },'lie') },
   { id:'wander', label:'wandering', glyph:'~', cat:'inner',
     weight:a=> 10,
     make:a=> gotoPoint(a,'wandering','~','inner', wanderPoint(a,220).x, wanderPoint(a,220).y, 80) },
   { id:'meditate', label:'meditating', glyph:'☉', cat:'inner',
     weight:a=> Mesh.noise>0.6 ? 18:7,
-    make:a=> { const w=World.nearestNode(a.x,a.y,'water'); const p=w?{x:w.x,y:w.y}:wanderPoint(a,160); return gotoPoint(a,'meditating','☉','inner',p.x,p.y,200); } },
+    make:a=> { const w=World.nearestNode(a.x,a.y,'water'); const p=w?{x:w.x,y:w.y}:wanderPoint(a,160); return gotoPoint(a,'meditating','☉','inner',p.x,p.y,200,'sit'); } },
   { id:'withdraw', label:'withdrawing', glyph:'◍', cat:'inner',
     weight:a=> a.overwhelmed>0.5 ? 30:0,
     make:a=> { const p=wanderPoint(a,300); return { label:'withdrawing',glyph:'◍',cat:'inner',target:p,arrive:12,dur:220,onArrive(ag){ag.meshMuted=200;},onTick(ag){ag.overwhelmed=Math.max(0,ag.overwhelmed-0.004);} }; } },
@@ -183,38 +205,48 @@ const Behaviors=[
       return st ? 18+(a.faction===2?10:0) : 0; },
     make:a=> { const st=World.nearestSite(a.x,a.y, s=>!s.built && (s.matsWood<s.needWood||s.matsStone<s.needStone));
       if(!st) return null;
-      return { label:'hauling materials',glyph:'▦',cat:'creative', target:{x:st.x,y:st.y}, arrive:14, dur:50,
+      return { label:'hauling materials',glyph:'▦',cat:'creative', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:50,
         onArrive(ag){
           if(ag.inv.wood>0 && st.matsWood<st.needWood){ const n=Math.min(ag.inv.wood,st.needWood-st.matsWood); ag.inv.wood-=n; st.matsWood+=n; ag.remember('delivered wood to a build site'); }
           if(ag.inv.stone>0 && st.matsStone<st.needStone){ const n=Math.min(ag.inv.stone,st.needStone-st.matsStone); ag.inv.stone-=n; st.matsStone+=n; ag.remember('delivered stone to a build site'); }
         } }; } },
-  { id:'construct', label:'raising a shelter', glyph:'⌗', cat:'creative',
+  { id:'construct', label:'raising a structure', glyph:'⌗', cat:'creative',
     weight:a=> { const st=World.nearestSite(a.x,a.y, s=>!s.built && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
-      return st ? 24+(a.faction===2?16:0) : 0; },
+      if(!st) return 0;
+      // nudge (not force) toward whichever incomplete type a settlement most needs next
+      const nudge=(st.type==='well'||st.type==='granary') ? 1.25 : (st.type==='farm' ? 1.1 : 1);
+      return (24+(a.faction===2?16:0))*nudge; },
     make:a=> { const st=World.nearestSite(a.x,a.y, s=>!s.built && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
       if(!st) return null;
-      return { label:'raising a shelter',glyph:'⌗',cat:'creative', target:{x:st.x,y:st.y}, arrive:14, dur:200,
+      return { label:'raising a '+st.type,glyph:'⌗',cat:'creative', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:200,
         onTick(ag){
           if(st.built) return;
-          st.progress=Math.min(1,st.progress+1/170);
-          if(st.progress>=1){ st.built=true; st.faction=ag.faction; ag.inv.beauty+=2; ag.remember('completed a shelter');
-            Mesh.broadcast(st.x,st.y,'discovery',0.7,Factions[ag.faction].color); raiseResonance(0.02); }
+          st.progress=Math.min(1,st.progress+1/st.buildDur);
+          if(st.progress>=1){
+            st.built=true; st.faction=ag.faction;
+            if(st.type==='hut'){ ag.inv.beauty+=2; }
+            else if(st.type==='well'){ st.max=40; st.amount=40; st.regen=0.00012; ag.inv.beauty+=1; }
+            else if(st.type==='farm'){ st.stage='empty'; st.stageT=0; }
+            else if(st.type==='granary'){ ag.inv.beauty+=4; raiseResonance(0.02); }
+            ag.remember('completed a '+st.type);
+            Mesh.broadcast(st.x,st.y,'discovery',0.7,Factions[ag.faction].color); raiseResonance(0.02);
+          }
         } }; } },
   { id:'craftTools', label:'forging tools', glyph:'⚒', cat:'creative',
     weight:a=> (a.inv.wood>0&&a.inv.stone>0) ? (a.faction===2?26:10):0,
-    make:a=> stayPut(a,'forging tools','⚒','creative',150,ag=>{ if(ag.task._t===1&&ag.inv.wood>0&&ag.inv.stone>0){ ag.inv.wood-=1; ag.inv.stone-=1; ag.inv.tools+=1; ag.remember('forged a tool'); } }) },
+    make:a=> stayPut(a,'forging tools','⚒','creative',150,ag=>{ if(ag.task._t===1&&ag.inv.wood>0&&ag.inv.stone>0){ ag.inv.wood-=1; ag.inv.stone-=1; ag.inv.tools+=1; ag.remember('forged a tool'); } },'work') },
   { id:'music', label:'making music', glyph:'♪', cat:'creative',
     weight:a=> World.isNight()||Mesh.resonance>0.6 ? 14:5,
-    make:a=> { const f=World.nearestOf(World.fires,a.x,a.y)||{x:a.x,y:a.y}; return { label:'making music',glyph:'♪',cat:'creative',target:{x:f.x,y:f.y},arrive:16,dur:200,onTick(ag){ if(ag.task._t%30===0) ag.emitSound(); } }; } },
+    make:a=> { const f=World.nearestOf(World.fires,a.x,a.y)||{x:a.x,y:a.y}; return { label:'making music',glyph:'♪',cat:'creative', pose:'sit', target:{x:f.x,y:f.y},arrive:16,dur:200,onTick(ag){ if(ag.task._t%30===0) ag.emitSound(); } }; } },
   { id:'shrine', label:'making a shrine', glyph:'⩏', cat:'creative',
     weight:a=> Mesh.grief>0.3 ? 16:3,
-    make:a=> stayPut(a,'making a shrine','⩏','creative',200,ag=>{ if(ag.task._t===1) ag.leaveMark('shrine'); }) },
+    make:a=> stayPut(a,'making a shrine','⩏','creative',200,ag=>{ if(ag.task._t===1) ag.leaveMark('shrine'); },'kneel') },
   { id:'garden', label:'planting beauty', glyph:'❁', cat:'creative',
     weight:a=> a.faction===0?12:4,
-    make:a=> { const p=wanderPoint(a,140); return { label:'planting beauty',glyph:'❁',cat:'creative',target:p,arrive:12,dur:150,onArrive(ag){ ag.leaveMark('garden'); ag.inv.beauty+=1; } }; } },
+    make:a=> { const p=wanderPoint(a,140); return { label:'planting beauty',glyph:'❁',cat:'creative', pose:'kneel', target:p,arrive:12,dur:150,onArrive(ag){ ag.leaveMark('garden'); ag.inv.beauty+=1; } }; } },
   { id:'mark', label:'leaving a mark', glyph:'✎', cat:'creative',
     weight:a=> 5,
-    make:a=> { const p=wanderPoint(a,120); return { label:'leaving a mark',glyph:'✎',cat:'creative',target:p,arrive:12,dur:80,onArrive(ag){ ag.leaveMark('mark'); } }; } },
+    make:a=> { const p=wanderPoint(a,120); return { label:'leaving a mark',glyph:'✎',cat:'creative', pose:'kneel', target:p,arrive:12,dur:80,onArrive(ag){ ag.leaveMark('mark'); } }; } },
 
   // ── MESH-SPECIFIC ──────────────────────────────────────────────────────────
   { id:'broadcast', label:'broadcasting a feeling', glyph:'◉', cat:'mesh',

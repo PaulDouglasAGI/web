@@ -10,6 +10,31 @@ function makeRNG(seed){
 // ── Tile types ───────────────────────────────────────────────────────────────
 const TILE={ WATER:0, SHORE:1, PLAIN:2, FOREST:3, HILL:4, RUIN:5, FIRE:6, GATHER:7 };
 
+// ── Buildable structure types ──────────────────────────────────────────────--
+const SITE_DEFS={
+  hut:    {needWood:7,  needStone:4,  buildDur:170},
+  well:   {needWood:3,  needStone:9,  buildDur:170},
+  farm:   {needWood:5,  needStone:1,  buildDur:120},
+  granary:{needWood:10, needStone:10, buildDur:240}
+};
+function mkSite(x,y,type,gather){
+  const def=SITE_DEFS[type];
+  const s={x,y,type,needWood:def.needWood,needStone:def.needStone,buildDur:def.buildDur,
+    matsWood:0,matsStone:0,progress:0,built:false,faction:null,gather};
+  if(type==='well') Object.assign(s,{amount:0,max:0,regen:0});
+  if(type==='farm') Object.assign(s,{stage:'empty',stageT:0});
+  return s;
+}
+
+// ── Settlement tier ladder (per gathering spot, gated by built structures) ──-
+const SETTLEMENT_TIERS=[
+  {name:'CAMP',         req:{}},
+  {name:'HAMLET',       req:{hut:3}},
+  {name:'VILLAGE',      req:{hut:5, well:1}},
+  {name:'TOWNSHIP',     req:{hut:8, well:2, farm:2}},
+  {name:'CIVILIZATION', req:{hut:12, well:2, farm:4, granary:1}}
+];
+
 const World={
   cols:170, rows:118, ts:20,           // tile size in world px
   w:0, h:0,
@@ -119,7 +144,7 @@ const World={
         const c=(rng()*cols)|0, r=(rng()*rows)|0, i=r*cols+c;
         if(this.tiles[i]===TILE.PLAIN){
           this.tiles[i]=TILE.GATHER;
-          this.gathers.push({x:(c+0.5)*this.ts,y:(r+0.5)*this.ts});
+          this.gathers.push({x:(c+0.5)*this.ts,y:(r+0.5)*this.ts,tier:0});
           // a fire at each gathering spot
           this.fires.push({x:(c+0.5)*this.ts,y:(r+0.5)*this.ts,lit:true});
           break;
@@ -127,27 +152,46 @@ const World={
       }
     }
 
-    // Buildable plots — empty shelter sites agents can haul materials to and raise
+    // Buildable plots — empty sites agents can haul materials to and raise.
+    // Wells & granaries are NOT pre-placed here — they unlock emergently via
+    // checkStructureUnlocks() once a settlement has earned the option to build them.
     this.sites=[];
-    const trySite=(cx,cy,rmin,rmax)=>{
-      for(let tries=0;tries<20;tries++){
-        const ang=rng()*Math.PI*2, r=rmin+rng()*(rmax-rmin);
-        const x=cx+Math.cos(ang)*r, y=cy+Math.sin(ang)*r;
-        if(x<20||y<20||x>this.w-20||y>this.h-20) continue;
-        if(this.tileAt(x,y)!==TILE.PLAIN) continue;
-        let tooClose=false;
-        for(const s of this.sites){ if((s.x-x)**2+(s.y-y)**2<80*80){ tooClose=true; break; } }
-        if(tooClose) continue;
-        this.sites.push({x,y,needWood:7,needStone:4,matsWood:0,matsStone:0,progress:0,built:false,faction:null});
-        return true;
-      }
-      return false;
-    };
-    for(const g of this.gathers){
+    for(let gi=0;gi<this.gathers.length;gi++){
+      const g=this.gathers[gi];
       const n=1+((rng()*2)|0);
-      for(let k=0;k<n;k++) trySite(g.x,g.y,55,150);
+      for(let k=0;k<n;k++) this.placeSite(g.x,g.y,55,150,'hut',gi,80);
+      const fn=2+((rng()*2)|0);
+      for(let k=0;k<fn;k++) this.placeSite(g.x,g.y,55,170,'farm',gi,70);
     }
-    for(let k=0;k<8;k++) trySite(rng()*this.w, rng()*this.h, 0, 1);
+    // Animals — wild fauna agents may hunt for food. They wander near a home
+    // point and respawn there (vanish/reappear, no gore) after being caught.
+    this.animals=[];
+    const addAnimal=()=>{
+      for(let tries=0;tries<40;tries++){
+        const c=(rng()*cols)|0, r=(rng()*rows)|0, i=r*cols+c, t=this.tiles[i];
+        if(t!==TILE.PLAIN && t!==TILE.FOREST) continue;
+        const x=(c+0.5)*this.ts, y=(r+0.5)*this.ts;
+        this.animals.push({x,y,vx:0,vy:0,sp:0.5+rng()*0.5,kind:'deer',alive:true,respawnAt:0,home:{x,y}});
+        return;
+      }
+    };
+    for(let i=0;i<24;i++) addAnimal();
+  },
+
+  // try to drop a new buildable site of `type` near (cx,cy), respecting tile validity & spacing
+  placeSite(cx,cy,rmin,rmax,type,gather,minSpacing){
+    for(let tries=0;tries<20;tries++){
+      const ang=this.rng()*Math.PI*2, r=rmin+this.rng()*(rmax-rmin);
+      const x=cx+Math.cos(ang)*r, y=cy+Math.sin(ang)*r;
+      if(x<20||y<20||x>this.w-20||y>this.h-20) continue;
+      if(this.tileAt(x,y)!==TILE.PLAIN) continue;
+      let tooClose=false;
+      for(const s of this.sites){ if((s.x-x)**2+(s.y-y)**2<minSpacing*minSpacing){ tooClose=true; break; } }
+      if(tooClose) continue;
+      this.sites.push(mkSite(x,y,type,gather));
+      return true;
+    }
+    return false;
   },
 
   tileAt(wx,wy){
@@ -157,7 +201,7 @@ const World={
   },
   walkable(wx,wy){ const t=this.tileAt(wx,wy); return t!==TILE.WATER; },
 
-  // nearest node of a given resource type with stock
+  // nearest node of a given resource type with stock (built wells duck-type as water nodes)
   nearestNode(x,y,type){
     let best=null,bd=Infinity;
     for(const nd of this.nodes){
@@ -165,6 +209,13 @@ const World={
       if(nd.amount<0.25) continue;
       const d=(nd.x-x)**2+(nd.y-y)**2;
       if(d<bd){bd=d;best=nd;}
+    }
+    if(type==='water'){
+      for(const s of this.sites){
+        if(s.type!=='well'||!s.built||s.amount<0.25) continue;
+        const d=(s.x-x)**2+(s.y-y)**2;
+        if(d<bd){bd=d;best=s;}
+      }
     }
     return best;
   },
@@ -183,6 +234,64 @@ const World={
     return best;
   },
 
+  // count built structures of each type belonging to a gathering spot, and the highest tier they satisfy
+  tierOf(gatherIndex){
+    const counts={};
+    for(const s of this.sites){ if(s.built && s.gather===gatherIndex) counts[s.type]=(counts[s.type]||0)+1; }
+    for(let i=SETTLEMENT_TIERS.length-1;i>=0;i--){
+      const req=SETTLEMENT_TIERS[i].req;
+      if(Object.keys(req).every(t=>(counts[t]||0)>=req[t])) return i;
+    }
+    return 0;
+  },
+  onTierUp(gi,tier){
+    const g=this.gathers[gi];
+    Events.banner='A SETTLEMENT HAS BECOME A '+SETTLEMENT_TIERS[tier].name;
+    Events.active='tierup'; Events.activeT=260;
+    raiseResonance(0.01*tier + (tier===SETTLEMENT_TIERS.length-1?0.07:0));
+    Mesh.broadcast(g.x,g.y,'discovery', tier===SETTLEMENT_TIERS.length-1?1:0.7, tier===SETTLEMENT_TIERS.length-1?'#ffe9b0':'#9fd6c8');
+  },
+  // emergently unlock the *option* to build more huts / a well / a granary once structural progress justifies it
+  checkStructureUnlocks(){
+    for(let gi=0;gi<this.gathers.length;gi++){
+      const g=this.gathers[gi];
+      const built=s=>s.built && s.gather===gi;
+      const huts=this.sites.filter(s=>s.type==='hut'&&built(s)).length;
+      const hutSites=this.sites.filter(s=>s.type==='hut'&&s.gather===gi).length;
+      // once every existing hut plot is filled, a settlement that's clearly thriving
+      // earns the option to expand with another — up to the civilization-tier cap
+      if(hutSites>0 && huts>=hutSites && hutSites<12) this.placeSite(g.x,g.y,55,170,'hut',gi,75);
+
+      const hasWellSite=this.sites.some(s=>s.type==='well'&&s.gather===gi);
+      if(!hasWellSite && huts>=2) this.placeSite(g.x,g.y,40,90,'well',gi,60);
+      const wells=this.sites.filter(s=>s.type==='well'&&built(s)).length;
+      const farms=this.sites.filter(s=>s.type==='farm'&&built(s)).length;
+      const hasGranarySite=this.sites.some(s=>s.type==='granary'&&s.gather===gi);
+      if(!hasGranarySite && huts>=6 && wells>=1 && farms>=2) this.placeSite(g.x,g.y,40,90,'granary',gi,60);
+    }
+  },
+
+  updateAnimals(){
+    // only the agents actively hunting matter for fleeing — cheap O(agents) filter,
+    // skips the O(animals × hunters) flee scan entirely when nobody is hunting
+    const hunters=Agents.filter(a=>a.task && a.task.cat==='hunt_chase');
+    for(const an of this.animals){
+      if(!an.alive){ an.respawnAt--; if(an.respawnAt<=0){ an.alive=true; an.x=an.home.x+(Math.random()-0.5)*40; an.y=an.home.y+(Math.random()-0.5)*40; } continue; }
+      let fleeing=false;
+      for(const a of hunters){
+        if((a.x-an.x)**2+(a.y-an.y)**2<140*140){
+          const dx=an.x-a.x, dy=an.y-a.y, d=Math.hypot(dx,dy)||1;
+          an.vx+=dx/d*0.08; an.vy+=dy/d*0.08; fleeing=true; break;
+        }
+      }
+      if(!fleeing){ an.vx+=(Math.random()-0.5)*0.02; an.vy+=(Math.random()-0.5)*0.02; }
+      an.vx*=0.9; an.vy*=0.9;
+      const nx=an.x+an.vx*an.sp, ny=an.y+an.vy*an.sp;
+      if(this.walkable(nx,an.y)) an.x=nx; else an.vx*=-0.5;
+      if(this.walkable(an.x,ny)) an.y=ny; else an.vy*=-0.5;
+    }
+  },
+
   update(){
     // Time of day
     this.dayTick++;
@@ -196,6 +305,26 @@ const World={
     for(const nd of this.nodes){
       if(nd.amount<nd.max) nd.amount=Math.min(nd.max,nd.amount+nd.regen*seasonRegen*16);
     }
+    // Built wells regen the same way as wild water nodes — never "used up"
+    for(const s of this.sites){
+      if(s.type==='well' && s.built && s.amount<s.max) s.amount=Math.min(s.max,s.amount+s.regen*seasonRegen*16);
+    }
+    // Farm lifecycle — crops grow whether or not anyone is watching
+    for(const s of this.sites){
+      if(s.type!=='farm' || !s.built) continue;
+      if(s.stage==='planted'){ s.stageT+=seasonRegen; if(s.stageT>900){ s.stage='growing'; s.stageT=0; } }
+      else if(s.stage==='growing'){ s.stageT+=seasonRegen; if(s.stageT>900){ s.stage='ready'; s.stageT=0; } }
+    }
+
+    if(this.dayTick%30===0) this.checkStructureUnlocks();
+    if(this.dayTick%60===0){
+      for(let gi=0;gi<this.gathers.length;gi++){
+        const g=this.gathers[gi], nt=this.tierOf(gi);
+        if(nt>g.tier){ g.tier=nt; this.onTierUp(gi,nt); }
+      }
+    }
+
+    this.updateAnimals();
   },
 
   // 0=deep night .. 1=midday brightness

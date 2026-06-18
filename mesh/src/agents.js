@@ -121,6 +121,10 @@ class Agent{
 
     // movement toward target
     if(t.targetAgent){ if(t.targetAgent.dead){ this.task=null; return; } t.target.x=t.targetAgent.x; t.target.y=t.targetAgent.y; }
+    if(t.animal){
+      if(!t.animal.alive){ this.task=null; return; }
+      if(t._arrived && dist2(this.x,this.y,t.animal.x,t.animal.y)>(t.arrive||14)*(t.arrive||14)*2.2) t._arrived=false;
+    }
     if(t.target && !t._arrived){
       const dx=t.target.x-this.x, dy=t.target.y-this.y;
       const d=Math.hypot(dx,dy);
@@ -140,6 +144,7 @@ class Agent{
     }
 
     // friction + integrate
+    if(t.pose==='work') this.walkPhase+=0.18;
     this.walkPhase+=Math.hypot(this.vx,this.vy)*0.6;
     this.vx*=0.86; this.vy*=0.86;
     let nx=this.x+this.vx, ny=this.y+this.vy;

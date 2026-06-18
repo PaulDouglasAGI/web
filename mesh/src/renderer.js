@@ -162,14 +162,38 @@ const Renderer={
       const sx=this.sx(s.x), sy=this.sy(s.y);
       if(sx<-30||sx>W+30||sy<-40||sy>H+30) continue;
       if(s.built){
-        const fc=Factions[s.faction!=null?s.faction:0];
-        const hw=10*z, hh=8*z;
-        ctx.fillStyle='#3a2c1e';
-        ctx.fillRect(sx-hw*0.65, sy-hh*0.15, hw*1.3, hh*1.15);
-        ctx.fillStyle=fc.color;
-        ctx.beginPath();
-        ctx.moveTo(sx-hw*0.8, sy-hh*0.2); ctx.lineTo(sx, sy-hh*1.4); ctx.lineTo(sx+hw*0.8, sy-hh*0.2);
-        ctx.closePath(); ctx.fill();
+        if(s.type==='farm'){
+          const stageCol={empty:'#5c4a32',planted:'#6b8c4a',growing:'#4a7a3a',ready:'#d4a73a'}[s.stage]||'#5c4a32';
+          const fw=16*z, fh=10*z;
+          ctx.fillStyle=stageCol;
+          ctx.fillRect(sx-fw/2, sy-fh/2, fw, fh);
+          ctx.strokeStyle='rgba(40,30,20,0.5)'; ctx.lineWidth=Math.max(0.5,0.8*z);
+          ctx.strokeRect(sx-fw/2, sy-fh/2, fw, fh);
+        } else if(s.type==='well'){
+          const r=8*z;
+          ctx.fillStyle='#6a6256';
+          ctx.beginPath(); ctx.arc(sx,sy,r,0,7); ctx.fill();
+          ctx.fillStyle= s.amount>0.5*s.max ? 'rgba(90,160,210,0.85)' : 'rgba(70,90,100,0.5)';
+          ctx.beginPath(); ctx.arc(sx,sy,r*0.6,0,7); ctx.fill();
+        } else if(s.type==='granary'){
+          const fc=Factions[s.faction!=null?s.faction:0];
+          const hw=14*z, hh=11*z;
+          ctx.fillStyle='#4a3a28';
+          ctx.fillRect(sx-hw*0.7, sy-hh*0.1, hw*1.4, hh*1.2);
+          ctx.fillStyle=fc.color;
+          ctx.beginPath();
+          ctx.moveTo(sx-hw*0.85, sy-hh*0.15); ctx.lineTo(sx, sy-hh*1.6); ctx.lineTo(sx+hw*0.85, sy-hh*0.15);
+          ctx.closePath(); ctx.fill();
+        } else {
+          const fc=Factions[s.faction!=null?s.faction:0];
+          const hw=10*z, hh=8*z;
+          ctx.fillStyle='#3a2c1e';
+          ctx.fillRect(sx-hw*0.65, sy-hh*0.15, hw*1.3, hh*1.15);
+          ctx.fillStyle=fc.color;
+          ctx.beginPath();
+          ctx.moveTo(sx-hw*0.8, sy-hh*0.2); ctx.lineTo(sx, sy-hh*1.4); ctx.lineTo(sx+hw*0.8, sy-hh*0.2);
+          ctx.closePath(); ctx.fill();
+        }
       } else {
         const r=9*z;
         ctx.strokeStyle='rgba(200,190,170,0.4)';
@@ -183,9 +207,35 @@ const Renderer={
         if(z>1.2){
           ctx.fillStyle='rgba(200,210,200,0.75)';
           ctx.font=(7*z)+'px "Exo 2",sans-serif'; ctx.textAlign='center';
-          ctx.fillText(Math.round(s.matsWood)+'/'+s.needWood+'w · '+Math.round(s.matsStone)+'/'+s.needStone+'s', sx, sy+r*1.15);
+          ctx.fillText(s.type+' '+Math.round(s.matsWood)+'/'+s.needWood+'w · '+Math.round(s.matsStone)+'/'+s.needStone+'s', sx, sy+r*1.15);
           ctx.textAlign='left';
         }
+      }
+    }
+
+    // ── ANIMALS ───────────────────────────────────────────────────────────--
+    for(const an of World.animals){
+      if(!an.alive) continue;
+      const sx=this.sx(an.x), sy=this.sy(an.y);
+      if(sx<-20||sx>W+20||sy<-20||sy>H+20) continue;
+      const r=Math.max(2,4*z);
+      ctx.fillStyle='#8a6a45';
+      ctx.beginPath(); ctx.ellipse(sx,sy,r*1.3,r*0.8,0,0,7); ctx.fill();
+      ctx.fillStyle='#6a4e34';
+      ctx.beginPath(); ctx.arc(sx-r*1.1,sy-r*0.3,r*0.55,0,7); ctx.fill();
+    }
+
+    // ── SETTLEMENT TIER LABELS ───────────────────────────────────────────--
+    if(z>0.7){
+      for(const g of World.gathers){
+        if(!g.tier) continue;
+        const sx=this.sx(g.x), sy=this.sy(g.y);
+        if(sx<-60||sx>W+60||sy<-40||sy>H+40) continue;
+        const top=g.tier===SETTLEMENT_TIERS.length-1;
+        ctx.fillStyle= top ? 'rgba(255,233,176,0.95)' : 'rgba(210,225,218,0.7)';
+        ctx.font=(top?11*z:8*z)+'px "Exo 2",sans-serif'; ctx.textAlign='center';
+        ctx.fillText(SETTLEMENT_TIERS[g.tier].name, sx, sy-34*z);
+        ctx.textAlign='left';
       }
     }
 
@@ -203,39 +253,73 @@ const Renderer={
         g.addColorStop(0, fc.glow+Math.max(0,glowA)+')'); g.addColorStop(1, fc.glow+'0)');
         ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,rad*3,0,7); ctx.fill();
       }
-      // humanoid figure: legs, clothed torso, arms, head, hair
+      // humanoid figure: legs, clothed torso, arms, head, hair — pose follows the task
       if(z>0.55){
-        const moving=Math.hypot(a.vx,a.vy)>0.04;
-        const swing=moving?Math.sin(a.walkPhase)*rad*0.55:0;
-        ctx.lineCap='round';
-        ctx.strokeStyle='rgba(35,26,20,0.85)';
-        ctx.lineWidth=Math.max(1,rad*0.3);
-        ctx.beginPath();
-        ctx.moveTo(sx-rad*0.26, sy+rad*0.45); ctx.lineTo(sx-rad*0.26+swing*0.4, sy+rad*1.55);
-        ctx.moveTo(sx+rad*0.26, sy+rad*0.45); ctx.lineTo(sx+rad*0.26-swing*0.4, sy+rad*1.55);
-        ctx.stroke();
-        // torso — clothing colored by faction
-        ctx.fillStyle=fc.color;
-        ctx.beginPath();
-        ctx.moveTo(sx-rad*0.6, sy+rad*0.5);
-        ctx.lineTo(sx-rad*0.68, sy-rad*0.35);
-        ctx.lineTo(sx+rad*0.68, sy-rad*0.35);
-        ctx.lineTo(sx+rad*0.6, sy+rad*0.5);
-        ctx.closePath(); ctx.fill();
-        // arms
-        ctx.strokeStyle=fc.color;
-        ctx.lineWidth=Math.max(0.8,rad*0.22);
-        ctx.beginPath();
-        ctx.moveTo(sx-rad*0.64, sy-rad*0.1); ctx.lineTo(sx-rad*0.86-swing*0.3, sy+rad*0.4);
-        ctx.moveTo(sx+rad*0.64, sy-rad*0.1); ctx.lineTo(sx+rad*0.86+swing*0.3, sy+rad*0.4);
-        ctx.stroke();
-        ctx.lineCap='butt';
-        // head — skin tone
-        ctx.fillStyle=a.skin;
-        ctx.beginPath(); ctx.arc(sx, sy-rad*0.95, rad*0.52, 0, 7); ctx.fill();
-        // hair
-        ctx.fillStyle=a.hair;
-        ctx.beginPath(); ctx.arc(sx, sy-rad*1.16, rad*0.55, Math.PI, 0); ctx.fill();
+        const pose=(a.task&&a.task.pose)||'walk';
+        if(pose==='lie'){
+          // sleeping — flat horizontal silhouette
+          ctx.fillStyle=fc.color;
+          ctx.beginPath(); ctx.ellipse(sx, sy+rad*0.55, rad*1.25, rad*0.5, 0, 0, 7); ctx.fill();
+          ctx.fillStyle=a.skin;
+          ctx.beginPath(); ctx.arc(sx-rad*1.05, sy+rad*0.5, rad*0.48, 0, 7); ctx.fill();
+          ctx.fillStyle=a.hair;
+          ctx.beginPath(); ctx.arc(sx-rad*1.2, sy+rad*0.42, rad*0.4, Math.PI*0.5, Math.PI*1.5); ctx.fill();
+        } else {
+          const moving=Math.hypot(a.vx,a.vy)>0.04;
+          const swing= pose==='work' ? Math.sin(a.walkPhase)*rad*0.5
+                     : (moving && pose==='walk') ? Math.sin(a.walkPhase)*rad*0.55 : 0;
+          const drop= pose==='kneel' ? rad*0.55 : pose==='sit' ? rad*0.35 : 0;
+          ctx.lineCap='round';
+          ctx.strokeStyle='rgba(35,26,20,0.85)';
+          ctx.lineWidth=Math.max(1,rad*0.3);
+          ctx.beginPath();
+          if(pose==='kneel'){
+            // both legs folded under, bent at the knee
+            ctx.moveTo(sx-rad*0.26, sy+rad*0.15); ctx.lineTo(sx-rad*0.5, sy+rad*1.0);
+            ctx.moveTo(sx+rad*0.26, sy+rad*0.15); ctx.lineTo(sx+rad*0.5, sy+rad*1.0);
+          } else if(pose==='sit'){
+            // bent seated legs, knees forward
+            ctx.moveTo(sx-rad*0.26, sy+rad*0.3); ctx.lineTo(sx-rad*0.6, sy+rad*0.95);
+            ctx.moveTo(sx+rad*0.26, sy+rad*0.3); ctx.lineTo(sx+rad*0.6, sy+rad*0.95);
+          } else {
+            // fixed stance for 'work', walk-cycle swing otherwise
+            ctx.moveTo(sx-rad*0.26, sy+rad*0.45); ctx.lineTo(sx-rad*0.26+(pose==='work'?0:swing*0.4), sy+rad*1.55);
+            ctx.moveTo(sx+rad*0.26, sy+rad*0.45); ctx.lineTo(sx+rad*0.26-(pose==='work'?0:swing*0.4), sy+rad*1.55);
+          }
+          ctx.stroke();
+          // torso — clothing colored by faction
+          ctx.fillStyle=fc.color;
+          ctx.beginPath();
+          ctx.moveTo(sx-rad*0.6, sy+rad*0.5-drop);
+          ctx.lineTo(sx-rad*0.68, sy-rad*0.35-drop);
+          ctx.lineTo(sx+rad*0.68, sy-rad*0.35-drop);
+          ctx.lineTo(sx+rad*0.6, sy+rad*0.5-drop);
+          ctx.closePath(); ctx.fill();
+          // arms
+          ctx.strokeStyle=fc.color;
+          ctx.lineWidth=Math.max(0.8,rad*0.22);
+          ctx.beginPath();
+          if(pose==='kneel'){
+            // one arm reaching down toward the ground
+            ctx.moveTo(sx-rad*0.64, sy-rad*0.1-drop); ctx.lineTo(sx-rad*0.5, sy+rad*0.4);
+            ctx.moveTo(sx+rad*0.64, sy-rad*0.1-drop); ctx.lineTo(sx+rad*0.25, sy+rad*0.6);
+          } else if(pose==='work'){
+            // tool-swing arm driven by walkPhase, even while stationary
+            ctx.moveTo(sx-rad*0.64, sy-rad*0.1); ctx.lineTo(sx-rad*0.86, sy+rad*0.4);
+            ctx.moveTo(sx+rad*0.64, sy-rad*0.1); ctx.lineTo(sx+rad*0.7+swing*0.55, sy+rad*0.15+Math.abs(swing)*0.5);
+          } else {
+            ctx.moveTo(sx-rad*0.64, sy-rad*0.1-drop); ctx.lineTo(sx-rad*0.86-swing*0.3, sy+rad*0.4-drop);
+            ctx.moveTo(sx+rad*0.64, sy-rad*0.1-drop); ctx.lineTo(sx+rad*0.86+swing*0.3, sy+rad*0.4-drop);
+          }
+          ctx.stroke();
+          ctx.lineCap='butt';
+          // head — skin tone
+          ctx.fillStyle=a.skin;
+          ctx.beginPath(); ctx.arc(sx, sy-rad*0.95-drop, rad*0.52, 0, 7); ctx.fill();
+          // hair
+          ctx.fillStyle=a.hair;
+          ctx.beginPath(); ctx.arc(sx, sy-rad*1.16-drop, rad*0.55, Math.PI, 0); ctx.fill();
+        }
       } else {
         ctx.fillStyle=fc.color;
         ctx.beginPath(); ctx.arc(sx,sy,rad,0,7); ctx.fill();
