@@ -11,6 +11,9 @@ const NAME_A=['Su','Ka','Mi','Ev','Ar','Ny','Ol','Ta','Wr','Fen','Lir','Mor','Se
 const NAME_B=['ren','la','dor','wyn','eth','is','ka','mar','ven','os','ya','rin','del','an','ux','ele','aro','iss','und','ora','ix','ael'];
 function genName(){ return NAME_A[(Math.random()*NAME_A.length)|0]+NAME_B[(Math.random()*NAME_B.length)|0]; }
 
+const SKIN_TONES=['#e8b894','#d49e6e','#c98f5e','#a06a40','#8d5a3c','#5c3a24','#f0c9a0'];
+const HAIR_COLORS=['#2b1d12','#4a2f1d','#6b4423','#1a1a1a','#7a5230','#c9a35a','#3a2418'];
+
 class Agent{
   constructor(x,y,faction){
     this.id=_agentId++;
@@ -35,6 +38,9 @@ class Agent{
     this.meshMuted=0;
     this.driftScore=[0,0,0,0];
     this.speed=(0.9+Math.random()*0.4)*(faction===1?1.25:1);
+    this.skin=SKIN_TONES[(Math.random()*SKIN_TONES.length)|0];
+    this.hair=HAIR_COLORS[(Math.random()*HAIR_COLORS.length)|0];
+    this.walkPhase=Math.random()*Math.PI*2;
   }
 
   remember(s){ this.memory.push(s); if(this.memory.length>6) this.memory.shift(); }
@@ -134,6 +140,7 @@ class Agent{
     }
 
     // friction + integrate
+    this.walkPhase+=Math.hypot(this.vx,this.vy)*0.6;
     this.vx*=0.86; this.vy*=0.86;
     let nx=this.x+this.vx, ny=this.y+this.vy;
     if(World.walkable(nx,this.y)) this.x=nx; else this.vx*=-0.4;

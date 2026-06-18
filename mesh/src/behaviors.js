@@ -177,9 +177,29 @@ const Behaviors=[
     make:a=> { const p=wanderPoint(a,180); return gotoPoint(a,'observing wildlife','❉','explore',p.x,p.y,120); } },
 
   // ── CREATIVE & EXPRESSIVE ──────────────────────────────────────────────────
-  { id:'build', label:'building', glyph:'⌗', cat:'creative',
-    weight:a=> a.inv.wood>1||a.inv.stone>1 ? 10+(a.faction===2?12:0):3,
-    make:a=> stayPut(a,'building','⌗','creative',180,ag=>{ if(ag.task._t===1){ if(ag.inv.wood>0)ag.inv.wood-=1; ag.inv.beauty+=1; } }) },
+  { id:'deliverMaterials', label:'hauling materials', glyph:'▦', cat:'creative',
+    weight:a=> { if(a.inv.wood<=0 && a.inv.stone<=0) return 0;
+      const st=World.nearestSite(a.x,a.y, s=>!s.built && (s.matsWood<s.needWood||s.matsStone<s.needStone));
+      return st ? 18+(a.faction===2?10:0) : 0; },
+    make:a=> { const st=World.nearestSite(a.x,a.y, s=>!s.built && (s.matsWood<s.needWood||s.matsStone<s.needStone));
+      if(!st) return null;
+      return { label:'hauling materials',glyph:'▦',cat:'creative', target:{x:st.x,y:st.y}, arrive:14, dur:50,
+        onArrive(ag){
+          if(ag.inv.wood>0 && st.matsWood<st.needWood){ const n=Math.min(ag.inv.wood,st.needWood-st.matsWood); ag.inv.wood-=n; st.matsWood+=n; ag.remember('delivered wood to a build site'); }
+          if(ag.inv.stone>0 && st.matsStone<st.needStone){ const n=Math.min(ag.inv.stone,st.needStone-st.matsStone); ag.inv.stone-=n; st.matsStone+=n; ag.remember('delivered stone to a build site'); }
+        } }; } },
+  { id:'construct', label:'raising a shelter', glyph:'⌗', cat:'creative',
+    weight:a=> { const st=World.nearestSite(a.x,a.y, s=>!s.built && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
+      return st ? 24+(a.faction===2?16:0) : 0; },
+    make:a=> { const st=World.nearestSite(a.x,a.y, s=>!s.built && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
+      if(!st) return null;
+      return { label:'raising a shelter',glyph:'⌗',cat:'creative', target:{x:st.x,y:st.y}, arrive:14, dur:200,
+        onTick(ag){
+          if(st.built) return;
+          st.progress=Math.min(1,st.progress+1/170);
+          if(st.progress>=1){ st.built=true; st.faction=ag.faction; ag.inv.beauty+=2; ag.remember('completed a shelter');
+            Mesh.broadcast(st.x,st.y,'discovery',0.7,Factions[ag.faction].color); raiseResonance(0.02); }
+        } }; } },
   { id:'craftTools', label:'forging tools', glyph:'⚒', cat:'creative',
     weight:a=> (a.inv.wood>0&&a.inv.stone>0) ? (a.faction===2?26:10):0,
     make:a=> stayPut(a,'forging tools','⚒','creative',150,ag=>{ if(ag.task._t===1&&ag.inv.wood>0&&ag.inv.stone>0){ ag.inv.wood-=1; ag.inv.stone-=1; ag.inv.tools+=1; ag.remember('forged a tool'); } }) },

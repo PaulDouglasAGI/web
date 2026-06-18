@@ -19,12 +19,40 @@ canvas.dragging{cursor:grabbing;}
 
 #pop{position:absolute;top:16px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:#5a6e74;font-family:'Exo 2',sans-serif;}
 
-/* Inspector */
-#inspector{position:absolute;z-index:25;pointer-events:none;padding:8px 12px;background:rgba(8,12,16,0.72);border:1px solid rgba(120,160,150,0.22);border-radius:3px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);opacity:0;transition:opacity .25s;transform:translate(-50%,-130%);white-space:nowrap;}
-#inspector.show{opacity:1;}
-#insp-name{font-family:'Exo 2',sans-serif;font-weight:700;font-size:12px;letter-spacing:2px;color:#e8f0ec;}
-#insp-faction{font-size:9px;letter-spacing:3px;margin-top:1px;}
-#insp-action{font-size:10px;color:#9aa8a4;margin-top:3px;font-style:italic;}
+/* Sim speed controls */
+#speed-ctl{position:absolute;bottom:18px;left:18px;z-index:30;display:flex;gap:6px;}
+#speed-ctl button{width:32px;height:32px;border-radius:5px;border:1px solid rgba(120,160,150,0.25);background:rgba(8,12,16,0.65);color:#7a8e88;font-size:11px;cursor:pointer;transition:.2s;}
+#speed-ctl button.active{background:rgba(120,200,180,0.25);color:#cfe8e0;border-color:rgba(160,220,200,0.5);}
+#speed-ctl button:hover{color:#cfe8e0;}
+
+/* Deep agent inspector panel */
+#agent-panel{position:absolute;top:0;right:0;height:100%;width:270px;max-width:86vw;background:rgba(6,10,13,0.9);border-left:1px solid rgba(120,160,150,0.2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:40;padding:20px 18px;transform:translateX(100%);transition:transform .3s ease;overflow-y:auto;}
+#agent-panel.show{transform:translateX(0);}
+#panel-close{position:absolute;top:12px;right:12px;background:none;border:none;color:#5a6e74;font-size:16px;cursor:pointer;line-height:1;}
+#panel-close:hover{color:#cfe0d8;}
+#panel-name{font-family:'Exo 2',sans-serif;font-weight:900;font-size:19px;color:#e8f0ec;letter-spacing:1px;margin-top:8px;}
+#panel-faction{font-size:10px;letter-spacing:3px;margin-top:4px;font-weight:700;text-transform:uppercase;}
+#panel-age{font-size:10px;color:#5a6e74;margin-top:3px;letter-spacing:2px;}
+#panel-action{margin-top:16px;font-size:13px;color:#bcd0c8;font-style:italic;}
+.panel-stats{margin-top:18px;display:flex;flex-direction:column;gap:9px;}
+.stat-row{display:flex;align-items:center;gap:8px;font-size:9px;letter-spacing:2px;color:#6a7e88;text-transform:uppercase;}
+.stat-row span{width:48px;flex-shrink:0;}
+.bar{flex:1;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;}
+.bar-fill{height:100%;background:#7fc08a;transition:width .4s;}
+.bar-fill.hunger{background:#e08043;}
+.bar-fill.social{background:#b89bd9;}
+.bar-fill.joy{background:#e6b455;}
+#panel-bond-row{margin-top:14px;font-size:10px;color:#5a6e74;letter-spacing:1px;}
+#panel-bond{color:#cfe0d8;}
+#panel-inv{margin-top:10px;display:flex;flex-wrap:wrap;gap:5px;}
+.inv-chip{font-size:9px;letter-spacing:1px;color:#cfe0d8;background:rgba(120,160,150,0.12);border:1px solid rgba(120,160,150,0.2);border-radius:3px;padding:2px 6px;text-transform:uppercase;}
+#panel-mem-label{margin-top:18px;font-size:9px;letter-spacing:3px;color:#3a4a50;}
+#panel-mem{margin-top:6px;display:flex;flex-direction:column;gap:4px;}
+.mem-line{font-size:10px;color:#7a8e88;line-height:1.4;}
+@media (max-width:560px){
+  #agent-panel{top:auto;bottom:0;right:0;left:0;width:100%;height:auto;max-height:64vh;border-left:none;border-top:1px solid rgba(120,160,150,0.2);border-radius:14px 14px 0 0;transform:translateY(100%);}
+  #agent-panel.show{transform:translateY(0);}
+}
 
 #hint{position:absolute;bottom:14px;right:18px;z-index:20;font-size:9px;letter-spacing:3px;color:#2e3a40;pointer-events:none;transition:opacity 1s;}
 #hint.fade{opacity:0;}

@@ -126,6 +126,28 @@ const World={
         }
       }
     }
+
+    // Buildable plots — empty shelter sites agents can haul materials to and raise
+    this.sites=[];
+    const trySite=(cx,cy,rmin,rmax)=>{
+      for(let tries=0;tries<20;tries++){
+        const ang=rng()*Math.PI*2, r=rmin+rng()*(rmax-rmin);
+        const x=cx+Math.cos(ang)*r, y=cy+Math.sin(ang)*r;
+        if(x<20||y<20||x>this.w-20||y>this.h-20) continue;
+        if(this.tileAt(x,y)!==TILE.PLAIN) continue;
+        let tooClose=false;
+        for(const s of this.sites){ if((s.x-x)**2+(s.y-y)**2<80*80){ tooClose=true; break; } }
+        if(tooClose) continue;
+        this.sites.push({x,y,needWood:7,needStone:4,matsWood:0,matsStone:0,progress:0,built:false,faction:null});
+        return true;
+      }
+      return false;
+    };
+    for(const g of this.gathers){
+      const n=1+((rng()*2)|0);
+      for(let k=0;k<n;k++) trySite(g.x,g.y,55,150);
+    }
+    for(let k=0;k<8;k++) trySite(rng()*this.w, rng()*this.h, 0, 1);
   },
 
   tileAt(wx,wy){
@@ -149,6 +171,15 @@ const World={
   nearestOf(list,x,y){
     let best=null,bd=Infinity;
     for(const o of list){ const d=(o.x-x)**2+(o.y-y)**2; if(d<bd){bd=d;best=o;} }
+    return best;
+  },
+  nearestSite(x,y,filter){
+    let best=null,bd=Infinity;
+    for(const s of this.sites){
+      if(filter && !filter(s)) continue;
+      const d=(s.x-x)**2+(s.y-y)**2;
+      if(d<bd){ bd=d; best=s; }
+    }
     return best;
   },
 

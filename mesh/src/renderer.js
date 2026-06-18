@@ -157,13 +157,45 @@ const Renderer={
       ctx.beginPath(); ctx.arc(ex,ey,2*z,0,7); ctx.fill();
     }
 
+    // ── BUILD SITES ──────────────────────────────────────────────────────--
+    for(const s of World.sites){
+      const sx=this.sx(s.x), sy=this.sy(s.y);
+      if(sx<-30||sx>W+30||sy<-40||sy>H+30) continue;
+      if(s.built){
+        const fc=Factions[s.faction!=null?s.faction:0];
+        const hw=10*z, hh=8*z;
+        ctx.fillStyle='#3a2c1e';
+        ctx.fillRect(sx-hw*0.65, sy-hh*0.15, hw*1.3, hh*1.15);
+        ctx.fillStyle=fc.color;
+        ctx.beginPath();
+        ctx.moveTo(sx-hw*0.8, sy-hh*0.2); ctx.lineTo(sx, sy-hh*1.4); ctx.lineTo(sx+hw*0.8, sy-hh*0.2);
+        ctx.closePath(); ctx.fill();
+      } else {
+        const r=9*z;
+        ctx.strokeStyle='rgba(200,190,170,0.4)';
+        ctx.lineWidth=Math.max(0.6,1*z);
+        ctx.strokeRect(sx-r, sy-r*0.8, r*2, r*1.6);
+        if(s.progress>0){
+          ctx.fillStyle='rgba(230,180,100,0.45)';
+          const fh=r*1.6*s.progress;
+          ctx.fillRect(sx-r, sy+r*0.8-fh, r*2, fh);
+        }
+        if(z>1.2){
+          ctx.fillStyle='rgba(200,210,200,0.75)';
+          ctx.font=(7*z)+'px "Exo 2",sans-serif'; ctx.textAlign='center';
+          ctx.fillText(Math.round(s.matsWood)+'/'+s.needWood+'w · '+Math.round(s.matsStone)+'/'+s.needStone+'s', sx, sy+r*1.15);
+          ctx.textAlign='left';
+        }
+      }
+    }
+
     // ── AGENTS ────────────────────────────────────────────────────────────--
     const showGlyph=z>1.15;
     for(const a of Agents){
       const sx=this.sx(a.x), sy=this.sy(a.y);
       if(sx<-20||sx>W+20||sy<-30||sy>H+20) continue;
       const fc=Factions[a.faction];
-      const rad=Math.max(2,2.6*z);
+      const rad=Math.max(2.4,3.2*z);
       // overwhelm / grief desaturate; joy brightens glow
       const glowA=0.25+a.joy*0.4 - a.overwhelmed*0.15;
       if(z>0.6){
@@ -171,17 +203,52 @@ const Renderer={
         g.addColorStop(0, fc.glow+Math.max(0,glowA)+')'); g.addColorStop(1, fc.glow+'0)');
         ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,rad*3,0,7); ctx.fill();
       }
-      // body
-      ctx.fillStyle=fc.color;
-      if(z>0.9){
-        // little figure: head + body
-        ctx.beginPath(); ctx.arc(sx,sy-rad*0.8,rad*0.7,0,7); ctx.fill();
-        ctx.fillRect(sx-rad*0.5, sy-rad*0.1, rad, rad*1.6);
+      // humanoid figure: legs, clothed torso, arms, head, hair
+      if(z>0.55){
+        const moving=Math.hypot(a.vx,a.vy)>0.04;
+        const swing=moving?Math.sin(a.walkPhase)*rad*0.55:0;
+        ctx.lineCap='round';
+        ctx.strokeStyle='rgba(35,26,20,0.85)';
+        ctx.lineWidth=Math.max(1,rad*0.3);
+        ctx.beginPath();
+        ctx.moveTo(sx-rad*0.26, sy+rad*0.45); ctx.lineTo(sx-rad*0.26+swing*0.4, sy+rad*1.55);
+        ctx.moveTo(sx+rad*0.26, sy+rad*0.45); ctx.lineTo(sx+rad*0.26-swing*0.4, sy+rad*1.55);
+        ctx.stroke();
+        // torso — clothing colored by faction
+        ctx.fillStyle=fc.color;
+        ctx.beginPath();
+        ctx.moveTo(sx-rad*0.6, sy+rad*0.5);
+        ctx.lineTo(sx-rad*0.68, sy-rad*0.35);
+        ctx.lineTo(sx+rad*0.68, sy-rad*0.35);
+        ctx.lineTo(sx+rad*0.6, sy+rad*0.5);
+        ctx.closePath(); ctx.fill();
+        // arms
+        ctx.strokeStyle=fc.color;
+        ctx.lineWidth=Math.max(0.8,rad*0.22);
+        ctx.beginPath();
+        ctx.moveTo(sx-rad*0.64, sy-rad*0.1); ctx.lineTo(sx-rad*0.86-swing*0.3, sy+rad*0.4);
+        ctx.moveTo(sx+rad*0.64, sy-rad*0.1); ctx.lineTo(sx+rad*0.86+swing*0.3, sy+rad*0.4);
+        ctx.stroke();
+        ctx.lineCap='butt';
+        // head — skin tone
+        ctx.fillStyle=a.skin;
+        ctx.beginPath(); ctx.arc(sx, sy-rad*0.95, rad*0.52, 0, 7); ctx.fill();
+        // hair
+        ctx.fillStyle=a.hair;
+        ctx.beginPath(); ctx.arc(sx, sy-rad*1.16, rad*0.55, Math.PI, 0); ctx.fill();
       } else {
+        ctx.fillStyle=fc.color;
         ctx.beginPath(); ctx.arc(sx,sy,rad,0,7); ctx.fill();
+      }
+      // carried-resource indicator
+      if(z>1 && a.inv){
+        const carry = a.inv.wood>0?['╪','#c89060'] : a.inv.stone>0?['◈','#aab0bc'] : a.inv.food>0?['✿','#9fd08a'] : a.inv.water>0?['≈','#7fb8d8'] : null;
+        if(carry){ ctx.fillStyle=carry[1]; ctx.font=(8*Math.min(z,2))+'px sans-serif'; ctx.textAlign='center'; ctx.fillText(carry[0], sx+rad*1.15, sy-rad*1.7); ctx.textAlign='left'; }
       }
       // grieving marker
       if(a.grieving>0.4 && z>1){ ctx.fillStyle='rgba(184,155,217,0.8)'; ctx.beginPath(); ctx.arc(sx,sy-rad*2.4,1.2*z,0,7); ctx.fill(); }
+      // selection ring
+      if(UI.selected===a){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,rad*2.3,0,7); ctx.stroke(); }
       // action glyph
       if(showGlyph && a.task && a.task.glyph){
         ctx.fillStyle='rgba(220,235,228,0.82)';

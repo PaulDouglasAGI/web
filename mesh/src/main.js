@@ -1,7 +1,7 @@
 /* main.js — boot, tick engine, render loop. The world runs itself forever. */
 'use strict';
 
-const Sim={ running:true, speed:1 };
+const Sim={ running:true, speed:0.35 };
 
 function boot(){
   World.init();
@@ -20,17 +20,18 @@ function boot(){
   requestAnimationFrame(loop);
 }
 
-let acc=0;
+let tickAcc=0;
 function loop(){
   requestAnimationFrame(loop);
 
-  // fixed-step simulation (decoupled from render)
-  const steps=Sim.speed;
-  for(let s=0;s<steps;s++){
+  // fixed-step simulation (decoupled from render) — fractional speed via accumulator
+  tickAcc+=Sim.speed;
+  while(tickAcc>=1){
     World.update();
     Mesh.update();
     updateAgents();
     Events.update();
+    tickAcc-=1;
   }
 
   Renderer.draw();

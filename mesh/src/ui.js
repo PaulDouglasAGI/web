@@ -1,28 +1,51 @@
-/* ui.js — ambient UI, camera input (pan/zoom only), agent inspector */
+/* ui.js — ambient UI, camera input (pan/zoom/tap), sim speed, deep agent inspector */
 'use strict';
 
+function setBar(el,frac){ el.style.width=Math.round(Math.max(0,Math.min(1,frac))*100)+'%'; }
+
 const UI={
-  el:{}, focus:null, hintFaded:false, _t:0,
+  el:{}, selected:null, hintFaded:false, _t:0,
 
   init(){
     this.el.season=document.getElementById('season');
     this.el.tod=document.getElementById('timeofday');
     this.el.res=document.getElementById('resonance-glyph');
     this.el.pop=document.getElementById('pop');
-    this.el.insp=document.getElementById('inspector');
-    this.el.iname=document.getElementById('insp-name');
-    this.el.ifac=document.getElementById('insp-faction');
-    this.el.iact=document.getElementById('insp-action');
     this.el.hint=document.getElementById('hint');
+
+    this.el.panel=document.getElementById('agent-panel');
+    this.el.panelClose=document.getElementById('panel-close');
+    this.el.pName=document.getElementById('panel-name');
+    this.el.pFaction=document.getElementById('panel-faction');
+    this.el.pAge=document.getElementById('panel-age');
+    this.el.pAction=document.getElementById('panel-action');
+    this.el.pBond=document.getElementById('panel-bond');
+    this.el.pInv=document.getElementById('panel-inv');
+    this.el.pMem=document.getElementById('panel-mem');
+    this.el.barEnergy=document.getElementById('bar-energy');
+    this.el.barHunger=document.getElementById('bar-hunger');
+    this.el.barSocial=document.getElementById('bar-social');
+    this.el.barJoy=document.getElementById('bar-joy');
+    this.el.panelClose.addEventListener('click',e=>{ e.stopPropagation(); this.deselect(); });
+
+    this.el.speedBtns=Array.from(document.querySelectorAll('#speed-ctl button'));
+    for(const b of this.el.speedBtns){
+      b.addEventListener('click',()=>{
+        Sim.speed=parseFloat(b.dataset.spd);
+        for(const o of this.el.speedBtns) o.classList.remove('active');
+        b.classList.add('active');
+      });
+    }
+
     this.bindCamera();
   },
 
   bindCamera(){
     const cnv=Renderer.cnv;
-    let dragging=false, lx=0, ly=0, moved=0;
-    const start=(x,y)=>{ dragging=true; lx=x; ly=y; moved=0; cnv.classList.add('dragging'); this.fadeHint(); };
+    let dragging=false, lx=0, ly=0, moved=0, downX=0, downY=0;
+    const start=(x,y)=>{ dragging=true; lx=x; ly=y; downX=x; downY=y; moved=0; cnv.classList.add('dragging'); this.fadeHint(); };
     const move=(x,y)=>{ if(!dragging) return; const dx=(x-lx)/Camera.zoom, dy=(y-ly)/Camera.zoom; Camera.x-=dx; Camera.y-=dy; moved+=Math.abs(dx)+Math.abs(dy); lx=x; ly=y; this.clampCam(); };
-    const end=()=>{ dragging=false; cnv.classList.remove('dragging'); };
+    const end=()=>{ dragging=false; cnv.classList.remove('dragging'); if(moved<6) this.handleTap(downX,downY); };
 
     cnv.addEventListener('mousedown',e=>start(e.clientX,e.clientY));
     window.addEventListener('mousemove',e=>move(e.clientX,e.clientY));
@@ -39,6 +62,49 @@ const UI={
     cnv.addEventListener('touchend',e=>{ if(e.touches.length===0) end(); pinchD=0; });
   },
   touchDist(e){ const dx=e.touches[0].clientX-e.touches[1].clientX, dy=e.touches[0].clientY-e.touches[1].clientY; return Math.hypot(dx,dy); },
+
+  handleTap(px,py){
+    const wx=Renderer.worldX(px), wy=Renderer.worldY(py);
+    const tol=26/Camera.zoom;
+    let best=null,bd=Infinity;
+    for(const a of Agents){ const d=dist2(a.x,a.y,wx,wy); if(d<bd){ bd=d; best=a; } }
+    if(best && bd<tol*tol) this.select(best);
+    else this.deselect();
+  },
+  select(agent){ this.selected=agent; this.el.panel.classList.add('show'); this.renderPanel(); },
+  deselect(){ this.selected=null; this.el.panel.classList.remove('show'); },
+
+  renderPanel(){
+    const a=this.selected; if(!a) return;
+    const fc=Factions[a.faction];
+    this.el.pName.textContent=a.name;
+    this.el.pFaction.textContent=fc.name;
+    this.el.pFaction.style.color=fc.color;
+    this.el.pAge.textContent='age '+Math.floor(a.age)+(a.bond?' · bonded':'');
+    this.el.pAction.textContent=a.task?(a.task.glyph+'  '+a.task.label):'…';
+    setBar(this.el.barEnergy, a.energy/100);
+    setBar(this.el.barHunger, a.hunger/100);
+    setBar(this.el.barSocial, a.social/100);
+    setBar(this.el.barJoy, a.joy);
+    const partner=a.bond?agentById(a.bond):null;
+    this.el.pBond.textContent=partner?partner.name:'—';
+    this.el.pInv.innerHTML='';
+    for(const k of RESOURCES){
+      if(a.inv[k]>0){
+        const chip=document.createElement('span');
+        chip.className='inv-chip';
+        chip.textContent=k+' '+Math.floor(a.inv[k]);
+        this.el.pInv.appendChild(chip);
+      }
+    }
+    this.el.pMem.innerHTML='';
+    for(let i=a.memory.length-1;i>=0;i--){
+      const line=document.createElement('div');
+      line.className='mem-line';
+      line.textContent=a.memory[i];
+      this.el.pMem.appendChild(line);
+    }
+  },
 
   zoomAt(px,py,factor){
     const wx=Renderer.worldX(px), wy=Renderer.worldY(py);
@@ -67,21 +133,9 @@ const UI={
       this.el.res.style.boxShadow='0 0 '+(14+r*30)+'px rgba('+warm+','+(warm-40)+','+cool+','+(0.3+r*0.4)+')';
     }
 
-    // inspector: focus nearest agent to screen center when zoomed in
-    if(Camera.zoom>1.15){
-      const cwx=Renderer.worldX(Renderer.W/2), cwy=Renderer.worldY(Renderer.H/2);
-      let best=null,bd=Infinity;
-      for(const a of Agents){ const d=dist2(a.x,a.y,cwx,cwy); if(d<bd){bd=d;best=a;} }
-      if(best && bd< (140/Camera.zoom)**2 *Camera.zoom){
-        this.focus=best;
-        const sx=Renderer.sx(best.x), sy=Renderer.sy(best.y);
-        this.el.insp.style.left=sx+'px'; this.el.insp.style.top=sy+'px';
-        this.el.insp.classList.add('show');
-        this.el.iname.textContent=best.name+'  ·  '+Math.floor(best.age);
-        const fc=Factions[best.faction];
-        this.el.ifac.textContent=fc.name; this.el.ifac.style.color=fc.color;
-        this.el.iact.textContent=best.task?best.task.label:'…';
-      } else { this.el.insp.classList.remove('show'); this.focus=null; }
-    } else { this.el.insp.classList.remove('show'); this.focus=null; }
+    if(this.selected){
+      if(this.selected.dead) this.deselect();
+      else this.renderPanel();
+    }
   }
 };
