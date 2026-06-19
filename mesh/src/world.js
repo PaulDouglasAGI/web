@@ -222,21 +222,27 @@ const World={
     this.totalBorn=0; this.totalDied=0; this.totalCrimes=0;
     // the Altar — a fixed landmark at the heart of the map, not built by agents
     this.altar={ x:this.w/2, y:this.h/2, sacrifices:0, worshipped:0, log:[] };
+    this._pendingPulses=[]; // deferred field writes, e.g. the dissolution coherence-surge below
     this.generate();
   },
 
   // judgment ceremony — a captured criminal, marched to the Altar by their own
-  // feet (see Agent.chooseTask's captured branch), is given to the Collective
+  // feet (see Agent.chooseTask's captured branch), is given to the Collective.
+  // This is a ceremonial dissolution, not an ordinary death: it fires an immediate
+  // dissonance-spike (the letting-go) and a delayed coherence-surge (the re-integration),
+  // never a grief pulse — see Agent.die()'s _dissolving branch.
   judgeCriminal(agent){
     const alt=this.altar;
-    siteLog(alt, agent.name+' was given to the Collective for '+agent.crime);
-    logJustice(agent.name+' was given to the Collective for '+agent.crime);
+    siteLog(alt, agent.name+' returned to the source, unable to hold form, after '+agent.crime);
+    logJustice(agent.name+' returned to the source, unable to hold form, after '+agent.crime);
     alt.sacrifices++;
-    Events.banner='THE COLLECTIVE HAS RECEIVED '+agent.name.toUpperCase();
+    Events.banner=agent.name.toUpperCase()+' HAS RETURNED TO THE SOURCE';
     Events.active='judgment'; Events.activeT=300;
     Mesh.broadcast(alt.x,alt.y,'judgment',1,'#ffe9b0');
     raiseResonance(0.05);
     Mesh.dissonance=Math.max(0,Mesh.dissonance-0.1);
+    agent._dissolving=true;
+    this._pendingPulses.push({x:alt.x,y:alt.y,dueTick:this.tick+30+((Math.random()*20)|0),channel:'coherence',amount:0.5,radius:140});
     agent.die();
   },
 
@@ -606,6 +612,14 @@ const World={
       const grow=s.growTicks||900;
       if(s.stage==='planted'){ s.stageT+=seasonRegen; if(s.stageT>grow){ s.stage='growing'; s.stageT=0; } }
       else if(s.stage==='growing'){ s.stageT+=seasonRegen; if(s.stageT>grow){ s.stage='ready'; s.stageT=0; } }
+    }
+
+    // deferred field writes (e.g. the coherence-surge that follows a dissolution's dissonance-spike)
+    if(this._pendingPulses&&this._pendingPulses.length){
+      for(let i=this._pendingPulses.length-1;i>=0;i--){
+        const p=this._pendingPulses[i];
+        if(this.tick>=p.dueTick){ Mesh.writeField(p.x,p.y,p.channel,p.amount,p.radius); this._pendingPulses.splice(i,1); }
+      }
     }
 
     if(this.dayTick%30===0) this.checkStructureUnlocks();

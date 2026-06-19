@@ -200,12 +200,14 @@ const Behaviors=[
           if(st.type==='market' && ag.task._t%40===0){
             const amt=(st.effRate||0.05)*0.5;
             raiseResonance(amt);
+            Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
             siteLog(st, ag.name+' brought the market to life');
           }
           if(st.type==='shrineHall' && ag.task._t%40===0){
             const amt=(st.effRate||0.05)*0.4, eased=(st.effRate||0.05)*0.6;
             raiseResonance(amt); Mesh.grief=Math.max(0,Mesh.grief-eased);
+            Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
             st.griefEased=(st.griefEased||0)+eased;
             siteLog(st, ag.name+' led a gathering at the shrine hall');
@@ -228,25 +230,27 @@ const Behaviors=[
             if(target && Math.random()<(st.effRate||0.1)){
               target.captured=true; target.capturedAt=World.tick; target.task=null;
               st.subdued=(st.subdued||0)+1;
-              siteLog(st, ag.name+' subdued '+target.name+' from the barracks');
-              ag.remember('subdued '+target.name); target.remember('was subdued by '+ag.name);
-              logJustice(target.name+' was subdued by '+ag.name+' from the barracks');
+              siteLog(st, ag.name+' helped '+target.name+' remember, from the barracks');
+              ag.remember('helped '+target.name+' remember'); target.remember('was helped to remember, by '+ag.name);
+              logJustice(target.name+' was helped to remember, by '+ag.name+' from the barracks');
             }
           }
           if(st.type==='temple' && ag.task._t%40===0){
             const amt=(st.effRate||0.05)*0.8, eased=(st.effRate||0.05)*1.2;
             raiseResonance(amt); Mesh.grief=Math.max(0,Mesh.grief-eased);
+            Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
             st.griefEased=(st.griefEased||0)+eased;
             siteLog(st, ag.name+' led a grand rite at the temple');
           }
           if(st.type==='temple' && ag.task._t%100===0){
             World.altar.worshipped=(World.altar.worshipped||0)+1;
-            siteLog(World.altar, ag.name+' carried temple devotion to the Collective');
+            siteLog(World.altar, ag.name+' carried the temple\'s stillness back to the source');
           }
           if(st.type==='tavern' && ag.task._t%40===0){
             const amt=(st.effRate||0.05)*0.5;
             raiseResonance(amt);
+            Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
             siteLog(st, ag.name+' raised spirits at the tavern');
           }
@@ -287,10 +291,10 @@ const Behaviors=[
     weight:a=> World.isNight()? 16:5,
     make:a=> { const f=World.nearestOf(World.fires,a.x,a.y); return f?gotoPoint(a,'telling a story','❝','social',f.x,f.y,170,'sit'):null; } },
   { id:'disagree', label:'disagreeing', glyph:'≠', cat:'social',
-    weight:a=> Mesh.dissonance>0.4 ? 12:3,
+    weight:a=> Mesh.dissonanceAt(a.x,a.y)>0.4 ? 12:3,
     make:a=> gotoAgent(a,'disagreeing','≠','social', nearestAgent(a,o=>o!==a&&o.faction!==a.faction), ag=>{ lowerResonance(0.003); }) },
   { id:'reconcile', label:'reconciling', glyph:'∞', cat:'social',
-    weight:a=> Mesh.dissonance>0.5 && a.faction===3 ? 18:4,
+    weight:a=> Mesh.dissonanceAt(a.x,a.y)>0.5 && a.faction===3 ? 18:4,
     make:a=> gotoAgent(a,'reconciling','∞','social', nearestAgent(a,o=>o!==a), ag=>{ raiseResonance(0.005); Mesh.dissonance=Math.max(0,Mesh.dissonance-0.05); }) },
   { id:'comfort', label:'comforting', glyph:'♡', cat:'social',
     weight:a=> Mesh.grief>0.2 ? (a.faction===3?30:14):0,
@@ -444,10 +448,11 @@ const Behaviors=[
         const n=Math.min(victim.inv[res],1+((Math.random()*2)|0));
         victim.inv[res]-=n; ag.inv[res]=(ag.inv[res]||0)+n;
         ag.wanted=true; ag.crime='theft'; ag.crimeTick=World.tick;
-        victim.remember('was robbed by '+ag.name); ag.remember('stole from '+victim.name);
+        victim.remember('was robbed by '+ag.name); ag.remember('forgot themselves, and took from '+victim.name);
         Mesh.broadcast(ag.x,ag.y,'crime',0.6,'#ff5a5a');
         lowerResonance(0.01); Mesh.dissonance=Math.min(1,Mesh.dissonance+0.03);
-        logCrime(ag.name+' stole from '+victim.name);
+        Mesh.writeField(ag.x,ag.y,'dissonance',0.4,150);
+        logCrime(ag.name+' forgot themselves, and took from '+victim.name);
       }, 60); } },
   { id:'commitMurder', label:'stalking with violent intent', glyph:'☠', cat:'crime',
     weight:a=> { if(a.criminality<=0.55 || a.wanted) return 0;
@@ -461,11 +466,12 @@ const Behaviors=[
         const victim=ag.task.targetAgent; if(!victim||victim.dead) return;
         victim.die();
         ag.wanted=true; ag.crime='murder'; ag.crimeTick=World.tick;
-        ag.remember('committed murder');
+        ag.remember('forgot themselves entirely, and ended another');
         Mesh.broadcast(ag.x,ag.y,'crime',1,'#ff2222');
         Mesh.grief=Math.min(1,Mesh.grief+0.25); Mesh.dissonance=Math.min(1,Mesh.dissonance+0.15);
+        Mesh.writeField(ag.x,ag.y,'dissonance',0.7,170);
         lowerResonance(0.04);
-        logCrime(ag.name+' murdered '+victim.name);
+        logCrime(ag.name+' forgot themselves entirely, and ended '+victim.name);
       }, 70); } },
   { id:'subdue', label:'closing in to subdue', glyph:'✊', cat:'justice',
     weight:a=> { if(a.criminality>0) return 0;
@@ -476,19 +482,20 @@ const Behaviors=[
       return gotoAgent(a,'closing in to subdue','✊','justice', t, ag=>{
         const target=ag.task.targetAgent; if(!target||target.dead||target.captured) return;
         target.captured=true; target.capturedAt=World.tick; target.task=null;
-        ag.remember('helped subdue '+target.name); target.remember('was subdued by '+ag.name);
-        logJustice(target.name+' was subdued by '+ag.name);
+        ag.remember('helped '+target.name+' remember'); target.remember('was helped to remember, by '+ag.name);
+        logJustice(target.name+' was helped to remember, by '+ag.name);
       }, 60); } },
-  { id:'worship', label:'worshipping the Collective', glyph:'☥', cat:'worship',
+  { id:'worship', label:'sitting in stillness, remembering', glyph:'☥', cat:'worship',
     weight:a=> Mesh.resonance>0.45 ? 14+(a.faction===3?10:0) : 4,
-    make:a=> ({ label:'worshipping the Collective',glyph:'☥',cat:'worship', pose:'kneel',
+    make:a=> ({ label:'sitting in stillness, remembering',glyph:'☥',cat:'worship', pose:'kneel',
       target:{x:World.altar.x,y:World.altar.y}, arrive:20, dur:200,
       onTick(ag){
         if(ag.task._t%50===0){
           raiseResonance(0.004);
+          Mesh.writeField(ag.x,ag.y,'coherence',0.15,120);
           World.altar.worshipped++;
-          siteLog(World.altar, ag.name+' worshipped the Collective');
-          if(Math.random()<0.3) ag.remember('worshipped the Collective');
+          siteLog(World.altar, ag.name+' sat in stillness, remembering');
+          if(Math.random()<0.3) ag.remember('sat in stillness, remembering');
         }
       } }) }
 ];

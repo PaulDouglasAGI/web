@@ -45,6 +45,12 @@ const UI={
       });
     }
 
+    this.el.fieldToggle=document.getElementById('field-toggle');
+    this.el.fieldToggle.addEventListener('click',()=>{
+      Renderer.showField=!Renderer.showField;
+      this.el.fieldToggle.classList.toggle('active',Renderer.showField);
+    });
+
     this.bindCamera();
   },
 
@@ -127,8 +133,8 @@ const UI={
     this.el.pFaction.style.color=fc.color;
     this.el.pAge.textContent='age '+Math.floor(a.age)+(a.bond?' · bonded':'');
     let actionTxt=a.task?(a.task.glyph+'  '+a.task.label):'…';
-    if(a.captured) actionTxt='⚖ captured — being marched to the Altar';
-    else if(a.wanted) actionTxt+='  ·  ⚠ WANTED ('+a.crime+')';
+    if(a.captured) actionTxt='⚖ being helped to remember, at the Altar';
+    else if(a.wanted) actionTxt+='  ·  ◌ FRAGMENTING ('+a.crime+')';
     this.el.pAction.textContent=actionTxt;
     setBar(this.el.barEnergy, a.energy/100);
     setBar(this.el.barHunger, a.hunger/100);
@@ -285,8 +291,8 @@ const UI={
     this.el.pFaction.textContent='the Collective';
     this.el.pFaction.style.color='#ffe9b0';
     this.el.pAge.textContent='fixed at the center of the world';
-    this.el.pAction.textContent='sacrifices given: '+alt.sacrifices+' · worshipped '+alt.worshipped+' times';
-    this.setStatLabels('resonance','dissonance','grief','—');
+    this.el.pAction.textContent='returned to the source: '+alt.sacrifices+' · remembered '+alt.worshipped+' times';
+    this.setStatLabels('field clarity','fragmentation','grief','—');
     setBar(this.el.barEnergy, Mesh.resonance);
     setBar(this.el.barHunger, Mesh.dissonance);
     setBar(this.el.barSocial, Mesh.grief);
@@ -320,8 +326,8 @@ const UI={
     this.el.pFaction.textContent=alive.length+' souls living';
     this.el.pFaction.style.color='#9fc9b8';
     this.el.pAge.textContent='born '+(World.totalBorn||0)+' · died '+(World.totalDied||0)+' · '+World.gathers.length+' settlements (avg tier '+avgTier+')';
-    this.el.pAction.textContent='crimes '+(World.totalCrimes||0)+' · sacrifices '+(World.altar.sacrifices||0)+' · jobs '+jobsFilled+'/'+jobsTotal+' filled';
-    this.setStatLabels('resonance','dissonance','grief','unrest');
+    this.el.pAction.textContent='crimes '+(World.totalCrimes||0)+' · returned to the source '+(World.altar.sacrifices||0)+' · jobs '+jobsFilled+'/'+jobsTotal+' filled';
+    this.setStatLabels('field clarity','fragmentation','grief','unrest');
     setBar(this.el.barEnergy, Mesh.resonance);
     setBar(this.el.barHunger, Mesh.dissonance);
     setBar(this.el.barSocial, Mesh.grief);
@@ -356,7 +362,7 @@ const UI={
       this.el.tod.textContent=World.phaseName();
       this.el.pop.textContent=Agents.length+' souls';
       const wantedCt=Agents.filter(a=>a.wanted && !a.captured).length;
-      if(wantedCt>0){ this.el.alerts.textContent='⚠ '+wantedCt+' WANTED'; this.el.alerts.style.display=''; }
+      if(wantedCt>0){ this.el.alerts.textContent='◌ '+wantedCt+' FRAGMENTING'; this.el.alerts.style.display=''; }
       else this.el.alerts.style.display='none';
       // resonance glyph warmth
       const r=Mesh.resonance;

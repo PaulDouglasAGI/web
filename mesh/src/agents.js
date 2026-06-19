@@ -46,9 +46,12 @@ class Agent{
     this.walkPhase=Math.random()*Math.PI*2;
     this._stuckTicks=0; this._lastDist=Infinity;
     this.job=null;
-    // a small fraction of agents are predisposed toward theft/violence — hidden until they act on it
-    this.criminality=Math.random()<0.06 ? 0.35+Math.random()*0.65 : 0;
+    // a small fraction of agents are predisposed toward theft/violence — hidden until they act on it.
+    // criminality itself floats: sustained local dissonance can pull *any* agent toward crime.
+    this._criminalBaseline=Math.random()<0.06 ? 0.35+Math.random()*0.65 : 0;
+    this.criminality=this._criminalBaseline;
     this.wanted=false; this.crime=null; this.crimeTick=0; this.captured=false;
+    this._dissolving=false;
   }
 
   remember(s){ this.memory.push(s); if(this.memory.length>6) this.memory.shift(); }
@@ -92,10 +95,13 @@ class Agent{
       // season modifiers
       if(World.season===3){ if(b.cat==='survival') w*=1.5; if(b.cat==='explore') w*=0.6; }
       if(World.season===0&&b.cat==='creative') w*=1.2;
-      // mesh resonance modifiers
+      // mesh field modifiers — sampled at this agent's location, not the global average
       if(felt>0.65 && (b.cat==='creative'||b.cat==='social')) w*=1.4;
       if(felt<0.4 && b.cat==='social') w*=0.7;
-      if(Mesh.grief>0.3 && b.cat==='social') w*=1.3;
+      if(Mesh.griefAt(this.x,this.y)>0.3 && b.cat==='social') w*=1.3;
+      const localCoh=Mesh.coherenceAt(this.x,this.y), localDis=Mesh.dissonanceAt(this.x,this.y);
+      if(localCoh>0.65 && (b.cat==='social'||b.cat==='trade'||b.cat==='creative')) w*=1.2;
+      if(localDis>0.4 && b.cat==='survival') w*=1.15;
       // personal overwhelm
       if(this.overwhelmed>0.5 && b.cat!=='inner') w*=0.5;
       // noise so they feel alive
@@ -126,6 +132,8 @@ class Agent{
     const bonus=this.settlementBonus();
     this.hunger=Math.min(100,this.hunger+Math.max(0.004,0.012-bonus.foodSec*0.0015));
     this.social=Math.min(100,this.social+0.01+bonus.tavernBonus*0.02);
+    // criminality floats with the local field — sustained dissonance can pull anyone toward crime
+    this.criminality=Math.min(1,this._criminalBaseline + Mesh.dissonanceAt(this.x,this.y)*0.4);
     if(this.meshMuted>0) this.meshMuted--;
     // mesh overwhelm
     if(this.meshMuted<=0) this.overwhelmed=Math.min(1,this.overwhelmed + (Mesh.noise*this.meshSensitivity-0.35)*0.004);
@@ -200,8 +208,16 @@ class Agent{
     this.dead=true;
     World.totalDied=(World.totalDied||0)+1;
     if(this.job&&this.job.siteRef&&this.job.siteRef.workers){ const idx=this.job.siteRef.workers.indexOf(this.id); if(idx>=0) this.job.siteRef.workers.splice(idx,1); }
-    Mesh.broadcast(this.x,this.y,'grief',0.9,Factions[this.faction].color);
-    Mesh.grief=Math.min(1,Mesh.grief+0.25);
+    if(this._dissolving){
+      // ceremonial dissolution at the Altar is a merciful re-integration, not a tragedy —
+      // a spike of friction as the localized self lets go, then (scheduled in World) a coherence surge
+      Mesh.broadcast(this.x,this.y,'dissonance-spike',1,'#ff5a5a');
+      Mesh.writeField(this.x,this.y,'dissonance',0.3,140);
+    } else {
+      Mesh.broadcast(this.x,this.y,'grief',0.9,Factions[this.faction].color);
+      Mesh.grief=Math.min(1,Mesh.grief+0.25);
+      Mesh.writeField(this.x,this.y,'grief',0.5,180);
+    }
     // bonded partner grieves hardest
     for(const o of Agents){ if(o.bond===this.id){ o.bond=null; o.grieving=1; o.remember('lost '+this.name);} }
     // nearby feel it

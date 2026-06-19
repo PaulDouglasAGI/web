@@ -5,6 +5,7 @@ const Camera={ x:0, y:0, zoom:1, minZoom:0.35, maxZoom:3.2 };
 
 const Renderer={
   cnv:null, ctx:null, W:0, H:0, dpr:1,
+  showField:false, // off by default — the field overlay is an opt-in deeper look, not the default view
 
   // base terrain colors [r,g,b]
   TCOL:{
@@ -44,6 +45,29 @@ const Renderer={
   worldX(px){ return (px-this.W/2)/Camera.zoom + Camera.x; },
   worldY(py){ return (py-this.H/2)/Camera.zoom + Camera.y; },
 
+  // optional, toggled view of the field underneath the living world — coherence as
+  // soft gold, grief as blue-violet, dissonance as red-orange. Viewport-culled like the tile loop.
+  drawFieldOverlay(){
+    const ctx=this.ctx, W=this.W, H=this.H, z=Camera.zoom;
+    const cw=Mesh.fieldCellW, ch=Mesh.fieldCellH;
+    const c0=Math.max(0,(this.worldX(0)/cw|0)-1);
+    const r0=Math.max(0,(this.worldY(0)/ch|0)-1);
+    const c1=Math.min(Mesh.fieldCols-1,(this.worldX(W)/cw|0)+1);
+    const r1=Math.min(Mesh.fieldRows-1,(this.worldY(H)/ch|0)+1);
+    const cellPx=Math.max(cw,ch)*z+1;
+    for(let row=r0;row<=r1;row++){
+      for(let col=c0;col<=c1;col++){
+        const i=row*Mesh.fieldCols+col;
+        const px=this.sx(col*cw)|0, py=this.sy(row*ch)|0;
+        const w=Math.ceil(cw*z+1), h=Math.ceil(ch*z+1);
+        const coh=Mesh.coherence[i], gr=Mesh.fieldGrief[i], dis=Mesh.fieldDissonance[i];
+        if(coh>0.5){ ctx.fillStyle='rgba(255,233,200,'+((coh-0.5)*0.5)+')'; ctx.fillRect(px,py,w,h); }
+        if(gr>0.05){ ctx.fillStyle='rgba(90,60,140,'+Math.min(0.5,gr*0.5)+')'; ctx.fillRect(px,py,w,h); }
+        if(dis>0.05){ ctx.fillStyle='rgba(220,90,50,'+Math.min(0.5,dis*0.5)+')'; ctx.fillRect(px,py,w,h); }
+      }
+    }
+  },
+
   draw(){
     const ctx=this.ctx, W=this.W, H=this.H, z=Camera.zoom;
     const day=World.daylight();
@@ -74,6 +98,8 @@ const Renderer={
         ctx.fillRect(this.sx(c*ts)|0, this.sy(r*ts)|0, Math.ceil(tilePx), Math.ceil(tilePx));
       }
     }
+
+    if(this.showField) this.drawFieldOverlay();
 
     // landscape marks
     for(const m of Marks){
