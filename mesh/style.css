@@ -17,7 +17,9 @@ canvas.dragging{cursor:grabbing;}
 #resonance-glyph{width:30px;height:30px;margin:0 auto 5px;border-radius:50%;background:radial-gradient(circle at 50% 50%,rgba(255,220,170,0.9),rgba(255,180,120,0.15) 60%,transparent 75%);box-shadow:0 0 26px rgba(255,200,150,0.5);transition:box-shadow .6s,background .6s;}
 #resonance-label{font-size:8px;letter-spacing:5px;color:#5a6e74;}
 
-#pop{position:absolute;top:16px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:#5a6e74;font-family:'Exo 2',sans-serif;}
+#pop{position:absolute;top:16px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:4px;color:#5a6e74;font-family:'Exo 2',sans-serif;pointer-events:auto;cursor:pointer;}
+#alerts{position:absolute;top:32px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:3px;color:#ff5a5a;font-family:'Exo 2',sans-serif;text-shadow:0 0 12px rgba(255,90,90,0.6);animation:alert-pulse 1.6s ease-in-out infinite;}
+@keyframes alert-pulse{0%,100%{opacity:0.55;}50%{opacity:1;}}
 
 /* Sim speed controls */
 #speed-ctl{position:absolute;bottom:18px;left:18px;z-index:30;display:flex;gap:6px;}

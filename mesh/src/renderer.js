@@ -9,7 +9,7 @@ const Renderer={
   // base terrain colors [r,g,b]
   TCOL:{
     0:[26,52,74],   // water
-    1:[120,128,96], // shore
+    1:[58,86,78],   // shore — wet rock/reed edge, not sand
     2:[64,92,54],   // plain
     3:[36,68,40],   // forest
     4:[84,90,70],   // hill — muted green-gray, less "desert tan" now that hills are rarer
@@ -256,6 +256,33 @@ const Renderer={
         ctx.font=(top?11*z:8*z)+'px "Exo 2",sans-serif'; ctx.textAlign='center';
         ctx.fillText(SETTLEMENT_TIERS[g.tier].name, sx, sy-34*z);
         ctx.textAlign='left';
+      }
+    }
+
+    // ── THE ALTAR ─────────────────────────────────────────────────────────--
+    {
+      const alt=World.altar;
+      const sx=this.sx(alt.x), sy=this.sy(alt.y);
+      if(!(sx<-60||sx>W+60||sy<-60||sy>H+60)){
+        const ar=Math.max(6,10*z);
+        const pulse=0.5+0.5*Math.sin(World.tick*0.03);
+        const g=ctx.createRadialGradient(sx,sy,0,sx,sy,ar*3);
+        g.addColorStop(0,'rgba(255,224,150,'+(0.35+pulse*0.25)+')');
+        g.addColorStop(1,'rgba(255,224,150,0)');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,ar*3,0,7); ctx.fill();
+        ctx.fillStyle='rgba(255,224,150,0.9)';
+        ctx.beginPath();
+        ctx.moveTo(sx,sy-ar); ctx.lineTo(sx+ar*0.7,sy); ctx.lineTo(sx,sy+ar); ctx.lineTo(sx-ar*0.7,sy);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle='rgba(255,233,176,0.7)'; ctx.lineWidth=Math.max(1,1.2*z);
+        ctx.stroke();
+        if(z>0.7){
+          ctx.fillStyle='rgba(255,233,176,0.9)';
+          ctx.font=10*z+'px "Exo 2",sans-serif'; ctx.textAlign='center';
+          ctx.fillText('THE ALTAR', sx, sy-ar-10*z);
+          ctx.textAlign='left';
+        }
+        if(UI.selected===alt){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,ar*2,0,7); ctx.stroke(); }
       }
     }
 

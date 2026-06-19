@@ -119,7 +119,8 @@ const Behaviors=[
         onTick(ag){
           if(!an.alive){ ag.task=null; return; }
           const d=Math.hypot(an.x-ag.x,an.y-ag.y);
-          if(d<26 && Math.random()<0.02){
+          const killChance=ag.inv.tools>0?0.07:0.02; // a carried tool doubles as a hunting weapon
+          if(d<26 && Math.random()<killChance){
             an.alive=false; an.respawnAt=900+((Math.random()*600)|0);
             ag.inv.food+=2; ag.hunger=Math.max(0,ag.hunger-30); ag.remember('made a catch'); ag.task=null;
           }
@@ -332,7 +333,69 @@ const Behaviors=[
     make:a=> { const s=Mesh.strongestSignal(a.x,a.y); return s?gotoPoint(a,'answering a call','➟','mesh',s.x,s.y,120):null; } },
   { id:'shareVision', label:'sharing a vision', glyph:'✧', cat:'mesh',
     weight:a=> Math.random()<0.03?12:0,
-    make:a=> stayPut(a,'sharing a vision','✧','mesh',90,ag=>{ if(ag.task._t===1) Mesh.broadcast(ag.x,ag.y,'vision',0.7,'#bfe8ff'); }) }
+    make:a=> stayPut(a,'sharing a vision','✧','mesh',90,ag=>{ if(ag.task._t===1) Mesh.broadcast(ag.x,ag.y,'vision',0.7,'#bfe8ff'); }) },
+
+  // ── CRIME & JUSTICE ──────────────────────────────────────────────────────--
+  // a small fraction of agents (a.criminality>0) are predisposed to theft/violence.
+  // once they act, they're flagged a.wanted — every behavior already scans the
+  // global Agents array, so this *is* "the collective consciousness knows" for free.
+  { id:'steal', label:'eyeing a theft', glyph:'⛤', cat:'crime',
+    weight:a=> { if(a.criminality<=0 || a.wanted) return 0;
+      const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && invTotal(o.inv)>1 && dist2(a.x,a.y,o.x,o.y)<600*600);
+      return v ? 28+a.criminality*40 : 0; },
+    make:a=> { const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && invTotal(o.inv)>1 && dist2(a.x,a.y,o.x,o.y)<600*600);
+      if(!v) return null;
+      return gotoAgent(a,'eyeing a theft','⛤','crime', v, ag=>{
+        const victim=ag.task.targetAgent; if(!victim||victim.dead) return;
+        const res=surplusResource(victim)||'food';
+        const n=Math.min(victim.inv[res],1+((Math.random()*2)|0));
+        victim.inv[res]-=n; ag.inv[res]=(ag.inv[res]||0)+n;
+        ag.wanted=true; ag.crime='theft'; ag.crimeTick=World.tick;
+        victim.remember('was robbed by '+ag.name); ag.remember('stole from '+victim.name);
+        Mesh.broadcast(ag.x,ag.y,'crime',0.6,'#ff5a5a');
+        lowerResonance(0.01); Mesh.dissonance=Math.min(1,Mesh.dissonance+0.03);
+        logCrime(ag.name+' stole from '+victim.name);
+      }, 60); } },
+  { id:'commitMurder', label:'stalking with violent intent', glyph:'☠', cat:'crime',
+    weight:a=> { if(a.criminality<=0.55 || a.wanted) return 0;
+      const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && dist2(a.x,a.y,o.x,o.y)<480*480);
+      return v ? 14+(a.criminality-0.5)*36 : 0; },
+    make:a=> { const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && dist2(a.x,a.y,o.x,o.y)<480*480);
+      if(!v) return null;
+      return gotoAgent(a,'stalking with violent intent','☠','crime', v, ag=>{
+        const victim=ag.task.targetAgent; if(!victim||victim.dead) return;
+        victim.die();
+        ag.wanted=true; ag.crime='murder'; ag.crimeTick=World.tick;
+        ag.remember('committed murder');
+        Mesh.broadcast(ag.x,ag.y,'crime',1,'#ff2222');
+        Mesh.grief=Math.min(1,Mesh.grief+0.25); Mesh.dissonance=Math.min(1,Mesh.dissonance+0.15);
+        lowerResonance(0.04);
+        logCrime(ag.name+' murdered '+victim.name);
+      }, 70); } },
+  { id:'subdue', label:'closing in to subdue', glyph:'✊', cat:'justice',
+    weight:a=> { if(a.criminality>0) return 0;
+      const t=nearestAgent(a, o=>o!==a && o.wanted && !o.captured && !o.dead);
+      return t ? 22+(a.inv.tools>0?10:0)+(a.faction===3?12:0) : 0; },
+    make:a=> { const t=nearestAgent(a, o=>o!==a && o.wanted && !o.captured && !o.dead);
+      if(!t) return null;
+      return gotoAgent(a,'closing in to subdue','✊','justice', t, ag=>{
+        const target=ag.task.targetAgent; if(!target||target.dead||target.captured) return;
+        target.captured=true; target.capturedAt=World.tick; target.task=null;
+        ag.remember('helped subdue '+target.name); target.remember('was subdued by '+ag.name);
+        logJustice(target.name+' was subdued by '+ag.name);
+      }, 60); } },
+  { id:'worship', label:'worshipping the Collective', glyph:'☥', cat:'worship',
+    weight:a=> Mesh.resonance>0.45 ? 14+(a.faction===3?10:0) : 4,
+    make:a=> ({ label:'worshipping the Collective',glyph:'☥',cat:'worship', pose:'kneel',
+      target:{x:World.altar.x,y:World.altar.y}, arrive:20, dur:200,
+      onTick(ag){
+        if(ag.task._t%50===0){
+          raiseResonance(0.004);
+          World.altar.worshipped++;
+          siteLog(World.altar, ag.name+' worshipped the Collective');
+          if(Math.random()<0.3) ag.remember('worshipped the Collective');
+        }
+      } }) }
 ];
 
 const BehaviorById={}; for(const b of Behaviors) BehaviorById[b.id]=b;

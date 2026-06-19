@@ -143,10 +143,31 @@ const World={
   // Season: 0 spring,1 summer,2 autumn,3 winter. seasonLen days.
   seasonLen:4, season:0, seasonProgress:0, dayCount:0,
 
+  // cumulative metrics — not derivable from current live state, so tracked directly
+  totalBorn:0, totalDied:0, totalCrimes:0,
+
   init(seed){
     this.rng=makeRNG(seed||((Math.random()*1e9)|0));
     this.w=this.cols*this.ts; this.h=this.rows*this.ts;
+    this.totalBorn=0; this.totalDied=0; this.totalCrimes=0;
+    // the Altar — a fixed landmark at the heart of the map, not built by agents
+    this.altar={ x:this.w/2, y:this.h/2, sacrifices:0, worshipped:0, log:[] };
     this.generate();
+  },
+
+  // judgment ceremony — a captured criminal, marched to the Altar by their own
+  // feet (see Agent.chooseTask's captured branch), is given to the Collective
+  judgeCriminal(agent){
+    const alt=this.altar;
+    siteLog(alt, agent.name+' was given to the Collective for '+agent.crime);
+    logJustice(agent.name+' was given to the Collective for '+agent.crime);
+    alt.sacrifices++;
+    Events.banner='THE COLLECTIVE HAS RECEIVED '+agent.name.toUpperCase();
+    Events.active='judgment'; Events.activeT=300;
+    Mesh.broadcast(alt.x,alt.y,'judgment',1,'#ffe9b0');
+    raiseResonance(0.05);
+    Mesh.dissonance=Math.max(0,Mesh.dissonance-0.1);
+    agent.die();
   },
 
   generate(){

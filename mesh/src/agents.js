@@ -5,6 +5,9 @@ const Agents=[];
 const Marks=[];       // landscape marks {x,y,type,faction,age}
 const Sounds=[];      // music waves {x,y,r,life}
 const Exchanges=[];   // trade particles {x,y,tx,ty,life}
+const CrimeLog=[];    // rolling log of theft/murder/justice events, world-readable
+function logCrime(msg){ CrimeLog.push(msg); if(CrimeLog.length>20) CrimeLog.shift(); World.totalCrimes=(World.totalCrimes||0)+1; }
+function logJustice(msg){ CrimeLog.push(msg); if(CrimeLog.length>20) CrimeLog.shift(); }
 let _agentId=1;
 
 const NAME_A=['Su','Ka','Mi','Ev','Ar','Ny','Ol','Ta','Wr','Fen','Lir','Mor','Sel','Ash','Ber','Cael','Dun','Ro','Vey','Ilo','Quen','Bryn','Nim','Oro'];
@@ -43,6 +46,9 @@ class Agent{
     this.walkPhase=Math.random()*Math.PI*2;
     this._stuckTicks=0; this._lastDist=Infinity;
     this.job=null;
+    // a small fraction of agents are predisposed toward theft/violence — hidden until they act on it
+    this.criminality=Math.random()<0.06 ? 0.35+Math.random()*0.65 : 0;
+    this.wanted=false; this.crime=null; this.crimeTick=0; this.captured=false;
   }
 
   remember(s){ this.memory.push(s); if(this.memory.length>6) this.memory.shift(); }
@@ -62,6 +68,13 @@ class Agent{
 
   // ── desire scoring ──────────────────────────────────────────────────────--
   chooseTask(){
+    if(this.captured){
+      this.task={ label:'being led to the altar', glyph:'⛓', cat:'justice', pose:'work',
+        target:{x:World.altar.x,y:World.altar.y}, arrive:24, dur:999999,
+        onArrive:(ag)=>{ World.judgeCriminal(ag); } };
+      this.task._t=0;
+      return;
+    }
     const f=this.faction;
     const day=World.daylight();               // 0 night .. 1 noon
     const night=World.isNight();
@@ -123,7 +136,8 @@ class Agent{
     // aging & mortality — softened: dying of old age stays rare, and starvation/exhaustion
     // is caught by the emergency rest override below before energy can spiral this low
     this.age+=1/World.dayLen;
-    if((this.age>60 && Math.random()<0.000018*(this.age-55)) || this.energy<-30){ this.die(); return; }
+    // a captured criminal's fate is the Altar's to decide, not exhaustion en route
+    if(!this.captured && ((this.age>60 && Math.random()<0.000018*(this.age-55)) || this.energy<-30)){ this.die(); return; }
 
     // emergency override: force a re-roll toward rest/sleep before energy bottoms out,
     // rather than letting the weighted system possibly keep grinding on something else
@@ -155,7 +169,7 @@ class Agent{
       else {
         const sp=this.speed*(0.6+this.energy/200);
         this.vx+=(dx/d)*sp*0.16; this.vy+=(dy/d)*sp*0.16;
-        this.energy-=0.018;
+        if(!this.captured) this.energy-=0.018;
         // stuck watchdog: catches targets reachable() couldn't filter (e.g. peninsulas) —
         // if distance-to-target hasn't meaningfully decreased for a long while, give up
         if(d>this._lastDist-0.4) this._stuckTicks++; else this._stuckTicks=0;
@@ -184,6 +198,7 @@ class Agent{
 
   die(){
     this.dead=true;
+    World.totalDied=(World.totalDied||0)+1;
     if(this.job&&this.job.siteRef&&this.job.siteRef.workers){ const idx=this.job.siteRef.workers.indexOf(this.id); if(idx>=0) this.job.siteRef.workers.splice(idx,1); }
     Mesh.broadcast(this.x,this.y,'grief',0.9,Factions[this.faction].color);
     Mesh.grief=Math.min(1,Mesh.grief+0.25);
@@ -222,6 +237,7 @@ function birthAgent(){
   const a=new Agent(spot.x+(Math.random()-0.5)*120, spot.y+(Math.random()-0.5)*120, (Math.random()*4)|0);
   a.age=0; a.skills=1; a.energy=80;
   Agents.push(a);
+  World.totalBorn=(World.totalBorn||0)+1;
   Mesh.broadcast(a.x,a.y,'joy',0.7,Factions[a.faction].color);
   Mesh.resonance=Math.min(1,Mesh.resonance+0.03);
 }

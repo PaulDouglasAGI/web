@@ -11,6 +11,7 @@ const UI={
     this.el.tod=document.getElementById('timeofday');
     this.el.res=document.getElementById('resonance-glyph');
     this.el.pop=document.getElementById('pop');
+    this.el.alerts=document.getElementById('alerts');
     this.el.hint=document.getElementById('hint');
 
     this.el.panel=document.getElementById('agent-panel');
@@ -33,6 +34,7 @@ const UI={
     this.el.statLabel3=document.getElementById('stat-label-3');
     this.el.statLabel4=document.getElementById('stat-label-4');
     this.el.panelClose.addEventListener('click',e=>{ e.stopPropagation(); this.deselect(); });
+    this.el.pop.addEventListener('click',e=>{ e.stopPropagation(); this.select(World,'world'); });
 
     this.el.speedBtns=Array.from(document.querySelectorAll('#speed-ctl button'));
     for(const b of this.el.speedBtns){
@@ -83,6 +85,7 @@ const UI={
     for(const an of World.animals){ if(!an.alive) continue; const d=dist2(an.x,an.y,wx,wy); if(d<bd){ bd=d; best=an; kind='animal'; } }
     for(const m of Marks){ const d=dist2(m.x,m.y,wx,wy); if(d<bd){ bd=d; best=m; kind='mark'; } }
     for(const g of World.gathers){ const d=dist2(g.x,g.y,wx,wy); if(d<bd){ bd=d; best=g; kind='settlement'; } }
+    { const d=dist2(World.altar.x,World.altar.y,wx,wy); if(d<bd){ bd=d; best=World.altar; kind='altar'; } }
     if(best && bd<tol*tol) this.select(best,kind);
     else this.deselect();
   },
@@ -109,6 +112,8 @@ const UI={
     else if(this.selKind==='animal') this.renderAnimalPanel(o);
     else if(this.selKind==='mark') this.renderMarkPanel(o);
     else if(this.selKind==='settlement') this.renderSettlementPanel(o);
+    else if(this.selKind==='altar') this.renderAltarPanel(o);
+    else if(this.selKind==='world') this.renderWorldPanel(o);
     else this.renderAgentPanel(o);
   },
 
@@ -121,7 +126,10 @@ const UI={
     this.el.pFaction.textContent=fc.name;
     this.el.pFaction.style.color=fc.color;
     this.el.pAge.textContent='age '+Math.floor(a.age)+(a.bond?' · bonded':'');
-    this.el.pAction.textContent=a.task?(a.task.glyph+'  '+a.task.label):'…';
+    let actionTxt=a.task?(a.task.glyph+'  '+a.task.label):'…';
+    if(a.captured) actionTxt='⚖ captured — being marched to the Altar';
+    else if(a.wanted) actionTxt+='  ·  ⚠ WANTED ('+a.crime+')';
+    this.el.pAction.textContent=actionTxt;
     setBar(this.el.barEnergy, a.energy/100);
     setBar(this.el.barHunger, a.hunger/100);
     setBar(this.el.barSocial, a.social/100);
@@ -265,6 +273,63 @@ const UI={
     setBar(this.el.barJoy, Math.min(1,(g.foodSec||0)/2));
   },
 
+  renderAltarPanel(alt){
+    this.setExtras(false);
+    this.setMemSection(true);
+    this.el.pName.textContent='THE ALTAR';
+    this.el.pFaction.textContent='the Collective';
+    this.el.pFaction.style.color='#ffe9b0';
+    this.el.pAge.textContent='fixed at the center of the world';
+    this.el.pAction.textContent='sacrifices given: '+alt.sacrifices+' · worshipped '+alt.worshipped+' times';
+    this.setStatLabels('resonance','dissonance','grief','—');
+    setBar(this.el.barEnergy, Mesh.resonance);
+    setBar(this.el.barHunger, Mesh.dissonance);
+    setBar(this.el.barSocial, Mesh.grief);
+    setBar(this.el.barJoy, 0);
+    this.el.pMem.innerHTML='';
+    const log=alt.log||[];
+    for(let i=log.length-1;i>=0;i--){
+      const line=document.createElement('div');
+      line.className='mem-line';
+      line.textContent=log[i];
+      this.el.pMem.appendChild(line);
+    }
+  },
+
+  renderWorldPanel(){
+    this.setExtras(false);
+    this.setMemSection(true);
+    const alive=Agents.filter(a=>!a.dead);
+    const wanted=alive.filter(a=>a.wanted && !a.captured).length;
+    let jobsFilled=0, jobsTotal=0;
+    for(const s of World.sites){
+      if(s.built && (s.type==='granary' || FUNCTIONAL_TYPES.includes(s.type))){
+        jobsTotal+=jobSlots(s);
+        jobsFilled+=(s.workers||[]).length;
+      }
+    }
+    let tierSum=0; for(const g of World.gathers) tierSum+=g.tier;
+    const avgTier=World.gathers.length? (tierSum/World.gathers.length).toFixed(1) : '0';
+
+    this.el.pName.textContent='THE MESH';
+    this.el.pFaction.textContent=alive.length+' souls living';
+    this.el.pFaction.style.color='#9fc9b8';
+    this.el.pAge.textContent='born '+(World.totalBorn||0)+' · died '+(World.totalDied||0)+' · '+World.gathers.length+' settlements (avg tier '+avgTier+')';
+    this.el.pAction.textContent='crimes '+(World.totalCrimes||0)+' · sacrifices '+(World.altar.sacrifices||0)+' · jobs '+jobsFilled+'/'+jobsTotal+' filled';
+    this.setStatLabels('resonance','dissonance','grief','unrest');
+    setBar(this.el.barEnergy, Mesh.resonance);
+    setBar(this.el.barHunger, Mesh.dissonance);
+    setBar(this.el.barSocial, Mesh.grief);
+    setBar(this.el.barJoy, alive.length? wanted/alive.length : 0);
+    this.el.pMem.innerHTML='';
+    for(let i=CrimeLog.length-1;i>=0;i--){
+      const line=document.createElement('div');
+      line.className='mem-line';
+      line.textContent=CrimeLog[i];
+      this.el.pMem.appendChild(line);
+    }
+  },
+
   zoomAt(px,py,factor){
     const wx=Renderer.worldX(px), wy=Renderer.worldY(py);
     Camera.zoom=Math.max(Camera.minZoom,Math.min(Camera.maxZoom,Camera.zoom*factor));
@@ -285,6 +350,9 @@ const UI={
       this.el.season.textContent=World.seasonName();
       this.el.tod.textContent=World.phaseName();
       this.el.pop.textContent=Agents.length+' souls';
+      const wantedCt=Agents.filter(a=>a.wanted && !a.captured).length;
+      if(wantedCt>0){ this.el.alerts.textContent='⚠ '+wantedCt+' WANTED'; this.el.alerts.style.display=''; }
+      else this.el.alerts.style.display='none';
       // resonance glyph warmth
       const r=Mesh.resonance;
       const warm=Math.round(120+r*135), cool=Math.round(120+(1-r)*60);
