@@ -8,7 +8,7 @@ function makeRNG(seed){
 }
 
 // ── Tile types ───────────────────────────────────────────────────────────────
-const TILE={ WATER:0, SHORE:1, PLAIN:2, FOREST:3, HILL:4, RUIN:5, FIRE:6, GATHER:7 };
+const TILE={ WATER:0, SHORE:1, PLAIN:2, FOREST:3, RUIN:5, FIRE:6, GATHER:7 };
 
 // ── Buildable structure types — each has a ladder of levels. Level 1 is the
 // initial build; level 2 makes it bigger (more capacity/yield/storage), level
@@ -279,8 +279,7 @@ const World={
       let t;
       if(v<0.16) t=TILE.WATER;
       else if(v<0.22) t=TILE.SHORE;
-      else if(v<0.78) t=TILE.PLAIN;       // raised from 0.62 — most of the map should read as open grass, not hill
-      else t=TILE.HILL;
+      else t=TILE.PLAIN;
       this.tiles[i]=t;
     }
     // Forest clumps on plains
@@ -303,7 +302,7 @@ const World={
         let ok=false;
         if(sub==='berry'||sub==='herb') ok=(t===TILE.PLAIN||t===TILE.FOREST);
         else if(sub==='wood') ok=(t===TILE.FOREST);
-        else if(sub==='stone') ok=(t===TILE.HILL);
+        else if(sub==='stone') ok=(t===TILE.PLAIN);
         else if(sub==='water') ok=(t===TILE.SHORE);
         else if(sub==='fish') ok=(t===TILE.SHORE);
         if(!ok) continue;
@@ -375,7 +374,7 @@ const World={
       const x=cx+Math.cos(ang)*r, y=cy+Math.sin(ang)*r;
       if(x<20||y<20||x>this.w-20||y>this.h-20) continue;
       const tt=this.tileAt(x,y);
-      if(tt!==TILE.PLAIN && tt!==TILE.HILL) continue;
+      if(tt!==TILE.PLAIN) continue;
       let tooClose=false;
       for(const s of this.sites){ if((s.x-x)**2+(s.y-y)**2<minSpacing*minSpacing){ tooClose=true; break; } }
       if(tooClose) continue;
@@ -384,7 +383,7 @@ const World={
     }
     return false;
   },
-  // harbor-only variant of placeSite — gated to TILE.SHORE instead of PLAIN/HILL,
+  // harbor-only variant of placeSite — gated to TILE.SHORE instead of PLAIN,
   // since a harbor only makes sense sitting right on the water's edge
   placeSiteOnShore(cx,cy,rmin,rmax,type,gather,minSpacing){
     for(let tries=0;tries<20;tries++){
@@ -547,23 +546,10 @@ const World={
       const hasTavernSite=this.sites.some(s=>s.type==='tavern'&&s.gather===gi);
       if(!hasTavernSite && marketBuilt>=1 && farms>=4) this.placeSite(g.x,g.y,70,180,'tavern',gi,50);
 
-      // quarry needs a nearby hill (its whole reason to exist) in addition to a
-      // settlement mature enough (2 wells) to staff it
+      // quarry unlocks once a settlement is mature enough (2 wells) to staff it
       const hasQuarrySite=this.sites.some(s=>s.type==='quarry'&&s.gather===gi);
-      if(!hasQuarrySite && wells>=2 && this.nearestHillWithin(g.x,g.y,220)) this.placeSite(g.x,g.y,70,200,'quarry',gi,50);
+      if(!hasQuarrySite && wells>=2) this.placeSite(g.x,g.y,70,200,'quarry',gi,50);
     }
-  },
-  // cheap scan for a HILL tile within `radius` of (cx,cy) — used to gate quarry
-  // unlocks to settlements that actually have stone to quarry nearby
-  nearestHillWithin(cx,cy,radius){
-    const step=this.ts;
-    for(let dy=-radius;dy<=radius;dy+=step){
-      for(let dx=-radius;dx<=radius;dx+=step){
-        if(dx*dx+dy*dy>radius*radius) continue;
-        if(this.tileAt(cx+dx,cy+dy)===TILE.HILL) return true;
-      }
-    }
-    return false;
   },
 
   updateAnimals(){
