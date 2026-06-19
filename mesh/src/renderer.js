@@ -208,6 +208,11 @@ const Renderer={
           ctx.fillStyle='rgba(230,180,100,0.65)';
           ctx.fillRect(sx-10*z*lvlScale, sy+17*z*lvlScale, 20*z*lvlScale*s.progress, 2*z);
         }
+        if(s.stoneUpgraded){
+          ctx.strokeStyle='rgba(190,190,182,0.9)';
+          ctx.lineWidth=Math.max(0.8,1.2*z);
+          ctx.beginPath(); ctx.arc(sx,sy,12*z*lvlScale,0,7); ctx.stroke();
+        }
       } else {
         const r=9*z;
         ctx.strokeStyle='rgba(200,190,170,0.4)';

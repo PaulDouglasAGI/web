@@ -80,6 +80,24 @@ const SITE_DEFS={
               {needWood:11, needStone:8,  buildDur:170, cap:2, effRate:0.22},
               {needWood:15, needStone:9,  buildDur:240, cap:2, effRate:0.32},
               {needWood:13, needStone:11, buildDur:180, cap:2, effRate:0.45}
+            ] },
+  // ── advanced/civic structures — gate later settlement tiers. masonry doesn't
+  // hold workers; its mere presence unlocks the upgradeToStone behavior for every
+  // other built site on the same gather. townHall is similarly passive: it just
+  // counts toward a settlement's `govern` total, which suppresses nearby crime.
+  masonry:{ levels:[
+              {needWood:14, needStone:20, buildDur:230, stoneRate:0.10},
+              {needWood:16, needStone:24, buildDur:250, stoneRate:0.14},
+              {needWood:15, needStone:28, buildDur:240, stoneRate:0.18},
+              {needWood:18, needStone:32, buildDur:270, stoneRate:0.24},
+              {needWood:20, needStone:38, buildDur:300, stoneRate:0.32}
+            ] },
+  townHall:{ levels:[
+              {needWood:16, needStone:18, buildDur:240, auraR:500},
+              {needWood:18, needStone:22, buildDur:260, auraR:600},
+              {needWood:17, needStone:26, buildDur:250, auraR:700},
+              {needWood:20, needStone:30, buildDur:280, auraR:800},
+              {needWood:22, needStone:34, buildDur:300, auraR:900}
             ] }
 };
 const FUNCTIONAL_TYPES=['workshop','market','shrineHall','loreHall','huntingLodge'];
@@ -90,7 +108,8 @@ function mkSite(x,y,type,gather){
   const lvl=SITE_DEFS[type].levels[0];
   const s={x,y,type,level:0,maxLevel:SITE_DEFS[type].levels.length,
     needWood:lvl.needWood,needStone:lvl.needStone,buildDur:lvl.buildDur,
-    matsWood:0,matsStone:0,progress:0,built:false,faction:null,gather};
+    matsWood:0,matsStone:0,progress:0,built:false,faction:null,gather,
+    stoneUpgraded:false,matsStoneUpgrade:0};
   if(type==='well') Object.assign(s,{amount:0,max:0,regen:0});
   if(type==='farm') Object.assign(s,{stage:'empty',stageT:0,growTicks:lvl.growTicks,yieldAmt:lvl.yieldAmt});
   if(type==='granary') Object.assign(s,{workers:[],log:[],contrib:0});
@@ -109,6 +128,8 @@ function applySiteLevel(s,ag){
   else if(s.type==='farm'){ s.growTicks=def.growTicks; s.yieldAmt=def.yieldAmt; s.stage='empty'; s.stageT=0; }
   else if(s.type==='granary'){ s.capacity=def.cap; s.auraR=def.auraR; ag.inv.beauty+=4*s.level; raiseResonance(0.02*s.level); }
   else if(FUNCTIONAL_TYPES.includes(s.type)){ s.capacity=def.cap; s.effRate=def.effRate; ag.inv.beauty+=2*s.level; }
+  else if(s.type==='masonry'){ s.stoneRate=def.stoneRate; ag.inv.beauty+=3*s.level; raiseResonance(0.015*s.level); }
+  else if(s.type==='townHall'){ s.auraR=def.auraR; ag.inv.beauty+=3*s.level; raiseResonance(0.015*s.level); }
   ag.remember('raised a '+s.type+' to level '+s.level);
   Mesh.broadcast(s.x,s.y,'discovery',0.7,Factions[ag.faction].color); raiseResonance(0.02);
   if(s.level<s.maxLevel){
@@ -124,7 +145,8 @@ const SETTLEMENT_TIERS=[
   {name:'HAMLET',       req:{hut:3}},
   {name:'VILLAGE',      req:{hut:5, well:1}},
   {name:'TOWNSHIP',     req:{hut:8, well:2, farm:2}},
-  {name:'CIVILIZATION', req:{hut:12, well:2, farm:4, granary:1}}
+  {name:'CIVILIZATION', req:{hut:12, well:2, farm:4, granary:1}},
+  {name:'STONE TOWN',   req:{hut:12, well:2, farm:4, granary:1, masonry:1}}
 ];
 
 const World={
@@ -409,6 +431,7 @@ const World={
       // with well/workshop/market/shrineHall/loreHall/huntingLodge — push it outward so
       // it isn't starved for space and civilization tier stays reachable
       if(!hasGranarySite && huts>=6 && wells>=1 && farms>=2) this.placeSite(g.x,g.y,90,170,'granary',gi,45);
+      const granaries=this.sites.filter(s=>s.type==='granary'&&built(s)).length;
 
       const hasWorkshopSite=this.sites.some(s=>s.type==='workshop'&&s.gather===gi);
       if(!hasWorkshopSite && huts>=4 && wells>=1) this.placeSite(g.x,g.y,40,100,'workshop',gi,60);
@@ -420,6 +443,15 @@ const World={
       if(!hasLoreHallSite && huts>=7 && wells>=1) this.placeSite(g.x,g.y,40,100,'loreHall',gi,60);
       const hasHuntingLodgeSite=this.sites.some(s=>s.type==='huntingLodge'&&s.gather===gi);
       if(!hasHuntingLodgeSite && huts>=5 && farms>=2) this.placeSite(g.x,g.y,40,100,'huntingLodge',gi,60);
+
+      // masonry unlocks once a settlement has fully met civilization's structural
+      // requirements — it's the gate for the next tier (STONE TOWN) and for the
+      // stone-upgrade behavior that recolors/strengthens every other built site.
+      const hasMasonrySite=this.sites.some(s=>s.type==='masonry'&&s.gather===gi);
+      if(!hasMasonrySite && huts>=12 && wells>=2 && farms>=4 && granaries>=1) this.placeSite(g.x,g.y,90,170,'masonry',gi,55);
+      const masonryBuilt=this.sites.filter(s=>s.type==='masonry'&&built(s)).length;
+      const hasTownHallSite=this.sites.some(s=>s.type==='townHall'&&s.gather===gi);
+      if(!hasTownHallSite && masonryBuilt>=1 && huts>=12) this.placeSite(g.x,g.y,60,140,'townHall',gi,60);
     }
   },
 
@@ -478,14 +510,15 @@ const World={
         if(nt>g.tier){ g.tier=nt; this.onTierUp(gi,nt); }
         // food-security (granaries) & rest-bonus (huts) auras for this settlement —
         // cheap to recompute since sites are already tagged with their gather index
-        let foodSec=0, restMult=1;
+        let foodSec=0, restMult=1, govern=0;
         for(const s of this.sites){
           if(s.gather!==gi || !s.built) continue;
-          if(s.type==='granary'){ s.contrib=(s.capacity||1)*0.4+((s.workers||[]).length>0?0.15*s.workers.length:0); foodSec+=s.contrib; }
-          if(s.type==='huntingLodge'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; foodSec+=s.contrib; }
-          if(s.type==='hut' && s.restMult) restMult=Math.max(restMult,s.restMult);
+          if(s.type==='granary'){ s.contrib=(s.capacity||1)*0.4+((s.workers||[]).length>0?0.15*s.workers.length:0); if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
+          if(s.type==='huntingLodge'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
+          if(s.type==='hut' && s.restMult){ const rm=s.stoneUpgraded?s.restMult*1.1:s.restMult; restMult=Math.max(restMult,rm); }
+          if(s.type==='townHall') govern++;
         }
-        g.foodSec=foodSec; g.restMult=restMult;
+        g.foodSec=foodSec; g.restMult=restMult; g.govern=govern;
       }
     }
 

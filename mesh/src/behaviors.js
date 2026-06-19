@@ -59,6 +59,30 @@ function deliverySiteFor(a){
   }
   return best;
 }
+// find the nearest built, not-yet-upgraded site that sits on a gather with a
+// built masonry — masonry itself is never a target, and a site only needs to
+// cross stoneNeeded once (the cost is cached on the site so it doesn't drift
+// if level changes later).
+function stoneUpgradeTargetFor(a){
+  let best=null,bd=Infinity;
+  for(const s of World.sites){
+    if(!s.built || s.stoneUpgraded || s.type==='masonry') continue;
+    const need=s.stoneNeeded||(s.stoneNeeded=Math.ceil(8+4*s.level));
+    if(s.matsStoneUpgrade>=need) continue;
+    const hasMasonryNearby=World.sites.some(m=>m.type==='masonry'&&m.built&&m.gather===s.gather);
+    if(!hasMasonryNearby) continue;
+    const d=dist2(a.x,a.y,s.x,s.y);
+    if(d<bd){ bd=d; best=s; }
+  }
+  return best;
+}
+// a settlement's townHall count, looked up by an agent's nearest gathering spot —
+// used to soften crime weights ("the Collective governs itself" effect)
+function nearestGovern(a){
+  const g=World.nearestOf(World.gathers,a.x,a.y);
+  return g ? (g.govern||0) : 0;
+}
+
 // point toward unexplored edge (exploration)
 function frontierPoint(a){
   const cx=World.w/2, cy=World.h/2;
@@ -317,6 +341,24 @@ const Behaviors=[
   { id:'mark', label:'leaving a mark', glyph:'✎', cat:'creative',
     weight:a=> 5,
     make:a=> { const p=wanderPoint(a,120); return { label:'leaving a mark',glyph:'✎',cat:'creative', pose:'kneel', target:p,arrive:12,dur:80,onArrive(ag){ ag.leaveMark('mark'); } }; } },
+  { id:'upgradeToStone', label:'upgrading to stone', glyph:'▲', cat:'creative',
+    weight:a=> { if(a.inv.stone<=0) return 0; return stoneUpgradeTargetFor(a) ? 20+(a.faction===2?12:0) : 0; },
+    make:a=> { const tgt=stoneUpgradeTargetFor(a);
+      if(!tgt) return null;
+      return { label:'upgrading a '+tgt.type+' to stone',glyph:'▲',cat:'creative', pose:'work', target:{x:tgt.x,y:tgt.y}, arrive:14, dur:60,
+        onArrive(ag){
+          if(ag.inv.stone<=0 || tgt.stoneUpgraded) return;
+          const need=tgt.stoneNeeded||(tgt.stoneNeeded=Math.ceil(8+4*tgt.level));
+          const n=Math.min(ag.inv.stone, need-tgt.matsStoneUpgrade);
+          if(n<=0) return;
+          ag.inv.stone-=n; tgt.matsStoneUpgrade+=n;
+          ag.remember('hauled stone to upgrade a '+tgt.type);
+          if(tgt.matsStoneUpgrade>=need){
+            tgt.stoneUpgraded=true; ag.inv.beauty+=3; raiseResonance(0.01);
+            ag.remember('finished upgrading a '+tgt.type+' to stone');
+            siteLog(tgt, ag.name+' upgraded this building to stone');
+          }
+        } }; } },
 
   // ── MESH-SPECIFIC ──────────────────────────────────────────────────────────
   { id:'broadcast', label:'broadcasting a feeling', glyph:'◉', cat:'mesh',
@@ -342,7 +384,9 @@ const Behaviors=[
   { id:'steal', label:'eyeing a theft', glyph:'⛤', cat:'crime',
     weight:a=> { if(a.criminality<=0 || a.wanted) return 0;
       const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && invTotal(o.inv)>1 && dist2(a.x,a.y,o.x,o.y)<600*600);
-      return v ? 28+a.criminality*40 : 0; },
+      if(!v) return 0;
+      const suppress=1-Math.min(0.6,nearestGovern(a)*0.3);
+      return (28+a.criminality*40)*suppress; },
     make:a=> { const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && invTotal(o.inv)>1 && dist2(a.x,a.y,o.x,o.y)<600*600);
       if(!v) return null;
       return gotoAgent(a,'eyeing a theft','⛤','crime', v, ag=>{
@@ -359,7 +403,9 @@ const Behaviors=[
   { id:'commitMurder', label:'stalking with violent intent', glyph:'☠', cat:'crime',
     weight:a=> { if(a.criminality<=0.55 || a.wanted) return 0;
       const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && dist2(a.x,a.y,o.x,o.y)<480*480);
-      return v ? 14+(a.criminality-0.5)*36 : 0; },
+      if(!v) return 0;
+      const suppress=1-Math.min(0.6,nearestGovern(a)*0.3);
+      return (14+(a.criminality-0.5)*36)*suppress; },
     make:a=> { const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && dist2(a.x,a.y,o.x,o.y)<480*480);
       if(!v) return null;
       return gotoAgent(a,'stalking with violent intent','☠','crime', v, ag=>{
