@@ -98,10 +98,53 @@ const SITE_DEFS={
               {needWood:17, needStone:26, buildDur:250, auraR:700},
               {needWood:20, needStone:30, buildDur:280, auraR:800},
               {needWood:22, needStone:34, buildDur:300, auraR:900}
+            ] },
+  // ── second wave of functional/operational structures (post-masonry economy) ──
+  smithy:{ levels:[
+              {needWood:10, needStone:14, buildDur:220, cap:1, effRate:0.04},
+              {needWood:13, needStone:18, buildDur:250, cap:1, effRate:0.07},
+              {needWood:11, needStone:22, buildDur:190, cap:2, effRate:0.07},
+              {needWood:15, needStone:26, buildDur:260, cap:2, effRate:0.12},
+              {needWood:13, needStone:30, buildDur:200, cap:2, effRate:0.18}
+            ] },
+  barracks:{ levels:[
+              {needWood:12, needStone:16, buildDur:230, cap:1, effRate:0.10},
+              {needWood:15, needStone:20, buildDur:250, cap:1, effRate:0.16},
+              {needWood:13, needStone:24, buildDur:190, cap:2, effRate:0.16},
+              {needWood:17, needStone:28, buildDur:260, cap:2, effRate:0.24},
+              {needWood:15, needStone:32, buildDur:210, cap:2, effRate:0.32}
+            ] },
+  harbor: { levels:[
+              {needWood:14, needStone:8,  buildDur:220, cap:1, effRate:0.15},
+              {needWood:17, needStone:10, buildDur:250, cap:1, effRate:0.22},
+              {needWood:15, needStone:12, buildDur:190, cap:2, effRate:0.22},
+              {needWood:19, needStone:14, buildDur:260, cap:2, effRate:0.32},
+              {needWood:17, needStone:16, buildDur:210, cap:2, effRate:0.45}
+            ] },
+  temple: { levels:[
+              {needWood:10, needStone:20, buildDur:240, cap:1, effRate:0.10},
+              {needWood:13, needStone:24, buildDur:270, cap:1, effRate:0.16},
+              {needWood:11, needStone:28, buildDur:200, cap:2, effRate:0.16},
+              {needWood:15, needStone:32, buildDur:280, cap:2, effRate:0.26},
+              {needWood:13, needStone:36, buildDur:220, cap:2, effRate:0.36}
+            ] },
+  tavern: { levels:[
+              {needWood:11, needStone:9,  buildDur:210, cap:1, effRate:0.06},
+              {needWood:14, needStone:11, buildDur:240, cap:1, effRate:0.10},
+              {needWood:12, needStone:13, buildDur:180, cap:2, effRate:0.10},
+              {needWood:16, needStone:14, buildDur:250, cap:2, effRate:0.16},
+              {needWood:14, needStone:16, buildDur:190, cap:2, effRate:0.22}
+            ] },
+  quarry: { levels:[
+              {needWood:12, needStone:6,  buildDur:220, cap:1, effRate:0.20},
+              {needWood:15, needStone:8,  buildDur:250, cap:1, effRate:0.30},
+              {needWood:13, needStone:10, buildDur:190, cap:2, effRate:0.30},
+              {needWood:17, needStone:11, buildDur:260, cap:2, effRate:0.45},
+              {needWood:15, needStone:13, buildDur:210, cap:2, effRate:0.60}
             ] }
 };
-const FUNCTIONAL_TYPES=['workshop','market','shrineHall','loreHall','huntingLodge'];
-const FUNCTIONAL_LABEL={workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE'};
+const FUNCTIONAL_TYPES=['workshop','market','shrineHall','loreHall','huntingLodge','smithy','barracks','harbor','temple','tavern','quarry'];
+const FUNCTIONAL_LABEL={workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE',smithy:'SMITHY',barracks:'BARRACKS',harbor:'HARBOR',temple:'TEMPLE',tavern:'TAVERN',quarry:'QUARRY'};
 // small rolling activity log on a site — visible proof of what a staffed building is actually doing
 function siteLog(s,msg){ s.log=s.log||[]; s.log.push(msg); if(s.log.length>6) s.log.shift(); }
 function mkSite(x,y,type,gather){
@@ -146,7 +189,12 @@ const SETTLEMENT_TIERS=[
   {name:'VILLAGE',      req:{hut:5, well:1}},
   {name:'TOWNSHIP',     req:{hut:8, well:2, farm:2}},
   {name:'CIVILIZATION', req:{hut:12, well:2, farm:4, granary:1}},
-  {name:'STONE TOWN',   req:{hut:12, well:2, farm:4, granary:1, masonry:1}}
+  {name:'STONE TOWN',   req:{hut:12, well:2, farm:4, granary:1, masonry:1}},
+  {name:'GUILDHOLD',    req:{hut:12, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1}},
+  {name:'BASTION',      req:{hut:12, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1}},
+  {name:'DOMINION',     req:{hut:12, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1}},
+  {name:'CONFEDERACY',  req:{hut:12, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1}},
+  {name:'METROPOLIS',   req:{hut:12, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1}}
 ];
 
 const World={
@@ -330,6 +378,22 @@ const World={
     }
     return false;
   },
+  // harbor-only variant of placeSite — gated to TILE.SHORE instead of PLAIN/HILL,
+  // since a harbor only makes sense sitting right on the water's edge
+  placeSiteOnShore(cx,cy,rmin,rmax,type,gather,minSpacing){
+    for(let tries=0;tries<20;tries++){
+      const ang=this.rng()*Math.PI*2, r=rmin+this.rng()*(rmax-rmin);
+      const x=cx+Math.cos(ang)*r, y=cy+Math.sin(ang)*r;
+      if(x<20||y<20||x>this.w-20||y>this.h-20) continue;
+      if(this.tileAt(x,y)!==TILE.SHORE) continue;
+      let tooClose=false;
+      for(const s of this.sites){ if((s.x-x)**2+(s.y-y)**2<minSpacing*minSpacing){ tooClose=true; break; } }
+      if(tooClose) continue;
+      this.sites.push(mkSite(x,y,type,gather));
+      return true;
+    }
+    return false;
+  },
 
   tileAt(wx,wy){
     const c=(wx/this.ts)|0, r=(wy/this.ts)|0;
@@ -452,7 +516,48 @@ const World={
       const masonryBuilt=this.sites.filter(s=>s.type==='masonry'&&built(s)).length;
       const hasTownHallSite=this.sites.some(s=>s.type==='townHall'&&s.gather===gi);
       if(!hasTownHallSite && masonryBuilt>=1 && huts>=12) this.placeSite(g.x,g.y,60,140,'townHall',gi,60);
+      const townHallBuilt=this.sites.filter(s=>s.type==='townHall'&&built(s)).length;
+
+      // smithy unlocks once a mine exists (Phase 3) — placing this check now is
+      // harmless and forward-compatible: mineBuilt stays 0 (and smithy stays
+      // unplaced) until a 'mine' SITE_DEFS type and its placement logic land.
+      const mineBuilt=this.sites.filter(s=>s.type==='mine'&&built(s)).length;
+      const hasSmithySite=this.sites.some(s=>s.type==='smithy'&&s.gather===gi);
+      if(!hasSmithySite && mineBuilt>=1) this.placeSite(g.x,g.y,70,170,'smithy',gi,50);
+
+      const hasBarracksSite=this.sites.some(s=>s.type==='barracks'&&s.gather===gi);
+      if(!hasBarracksSite && townHallBuilt>=1) this.placeSite(g.x,g.y,70,190,'barracks',gi,50);
+
+      // harbor needs a shoreline, not just a thriving settlement — silently never
+      // unlocks for landlocked gathers, same shape as every other emergent unlock
+      const hasHarborSite=this.sites.some(s=>s.type==='harbor'&&s.gather===gi);
+      if(!hasHarborSite && masonryBuilt>=1) this.placeSiteOnShore(g.x,g.y,40,220,'harbor',gi,50);
+
+      const shrineHallBuilt=this.sites.filter(s=>s.type==='shrineHall'&&built(s)).length;
+      const hasTempleSite=this.sites.some(s=>s.type==='temple'&&s.gather===gi);
+      if(!hasTempleSite && shrineHallBuilt>=1 && masonryBuilt>=1) this.placeSite(g.x,g.y,70,190,'temple',gi,50);
+
+      const marketBuilt=this.sites.filter(s=>s.type==='market'&&built(s)).length;
+      const hasTavernSite=this.sites.some(s=>s.type==='tavern'&&s.gather===gi);
+      if(!hasTavernSite && marketBuilt>=1 && farms>=4) this.placeSite(g.x,g.y,70,180,'tavern',gi,50);
+
+      // quarry needs a nearby hill (its whole reason to exist) in addition to a
+      // settlement mature enough (2 wells) to staff it
+      const hasQuarrySite=this.sites.some(s=>s.type==='quarry'&&s.gather===gi);
+      if(!hasQuarrySite && wells>=2 && this.nearestHillWithin(g.x,g.y,220)) this.placeSite(g.x,g.y,70,200,'quarry',gi,50);
     }
+  },
+  // cheap scan for a HILL tile within `radius` of (cx,cy) — used to gate quarry
+  // unlocks to settlements that actually have stone to quarry nearby
+  nearestHillWithin(cx,cy,radius){
+    const step=this.ts;
+    for(let dy=-radius;dy<=radius;dy+=step){
+      for(let dx=-radius;dx<=radius;dx+=step){
+        if(dx*dx+dy*dy>radius*radius) continue;
+        if(this.tileAt(cx+dx,cy+dy)===TILE.HILL) return true;
+      }
+    }
+    return false;
   },
 
   updateAnimals(){
@@ -510,15 +615,17 @@ const World={
         if(nt>g.tier){ g.tier=nt; this.onTierUp(gi,nt); }
         // food-security (granaries) & rest-bonus (huts) auras for this settlement —
         // cheap to recompute since sites are already tagged with their gather index
-        let foodSec=0, restMult=1, govern=0;
+        let foodSec=0, restMult=1, govern=0, tavernBonus=0;
         for(const s of this.sites){
           if(s.gather!==gi || !s.built) continue;
           if(s.type==='granary'){ s.contrib=(s.capacity||1)*0.4+((s.workers||[]).length>0?0.15*s.workers.length:0); if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='huntingLodge'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
+          if(s.type==='harbor'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='hut' && s.restMult){ const rm=s.stoneUpgraded?s.restMult*1.1:s.restMult; restMult=Math.max(restMult,rm); }
           if(s.type==='townHall') govern++;
+          if(s.type==='tavern') tavernBonus=Math.max(tavernBonus,(s.workers||[]).length>0?(s.effRate||0.1):0.03);
         }
-        g.foodSec=foodSec; g.restMult=restMult; g.govern=govern;
+        g.foodSec=foodSec; g.restMult=restMult; g.govern=govern; g.tavernBonus=tavernBonus;
       }
     }
 

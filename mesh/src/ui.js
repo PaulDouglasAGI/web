@@ -156,7 +156,7 @@ const UI={
 
   renderSitePanel(s){
     this.setExtras(false);
-    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY',workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE',masonry:'MASONRY',townHall:'TOWN HALL'};
+    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY',workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE',masonry:'MASONRY',townHall:'TOWN HALL',smithy:'SMITHY',barracks:'BARRACKS',harbor:'HARBOR',temple:'TEMPLE',tavern:'TAVERN',quarry:'QUARRY'};
     this.el.pName.textContent=SITE_LABEL[s.type]||s.type.toUpperCase();
     if(s.faction!=null){ this.el.pFaction.textContent=Factions[s.faction].name; this.el.pFaction.style.color=Factions[s.faction].color; }
     else { this.el.pFaction.textContent='unclaimed'; this.el.pFaction.style.color='#9aa6a2'; }
@@ -165,13 +165,18 @@ const UI={
     const isJobSite = s.built && (s.type==='granary' || FUNCTIONAL_TYPES.includes(s.type));
     if(isJobSite){
       const slots=jobSlots(s), workers=(s.workers||[]).length;
-      const hasLog = FUNCTIONAL_TYPES.includes(s.type) && s.type!=='huntingLodge';
+      const hasLog = FUNCTIONAL_TYPES.includes(s.type) && s.type!=='huntingLodge' && s.type!=='harbor';
       let summary;
       if(s.type==='workshop') summary=workers+'/'+slots+' working · '+(s.toolsGranted||0)+' tools forged';
       else if(s.type==='market') summary=workers+'/'+slots+' working · resonance +'+(s.resonanceGiven||0).toFixed(2);
       else if(s.type==='shrineHall') summary=workers+'/'+slots+' working · grief eased '+(s.griefEased||0).toFixed(2);
       else if(s.type==='loreHall') summary=workers+'/'+slots+' working · '+(s.pupilsTaught||0)+' taught';
-      else summary=workers+'/'+slots+' staffed · feeding aura +'+(s.contrib||0).toFixed(2); // granary / huntingLodge
+      else if(s.type==='smithy') summary=workers+'/'+slots+' working · '+(s.weaponsForged||0)+' weapons forged';
+      else if(s.type==='barracks') summary=workers+'/'+slots+' on duty · '+(s.subdued||0)+' subdued';
+      else if(s.type==='temple') summary=workers+'/'+slots+' working · grief eased '+(s.griefEased||0).toFixed(2);
+      else if(s.type==='tavern') summary=workers+'/'+slots+' working · resonance +'+(s.resonanceGiven||0).toFixed(2);
+      else if(s.type==='quarry') summary=workers+'/'+slots+' working · '+(s.stoneMined||0).toFixed(0)+' stone quarried';
+      else summary=workers+'/'+slots+' staffed · feeding aura +'+(s.contrib||0).toFixed(2); // granary / huntingLodge / harbor
       this.el.pAction.textContent=summary;
       this.setStatLabels('staffed','—','—','—');
       setBar(this.el.barEnergy, slots? workers/slots : 0);

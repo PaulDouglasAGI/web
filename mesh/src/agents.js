@@ -117,7 +117,7 @@ class Agent{
   // nearest settlement's granary food-security / hut rest-bonus auras (0 / 1 if none built yet)
   settlementBonus(){
     const g=World.nearestOf(World.gathers,this.x,this.y);
-    return g?{foodSec:g.foodSec||0,restMult:g.restMult||1}:{foodSec:0,restMult:1};
+    return g?{foodSec:g.foodSec||0,restMult:g.restMult||1,tavernBonus:g.tavernBonus||0}:{foodSec:0,restMult:1,tavernBonus:0};
   }
 
   // ── per-tick update ─────────────────────────────────────────────────────--
@@ -125,7 +125,7 @@ class Agent{
     // needs — a granary's food-security aura slows hunger growth for everyone near it
     const bonus=this.settlementBonus();
     this.hunger=Math.min(100,this.hunger+Math.max(0.004,0.012-bonus.foodSec*0.0015));
-    this.social=Math.min(100,this.social+0.01);
+    this.social=Math.min(100,this.social+0.01+bonus.tavernBonus*0.02);
     if(this.meshMuted>0) this.meshMuted--;
     // mesh overwhelm
     if(this.meshMuted<=0) this.overwhelmed=Math.min(1,this.overwhelmed + (Mesh.noise*this.meshSensitivity-0.35)*0.004);

@@ -96,7 +96,7 @@ function frontierPoint(a){
 
 // ── functional structure jobs ──────────────────────────────────────────────
 const MIN_TENURE_TICKS=World.seasonLen*World.dayLen;
-const JOB_SITE_TYPES=['granary','workshop','market','shrineHall','loreHall','huntingLodge'];
+const JOB_SITE_TYPES=['granary','workshop','market','shrineHall','loreHall','huntingLodge','smithy','barracks','harbor','temple','tavern','quarry'];
 function jobSlots(s){ return s.type==='granary' ? 2 : (s.capacity||1); }
 function openFunctionalSite(a){
   return World.nearestSite(a.x,a.y, s=> JOB_SITE_TYPES.includes(s.type) && s.built && (s.workers||[]).length<jobSlots(s));
@@ -218,6 +218,47 @@ const Behaviors=[
               siteLog(st, ag.name+' taught '+pupil.name);
             }
           }
+          if(st.type==='smithy' && ag.task._t%45===0 && (ag.inv.ore||0)>0 && Math.random()<(st.effRate||0.05)){
+            ag.inv.ore-=1; ag.inv.weapons=(ag.inv.weapons||0)+1;
+            st.weaponsForged=(st.weaponsForged||0)+1;
+            siteLog(st, ag.name+' forged a weapon');
+          }
+          if(st.type==='barracks' && ag.task._t%50===0){
+            const target=nearestAgent(ag, o=>o!==ag && o.wanted && !o.captured && !o.dead && dist2(o.x,o.y,st.x,st.y)<260*260);
+            if(target && Math.random()<(st.effRate||0.1)){
+              target.captured=true; target.capturedAt=World.tick; target.task=null;
+              st.subdued=(st.subdued||0)+1;
+              siteLog(st, ag.name+' subdued '+target.name+' from the barracks');
+              ag.remember('subdued '+target.name); target.remember('was subdued by '+ag.name);
+              logJustice(target.name+' was subdued by '+ag.name+' from the barracks');
+            }
+          }
+          if(st.type==='temple' && ag.task._t%40===0){
+            const amt=(st.effRate||0.05)*0.8, eased=(st.effRate||0.05)*1.2;
+            raiseResonance(amt); Mesh.grief=Math.max(0,Mesh.grief-eased);
+            st.resonanceGiven=(st.resonanceGiven||0)+amt;
+            st.griefEased=(st.griefEased||0)+eased;
+            siteLog(st, ag.name+' led a grand rite at the temple');
+          }
+          if(st.type==='temple' && ag.task._t%100===0){
+            World.altar.worshipped=(World.altar.worshipped||0)+1;
+            siteLog(World.altar, ag.name+' carried temple devotion to the Collective');
+          }
+          if(st.type==='tavern' && ag.task._t%40===0){
+            const amt=(st.effRate||0.05)*0.5;
+            raiseResonance(amt);
+            st.resonanceGiven=(st.resonanceGiven||0)+amt;
+            siteLog(st, ag.name+' raised spirits at the tavern');
+          }
+          if(st.type==='quarry' && ag.task._t%35===0){
+            const gg=World.gathers[st.gather];
+            if(gg){
+              const amt=(st.effRate||0.2)*2;
+              gg.stoneStock=(gg.stoneStock||0)+amt;
+              st.stoneMined=(st.stoneMined||0)+amt;
+              siteLog(st, ag.name+' quarried bulk stone');
+            }
+          }
         } }; } },
 
   // ── SOCIAL ─────────────────────────────────────────────────────────────────
@@ -311,6 +352,11 @@ const Behaviors=[
         onArrive(ag){
           if(ag.inv.wood>0 && st.matsWood<st.needWood){ const n=Math.min(ag.inv.wood,st.needWood-st.matsWood); ag.inv.wood-=n; st.matsWood+=n; ag.remember('delivered wood to a build site'); }
           if(ag.inv.stone>0 && st.matsStone<st.needStone){ const n=Math.min(ag.inv.stone,st.needStone-st.matsStone); ag.inv.stone-=n; st.matsStone+=n; ag.remember('delivered stone to a build site'); }
+          // a quarry's bulk stockpile tops off whatever the agent couldn't personally carry
+          if(st.matsStone<st.needStone){
+            const gg=World.gathers[st.gather];
+            if(gg && gg.stoneStock>0){ const n=Math.min(gg.stoneStock,st.needStone-st.matsStone); gg.stoneStock-=n; st.matsStone+=n; }
+          }
         } }; } },
   { id:'construct', label:'raising a structure', glyph:'⌗', cat:'creative',
     weight:a=> { const st=World.nearestSite(a.x,a.y, s=>s.level<s.maxLevel && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
@@ -347,12 +393,15 @@ const Behaviors=[
       if(!tgt) return null;
       return { label:'upgrading a '+tgt.type+' to stone',glyph:'▲',cat:'creative', pose:'work', target:{x:tgt.x,y:tgt.y}, arrive:14, dur:60,
         onArrive(ag){
-          if(ag.inv.stone<=0 || tgt.stoneUpgraded) return;
+          if(tgt.stoneUpgraded) return;
           const need=tgt.stoneNeeded||(tgt.stoneNeeded=Math.ceil(8+4*tgt.level));
           const n=Math.min(ag.inv.stone, need-tgt.matsStoneUpgrade);
-          if(n<=0) return;
-          ag.inv.stone-=n; tgt.matsStoneUpgrade+=n;
-          ag.remember('hauled stone to upgrade a '+tgt.type);
+          if(n>0){ ag.inv.stone-=n; tgt.matsStoneUpgrade+=n; ag.remember('hauled stone to upgrade a '+tgt.type); }
+          // a quarry's bulk stockpile tops off whatever the agent couldn't personally carry
+          if(tgt.matsStoneUpgrade<need){
+            const gg=World.gathers[tgt.gather];
+            if(gg && gg.stoneStock>0){ const n2=Math.min(gg.stoneStock,need-tgt.matsStoneUpgrade); gg.stoneStock-=n2; tgt.matsStoneUpgrade+=n2; }
+          }
           if(tgt.matsStoneUpgrade>=need){
             tgt.stoneUpgraded=true; ag.inv.beauty+=3; raiseResonance(0.01);
             ag.remember('finished upgrading a '+tgt.type+' to stone');
