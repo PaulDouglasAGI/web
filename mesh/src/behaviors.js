@@ -54,7 +54,12 @@ function deliverySiteFor(a){
     if(!canHelp) continue;
     const d=Math.sqrt(dist2(a.x,a.y,s.x,s.y));
     const completion=(s.matsWood+s.matsStone)/(s.needWood+s.needStone);
-    const score=completion*600-d;
+    // structurally-gating types unlock whole tiers and every later building behind
+    // them — a flat bonus (not a multiplier on completion, which is 0 for any site
+    // that hasn't received materials yet) so they outweigh the many cheaper hut/farm
+    // sites that would otherwise always look like the better score
+    const priorityBonus=(s.type==='well'||s.type==='granary'||s.type==='masonry'||s.type==='quarry')?500:0;
+    const score=completion*600+priorityBonus-d;
     if(score>bestScore){ bestScore=score; best=s; }
   }
   return best;
