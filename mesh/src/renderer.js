@@ -12,7 +12,7 @@ const Renderer={
     1:[58,86,78],   // shore — wet rock/reed edge, not sand
     2:[64,92,54],   // plain
     3:[36,68,40],   // forest
-    4:[84,90,70],   // hill — muted green-gray, less "desert tan" now that hills are rarer
+    4:[76,80,90],   // hill — cool slate/granite, buildable, resists going sandy-tan under warm season tints
     5:[70,66,72],   // ruin
     6:[80,60,46],   // fire area
     7:[78,98,60]    // gathering spot

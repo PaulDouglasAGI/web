@@ -298,7 +298,8 @@ const World={
       const ang=this.rng()*Math.PI*2, r=rmin+this.rng()*(rmax-rmin);
       const x=cx+Math.cos(ang)*r, y=cy+Math.sin(ang)*r;
       if(x<20||y<20||x>this.w-20||y>this.h-20) continue;
-      if(this.tileAt(x,y)!==TILE.PLAIN) continue;
+      const tt=this.tileAt(x,y);
+      if(tt!==TILE.PLAIN && tt!==TILE.HILL) continue;
       let tooClose=false;
       for(const s of this.sites){ if((s.x-x)**2+(s.y-y)**2<minSpacing*minSpacing){ tooClose=true; break; } }
       if(tooClose) continue;
@@ -393,10 +394,16 @@ const World={
       // earns the option to expand with another — up to the civilization-tier cap
       if(hutSites>0 && huts>=hutSites && hutSites<12) this.placeSite(g.x,g.y,55,170,'hut',gi,75);
 
-      const hasWellSite=this.sites.some(s=>s.type==='well'&&s.gather===gi);
-      if(!hasWellSite && huts>=2) this.placeSite(g.x,g.y,40,90,'well',gi,60);
+      const wellSites=this.sites.filter(s=>s.type==='well'&&s.gather===gi).length;
       const wells=this.sites.filter(s=>s.type==='well'&&built(s)).length;
+      // a thriving settlement earns a second well once the first is built — caps at the
+      // civilization-tier requirement of 2 so township/civilization stay reachable
+      if(wellSites<2 && (wellSites===0 ? huts>=2 : wells>=wellSites)) this.placeSite(g.x,g.y,40,90,'well',gi,60);
+      const farmSites=this.sites.filter(s=>s.type==='farm'&&s.gather===gi).length;
       const farms=this.sites.filter(s=>s.type==='farm'&&built(s)).length;
+      // farms start at 2-3 from world-gen and never grew past that — let a settlement with
+      // every existing farm built and a well add another, up to the civilization-tier cap
+      if(farmSites>0 && farms>=farmSites && wells>=1 && farmSites<5) this.placeSite(g.x,g.y,55,170,'farm',gi,70);
       const hasGranarySite=this.sites.some(s=>s.type==='granary'&&s.gather===gi);
       if(!hasGranarySite && huts>=6 && wells>=1 && farms>=2) this.placeSite(g.x,g.y,40,90,'granary',gi,60);
 
