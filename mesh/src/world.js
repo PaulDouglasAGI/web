@@ -405,7 +405,10 @@ const World={
       // every existing farm built and a well add another, up to the civilization-tier cap
       if(farmSites>0 && farms>=farmSites && wells>=1 && farmSites<5) this.placeSite(g.x,g.y,55,170,'farm',gi,70);
       const hasGranarySite=this.sites.some(s=>s.type==='granary'&&s.gather===gi);
-      if(!hasGranarySite && huts>=6 && wells>=1 && farms>=2) this.placeSite(g.x,g.y,40,90,'granary',gi,60);
+      // by the time a granary unlocks (huts>=6) the inner 40-100 ring is usually packed
+      // with well/workshop/market/shrineHall/loreHall/huntingLodge — push it outward so
+      // it isn't starved for space and civilization tier stays reachable
+      if(!hasGranarySite && huts>=6 && wells>=1 && farms>=2) this.placeSite(g.x,g.y,90,170,'granary',gi,45);
 
       const hasWorkshopSite=this.sites.some(s=>s.type==='workshop'&&s.gather===gi);
       if(!hasWorkshopSite && huts>=4 && wells>=1) this.placeSite(g.x,g.y,40,100,'workshop',gi,60);
