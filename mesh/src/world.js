@@ -195,18 +195,23 @@ function applySiteLevel(s,ag){
 }
 
 // ── Settlement tier ladder (per gathering spot, gated by built structures) ──-
+// hut requirements above 6 were never reachable in practice — 5 gathering spots
+// split the population thin enough that no single settlement's hut count was ever
+// observed clearing 7 in multi-hour runs (confirmed live: max 7, plateauing well
+// short of 8). Every tier here is capped at hut:6, matching the threshold
+// checkStructureUnlocks() already uses to unlock masonry/granary/townHall.
 const SETTLEMENT_TIERS=[
   {name:'CAMP',         req:{}},
   {name:'HAMLET',       req:{hut:3}},
   {name:'VILLAGE',      req:{hut:5, well:1}},
-  {name:'TOWNSHIP',     req:{hut:8, well:2, farm:2}},
+  {name:'TOWNSHIP',     req:{hut:6, well:2, farm:2}},
   {name:'CIVILIZATION', req:{hut:6, well:2, farm:4, granary:1}},
   {name:'STONE TOWN',   req:{hut:6, well:2, farm:4, granary:1, masonry:1}},
-  {name:'GUILDHOLD',    req:{hut:8, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1}},
-  {name:'BASTION',      req:{hut:8, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1}},
-  {name:'DOMINION',     req:{hut:8, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1}},
-  {name:'CONFEDERACY',  req:{hut:8, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1}},
-  {name:'METROPOLIS',   req:{hut:8, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1}}
+  {name:'GUILDHOLD',    req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1}},
+  {name:'BASTION',      req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1}},
+  {name:'DOMINION',     req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1}},
+  {name:'CONFEDERACY',  req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1}},
+  {name:'METROPOLIS',   req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1}}
 ];
 
 const World={
@@ -534,8 +539,12 @@ const World={
       const hasMasonrySite=this.sites.some(s=>s.type==='masonry'&&s.gather===gi);
       if(!hasMasonrySite && huts>=6 && wells>=2 && farms>=4 && granaries>=1) this.placeSite(g.x,g.y,90,170,'masonry',gi,55);
       const masonryBuilt=this.sites.filter(s=>s.type==='masonry'&&built(s)).length;
+      // huts>=8 here was never reachable in practice — same crowding issue as
+      // masonry's old huts>=12 gate above; 6 lines up with masonry's own bar and
+      // with every tier requirement above (SETTLEMENT_TIERS), confirmed reachable
+      // live (multiple settlements observed clearing 6-7 huts in long runs).
       const hasTownHallSite=this.sites.some(s=>s.type==='townHall'&&s.gather===gi);
-      if(!hasTownHallSite && masonryBuilt>=1 && huts>=8) this.placeSite(g.x,g.y,60,140,'townHall',gi,60);
+      if(!hasTownHallSite && masonryBuilt>=1 && huts>=6) this.placeSite(g.x,g.y,60,140,'townHall',gi,60);
       const townHallBuilt=this.sites.filter(s=>s.type==='townHall'&&built(s)).length;
 
       // mine unlocks once a settlement has raised a town hall — the same maturity
