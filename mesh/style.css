@@ -39,6 +39,24 @@ canvas.dragging{cursor:grabbing;}
 #mine-ctl button.active{background:rgba(220,170,90,0.25);color:#f0dcb0;border-color:rgba(220,180,120,0.5);}
 #mine-ctl button:hover{color:#cfe8e0;}
 
+/* Economy dashboard toggle — settlement & faction breakdown, off by default */
+#econ-ctl{position:absolute;bottom:134px;left:18px;z-index:30;display:flex;gap:6px;}
+#econ-ctl button{height:28px;padding:0 10px;border-radius:5px;border:1px solid rgba(120,160,150,0.25);background:rgba(8,12,16,0.65);color:#7a8e88;font-size:10px;letter-spacing:1px;cursor:pointer;transition:.2s;}
+#econ-ctl button.active{background:rgba(120,170,220,0.25);color:#d8e4f0;border-color:rgba(140,180,220,0.5);}
+#econ-ctl button:hover{color:#cfe8e0;}
+
+/* Economy dashboard panel — settlement + faction tables */
+#econ-panel{position:absolute;top:0;left:0;height:100%;width:320px;max-width:90vw;background:rgba(6,10,13,0.92);border-right:1px solid rgba(120,160,150,0.2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:40;padding:20px 18px;transform:translateX(-100%);transition:transform .3s ease;overflow-y:auto;}
+#econ-panel.show{transform:translateX(0);}
+#econ-panel-close{position:absolute;top:12px;right:12px;background:none;border:none;color:#5a6e74;font-size:16px;cursor:pointer;line-height:1;}
+#econ-panel-close:hover{color:#cfe0d8;}
+#econ-panel-title{font-family:'Exo 2',sans-serif;font-weight:900;font-size:17px;color:#e8f0ec;letter-spacing:1px;margin-top:8px;}
+.econ-section-label{margin-top:18px;font-size:9px;letter-spacing:3px;color:#3a4a50;text-transform:uppercase;}
+.econ-table{margin-top:8px;display:flex;flex-direction:column;gap:10px;}
+.econ-row{border:1px solid rgba(120,160,150,0.15);border-radius:6px;padding:8px 10px;background:rgba(120,160,150,0.05);}
+.econ-row-title{font-size:11px;font-weight:700;letter-spacing:1px;color:#cfe0d8;text-transform:uppercase;}
+.econ-row-line{font-size:10px;color:#8aa098;margin-top:4px;line-height:1.5;}
+
 /* Deep agent inspector panel */
 #agent-panel{position:absolute;top:0;right:0;height:100%;width:270px;max-width:86vw;background:rgba(6,10,13,0.9);border-left:1px solid rgba(120,160,150,0.2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:40;padding:20px 18px;transform:translateX(100%);transition:transform .3s ease;overflow-y:auto;}
 #agent-panel.show{transform:translateX(0);}
@@ -66,6 +84,8 @@ canvas.dragging{cursor:grabbing;}
 @media (max-width:560px){
   #agent-panel{top:auto;bottom:0;right:0;left:0;width:100%;height:auto;max-height:64vh;border-left:none;border-top:1px solid rgba(120,160,150,0.2);border-radius:14px 14px 0 0;transform:translateY(100%);}
   #agent-panel.show{transform:translateY(0);}
+  #econ-panel{top:auto;bottom:0;right:0;left:0;width:100%;height:auto;max-height:64vh;border-right:none;border-top:1px solid rgba(120,160,150,0.2);border-radius:14px 14px 0 0;transform:translateY(100%);}
+  #econ-panel.show{transform:translateY(0);}
 }
 
 #hint{position:absolute;bottom:14px;right:18px;z-index:20;font-size:9px;letter-spacing:3px;color:#2e3a40;pointer-events:none;transition:opacity 1s;}

@@ -6,7 +6,7 @@ const Marks=[];       // landscape marks {x,y,type,faction,age}
 const Sounds=[];      // music waves {x,y,r,life}
 const Exchanges=[];   // trade particles {x,y,tx,ty,life}
 const CrimeLog=[];    // rolling log of theft/murder/justice events, world-readable
-function logCrime(msg){ CrimeLog.push(msg); if(CrimeLog.length>20) CrimeLog.shift(); World.totalCrimes=(World.totalCrimes||0)+1; }
+function logCrime(msg,faction){ CrimeLog.push(msg); if(CrimeLog.length>20) CrimeLog.shift(); World.totalCrimes=(World.totalCrimes||0)+1; if(faction!=null) World.crimesByFaction[faction]=(World.crimesByFaction[faction]||0)+1; }
 function logJustice(msg){ CrimeLog.push(msg); if(CrimeLog.length>20) CrimeLog.shift(); }
 let _agentId=1;
 

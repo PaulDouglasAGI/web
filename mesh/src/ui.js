@@ -66,6 +66,25 @@ const UI={
       this.deselect();
     });
 
+    this.showEcon=false;
+    this.el.econToggle=document.getElementById('econ-toggle');
+    this.el.econPanel=document.getElementById('econ-panel');
+    this.el.econPanelClose=document.getElementById('econ-panel-close');
+    this.el.econSettlements=document.getElementById('econ-settlements');
+    this.el.econFactions=document.getElementById('econ-factions');
+    this.el.econToggle.addEventListener('click',()=>{
+      this.showEcon=!this.showEcon;
+      this.el.econToggle.classList.toggle('active',this.showEcon);
+      this.el.econPanel.classList.toggle('show',this.showEcon);
+      if(this.showEcon) this.renderEconPanel();
+    });
+    this.el.econPanelClose.addEventListener('click',e=>{
+      e.stopPropagation();
+      this.showEcon=false;
+      this.el.econToggle.classList.remove('active');
+      this.el.econPanel.classList.remove('show');
+    });
+
     this.bindCamera();
   },
 
@@ -151,10 +170,12 @@ const UI={
     this.el.pName.textContent=a.name;
     this.el.pFaction.textContent=fc.name;
     this.el.pFaction.style.color=fc.color;
-    this.el.pAge.textContent='age '+Math.floor(a.age)+(a.bond?' · bonded':'');
+    const skillTier=a.skills>=3?'expert':(a.skills===2?'skilled':'apprentice');
+    this.el.pAge.textContent='age '+Math.floor(a.age)+(a.bond?' · bonded':'')+' · '+skillTier+' (skills '+a.skills+')';
     let actionTxt=a.task?(a.task.glyph+'  '+a.task.label):'…';
     if(a.captured) actionTxt='⚖ being helped to remember, at the Altar';
     else if(a.wanted) actionTxt+='  ·  ◌ FRAGMENTING ('+a.crime+')';
+    actionTxt+='  ·  criminality '+(a.criminality||0).toFixed(2);
     this.el.pAction.textContent=actionTxt;
     setBar(this.el.barEnergy, a.energy/100);
     setBar(this.el.barHunger, a.hunger/100);
@@ -203,10 +224,11 @@ const UI={
       else if(s.type==='tavern') summary=workers+'/'+slots+' working · resonance +'+(s.resonanceGiven||0).toFixed(2);
       else if(s.type==='quarry') summary=workers+'/'+slots+' working · '+(s.stoneMined||0).toFixed(0)+' stone quarried';
       else summary=workers+'/'+slots+' staffed · feeding aura +'+(s.contrib||0).toFixed(2); // granary / huntingLodge / harbor
+      if(s.stoneUpgraded) summary+=' · stone-reinforced';
       this.el.pAction.textContent=summary;
-      this.setStatLabels('staffed','—','—','—');
+      this.setStatLabels('staffed','efficiency','—','—');
       setBar(this.el.barEnergy, slots? workers/slots : 0);
-      setBar(this.el.barHunger,0); setBar(this.el.barSocial,0); setBar(this.el.barJoy,0);
+      setBar(this.el.barHunger, Math.min(1,(s.effRate||0)*2)); setBar(this.el.barSocial,0); setBar(this.el.barJoy,0);
       this.setMemSection(hasLog);
       if(hasLog){
         this.el.pMem.innerHTML='';
@@ -296,7 +318,9 @@ const UI={
     this.el.pFaction.style.color='#9fc9b8';
     const builtSummary=Object.keys(counts).map(t=>counts[t]+' '+t).join(', ')||'nothing built yet';
     this.el.pAge.textContent=builtSummary;
-    this.el.pAction.textContent='jobs '+jobsFilled+'/'+jobsTotal+' filled · food sec '+(g.foodSec||0).toFixed(2);
+    this.el.pAction.textContent='jobs '+jobsFilled+'/'+jobsTotal+' filled · food sec '+(g.foodSec||0).toFixed(2)
+      +' · govern '+(g.govern||0)+' · rest x'+(g.restMult||1).toFixed(2)+' · tavern '+(g.tavernBonus||0).toFixed(2)+' · stone '+(g.stoneStock||0).toFixed(0)
+      +' · field here: clarity '+Mesh.coherenceAt(g.x,g.y).toFixed(2)+' grief '+Mesh.griefAt(g.x,g.y).toFixed(2)+' frag '+Mesh.dissonanceAt(g.x,g.y).toFixed(2);
     this.setStatLabels('housing','jobs','tier','food sec');
     setBar(this.el.barEnergy, housing? Math.min(1,pop/housing) : 0);
     setBar(this.el.barHunger, jobsTotal? jobsFilled/jobsTotal : 0);
@@ -346,7 +370,8 @@ const UI={
     this.el.pFaction.textContent=alive.length+' souls living';
     this.el.pFaction.style.color='#9fc9b8';
     this.el.pAge.textContent='born '+(World.totalBorn||0)+' · died '+(World.totalDied||0)+' · '+World.gathers.length+' settlements (avg tier '+avgTier+')';
-    this.el.pAction.textContent='crimes '+(World.totalCrimes||0)+' · returned to the source '+(World.altar.sacrifices||0)+' · jobs '+jobsFilled+'/'+jobsTotal+' filled';
+    const factionPop=Factions.map(fc=>fc.name+' '+alive.filter(a=>a.faction===fc.id).length).join(' · ');
+    this.el.pAction.textContent='crimes '+(World.totalCrimes||0)+' · returned to the source '+(World.altar.sacrifices||0)+' · jobs '+jobsFilled+'/'+jobsTotal+' filled · '+factionPop;
     this.setStatLabels('field clarity','fragmentation','grief','unrest');
     setBar(this.el.barEnergy, Mesh.resonance);
     setBar(this.el.barHunger, Mesh.dissonance);
@@ -358,6 +383,44 @@ const UI={
       line.className='mem-line';
       line.textContent=CrimeLog[i];
       this.el.pMem.appendChild(line);
+    }
+  },
+
+  renderEconPanel(){
+    this.el.econSettlements.innerHTML='';
+    for(let gi=0;gi<World.gathers.length;gi++){
+      const g=World.gathers[gi];
+      const pop=Agents.filter(a=>!a.dead && !a.underground && World.nearestOf(World.gathers,a.x,a.y)===g).length;
+      const row=document.createElement('div'); row.className='econ-row';
+      const title=document.createElement('div'); title.className='econ-row-title';
+      title.textContent=SETTLEMENT_TIERS[g.tier].name+' · '+pop+' souls';
+      row.appendChild(title);
+      const line=document.createElement('div'); line.className='econ-row-line';
+      line.textContent='food sec '+(g.foodSec||0).toFixed(2)+' · rest x'+(g.restMult||1).toFixed(2)+' · govern '+(g.govern||0)+' · tavern '+(g.tavernBonus||0).toFixed(2)+' · stone '+(g.stoneStock||0).toFixed(0);
+      row.appendChild(line);
+      this.el.econSettlements.appendChild(row);
+    }
+    if(World.gathers.length===0){
+      const e=document.createElement('div'); e.className='econ-row-line'; e.textContent='no settlements yet';
+      this.el.econSettlements.appendChild(e);
+    }
+
+    this.el.econFactions.innerHTML='';
+    const alive=Agents.filter(a=>!a.dead);
+    for(let fi=0;fi<Factions.length;fi++){
+      const fc=Factions[fi];
+      const pop=alive.filter(a=>a.faction===fi).length;
+      const stock=(World.factionStock&&World.factionStock[fi])||{};
+      const stockTxt=Object.keys(stock).filter(k=>stock[k]>0.05).map(k=>k+' '+stock[k].toFixed(0)).join(', ')||'nothing held';
+      const row=document.createElement('div'); row.className='econ-row';
+      const title=document.createElement('div'); title.className='econ-row-title';
+      title.style.color=fc.color;
+      title.textContent=fc.name+' · '+pop;
+      row.appendChild(title);
+      const line=document.createElement('div'); line.className='econ-row-line';
+      line.textContent='holds '+stockTxt+' · crimes '+((World.crimesByFaction&&World.crimesByFaction[fi])||0);
+      row.appendChild(line);
+      this.el.econFactions.appendChild(row);
     }
   },
 
@@ -395,5 +458,7 @@ const UI={
       if(this.selKind==='agent' && this.selected.dead) this.deselect();
       else this.renderPanel();
     }
+
+    if(this.showEcon && this._t%15===0) this.renderEconPanel();
   }
 };

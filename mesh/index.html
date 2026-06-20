@@ -49,6 +49,21 @@
   <button id="mine-toggle" title="view the mine below">⛏ mine</button>
 </div>
 
+<!-- economy dashboard toggle — settlement & faction breakdown, off by default -->
+<div id="econ-ctl">
+  <button id="econ-toggle" title="see the economy">📊 economy</button>
+</div>
+
+<!-- Economy dashboard (settlement + faction tables) -->
+<div id="econ-panel">
+  <button id="econ-panel-close" aria-label="close">✕</button>
+  <div id="econ-panel-title">THE ECONOMY</div>
+  <div class="econ-section-label">settlements</div>
+  <div id="econ-settlements" class="econ-table"></div>
+  <div class="econ-section-label">factions</div>
+  <div id="econ-factions" class="econ-table"></div>
+</div>
+
 <!-- Agent inspector (deep panel — tap an agent to open) -->
 <div id="agent-panel">
   <button id="panel-close" aria-label="close">✕</button>

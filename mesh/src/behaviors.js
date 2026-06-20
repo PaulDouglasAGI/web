@@ -206,20 +206,23 @@ const Behaviors=[
           if(!ag.job || ag.job.siteRef!==st) return;
           // a trained worker (taught at a lore hall) does the job better — ties skills back into the economy
           const skillMult=Math.min(1.5, 1+(ag.skills-1)*0.08);
-          if(st.type==='workshop' && Math.random()<(st.effRate||0.05)*skillMult){
+          // a well-governed settlement (leveled townHalls) runs its job sites more effectively, not just less crime
+          const governMult=1+Math.min(0.25, (World.gathers[st.gather]?.govern||0)*0.04);
+          const workMult=skillMult*governMult;
+          if(st.type==='workshop' && Math.random()<(st.effRate||0.05)*workMult){
             ag.inv.tools=(ag.inv.tools||0)+1;
             st.toolsGranted=(st.toolsGranted||0)+1;
             siteLog(st,'forged a tool for '+ag.name);
           }
           if(st.type==='market' && ag.task._t%40===0){
-            const amt=(st.effRate||0.05)*0.5*skillMult;
+            const amt=(st.effRate||0.05)*0.5*workMult;
             raiseResonance(amt);
             Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
             siteLog(st, ag.name+' brought the market to life');
           }
           if(st.type==='shrineHall' && ag.task._t%40===0){
-            const amt=(st.effRate||0.05)*0.4*skillMult, eased=(st.effRate||0.05)*0.6*skillMult;
+            const amt=(st.effRate||0.05)*0.4*workMult, eased=(st.effRate||0.05)*0.6*workMult;
             raiseResonance(amt); Mesh.grief=Math.max(0,Mesh.grief-eased);
             Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
@@ -234,7 +237,7 @@ const Behaviors=[
               siteLog(st, ag.name+' taught '+pupil.name);
             }
           }
-          if(st.type==='smithy' && ag.task._t%45===0 && Math.random()<(st.effRate||0.05)*skillMult){
+          if(st.type==='smithy' && ag.task._t%45===0 && Math.random()<(st.effRate||0.05)*workMult){
             const gg=World.gathers[st.gather];
             if((ag.inv.ore||0)>0){
               ag.inv.ore-=1; ag.inv.weapons=(ag.inv.weapons||0)+1;
@@ -250,7 +253,7 @@ const Behaviors=[
             const target=nearestAgent(ag, o=>o!==ag && o.wanted && !o.captured && !o.dead && dist2(o.x,o.y,st.x,st.y)<260*260);
             // a worker carrying a forged weapon is more effective at subduing the wanted
             const weaponMult=(ag.inv.weapons||0)>0?1.5:1;
-            if(target && Math.random()<(st.effRate||0.1)*skillMult*weaponMult){
+            if(target && Math.random()<(st.effRate||0.1)*workMult*weaponMult){
               target.captured=true; target.capturedAt=World.tick; target.task=null;
               st.subdued=(st.subdued||0)+1;
               siteLog(st, ag.name+' helped '+target.name+' remember, from the barracks');
@@ -259,7 +262,7 @@ const Behaviors=[
             }
           }
           if(st.type==='temple' && ag.task._t%40===0){
-            const amt=(st.effRate||0.05)*0.8*skillMult, eased=(st.effRate||0.05)*1.2*skillMult;
+            const amt=(st.effRate||0.05)*0.8*workMult, eased=(st.effRate||0.05)*1.2*workMult;
             raiseResonance(amt); Mesh.grief=Math.max(0,Mesh.grief-eased);
             Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
@@ -271,7 +274,7 @@ const Behaviors=[
             siteLog(World.altar, ag.name+' carried the temple\'s stillness back to the source');
           }
           if(st.type==='tavern' && ag.task._t%40===0){
-            const amt=(st.effRate||0.05)*0.5*skillMult;
+            const amt=(st.effRate||0.05)*0.5*workMult;
             raiseResonance(amt);
             Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
@@ -280,7 +283,7 @@ const Behaviors=[
           if(st.type==='quarry' && ag.task._t%35===0){
             const gg=World.gathers[st.gather];
             if(gg){
-              const amt=(st.effRate||0.2)*2*skillMult;
+              const amt=(st.effRate||0.2)*2*workMult;
               gg.stoneStock=(gg.stoneStock||0)+amt;
               st.stoneMined=(st.stoneMined||0)+amt;
               siteLog(st, ag.name+' quarried bulk stone');
@@ -483,7 +486,7 @@ const Behaviors=[
         Mesh.broadcast(ag.x,ag.y,'crime',0.6,'#ff5a5a');
         lowerResonance(0.01); Mesh.dissonance=Math.min(1,Mesh.dissonance+0.03);
         Mesh.writeField(ag.x,ag.y,'dissonance',0.4,150);
-        logCrime(ag.name+' forgot themselves, and took from '+victim.name);
+        logCrime(ag.name+' forgot themselves, and took from '+victim.name, ag.faction);
       }, 60); } },
   { id:'commitMurder', label:'stalking with violent intent', glyph:'☠', cat:'crime',
     weight:a=> { if(a.criminality<=0.55 || a.wanted) return 0;
@@ -502,7 +505,7 @@ const Behaviors=[
         Mesh.grief=Math.min(1,Mesh.grief+0.25); Mesh.dissonance=Math.min(1,Mesh.dissonance+0.15);
         Mesh.writeField(ag.x,ag.y,'dissonance',0.7,170);
         lowerResonance(0.04);
-        logCrime(ag.name+' forgot themselves entirely, and ended '+victim.name);
+        logCrime(ag.name+' forgot themselves entirely, and ended '+victim.name, ag.faction);
       }, 70); } },
   { id:'subdue', label:'closing in to subdue', glyph:'✊', cat:'justice',
     weight:a=> { if(a.criminality>0) return 0;

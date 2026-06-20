@@ -231,12 +231,13 @@ const World={
   seasonLen:4, season:0, seasonProgress:0, dayCount:0,
 
   // cumulative metrics — not derivable from current live state, so tracked directly
-  totalBorn:0, totalDied:0, totalCrimes:0,
+  totalBorn:0, totalDied:0, totalCrimes:0, crimesByFaction:[0,0,0,0],
 
   init(seed){
     this.rng=makeRNG(seed||((Math.random()*1e9)|0));
     this.w=this.cols*this.ts; this.h=this.rows*this.ts;
-    this.totalBorn=0; this.totalDied=0; this.totalCrimes=0;
+    this.totalBorn=0; this.totalDied=0; this.totalCrimes=0; this.crimesByFaction=[0,0,0,0];
+    this.factionStock=[{},{},{},{}];
     // the Altar — a fixed landmark at the heart of the map, not built by agents
     this.altar={ x:this.w/2, y:this.h/2, sacrifices:0, worshipped:0, log:[] };
     this._pendingPulses=[]; // deferred field writes, e.g. the dissolution coherence-surge below
@@ -655,6 +656,14 @@ const World={
         }
         g.foodSec=foodSec; g.restMult=restMult; g.govern=govern; g.tavernBonus=tavernBonus;
       }
+      // per-faction resource ledger — a live snapshot of what each faction's living members currently hold
+      const stock=[{},{},{},{}];
+      for(const a of Agents){
+        if(a.dead) continue;
+        const fs=stock[a.faction]; if(!fs) continue;
+        for(const k of RESOURCES) if(a.inv[k]>0) fs[k]=(fs[k]||0)+a.inv[k];
+      }
+      this.factionStock=stock;
     }
 
     this.updateAnimals();
