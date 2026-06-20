@@ -188,13 +188,13 @@ const SETTLEMENT_TIERS=[
   {name:'HAMLET',       req:{hut:3}},
   {name:'VILLAGE',      req:{hut:5, well:1}},
   {name:'TOWNSHIP',     req:{hut:8, well:2, farm:2}},
-  {name:'CIVILIZATION', req:{hut:12, well:2, farm:4, granary:1}},
-  {name:'STONE TOWN',   req:{hut:12, well:2, farm:4, granary:1, masonry:1}},
-  {name:'GUILDHOLD',    req:{hut:12, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1}},
-  {name:'BASTION',      req:{hut:12, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1}},
-  {name:'DOMINION',     req:{hut:12, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1}},
-  {name:'CONFEDERACY',  req:{hut:12, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1}},
-  {name:'METROPOLIS',   req:{hut:12, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1}}
+  {name:'CIVILIZATION', req:{hut:6, well:2, farm:4, granary:1}},
+  {name:'STONE TOWN',   req:{hut:6, well:2, farm:4, granary:1, masonry:1}},
+  {name:'GUILDHOLD',    req:{hut:8, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1}},
+  {name:'BASTION',      req:{hut:8, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1}},
+  {name:'DOMINION',     req:{hut:8, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1}},
+  {name:'CONFEDERACY',  req:{hut:8, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1}},
+  {name:'METROPOLIS',   req:{hut:8, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1}}
 ];
 
 const World={
@@ -516,11 +516,14 @@ const World={
       // masonry unlocks once a settlement has fully met civilization's structural
       // requirements — it's the gate for the next tier (STONE TOWN) and for the
       // stone-upgrade behavior that recolors/strengthens every other built site.
+      // (huts>=12 here was never reachable in practice — 5 gathering spots split
+      // the population thin enough that no single settlement ever filled 12 hut
+      // plots; 6 lines up with granary's own prerequisite, the tier just below.)
       const hasMasonrySite=this.sites.some(s=>s.type==='masonry'&&s.gather===gi);
-      if(!hasMasonrySite && huts>=12 && wells>=2 && farms>=4 && granaries>=1) this.placeSite(g.x,g.y,90,170,'masonry',gi,55);
+      if(!hasMasonrySite && huts>=6 && wells>=2 && farms>=4 && granaries>=1) this.placeSite(g.x,g.y,90,170,'masonry',gi,55);
       const masonryBuilt=this.sites.filter(s=>s.type==='masonry'&&built(s)).length;
       const hasTownHallSite=this.sites.some(s=>s.type==='townHall'&&s.gather===gi);
-      if(!hasTownHallSite && masonryBuilt>=1 && huts>=12) this.placeSite(g.x,g.y,60,140,'townHall',gi,60);
+      if(!hasTownHallSite && masonryBuilt>=1 && huts>=8) this.placeSite(g.x,g.y,60,140,'townHall',gi,60);
       const townHallBuilt=this.sites.filter(s=>s.type==='townHall'&&built(s)).length;
 
       // smithy unlocks once a mine exists (Phase 3) — placing this check now is
