@@ -648,7 +648,9 @@ const World={
           if(s.type==='huntingLodge'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='harbor'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='hut' && s.restMult){ const rm=s.stoneUpgraded?s.restMult*1.1:s.restMult; restMult=Math.max(restMult,rm); }
-          if(s.type==='townHall') govern++;
+          // masonry holds no workers, so its stoneRate trickles into the settlement stockpile passively here instead
+          if(s.type==='masonry' && s.stoneRate){ g.stoneStock=(g.stoneStock||0)+s.stoneRate; }
+          if(s.type==='townHall') govern+=s.level;
           if(s.type==='tavern') tavernBonus=Math.max(tavernBonus,(s.workers||[]).length>0?(s.effRate||0.1):0.03);
         }
         g.foodSec=foodSec; g.restMult=restMult; g.govern=govern; g.tavernBonus=tavernBonus;
