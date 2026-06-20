@@ -52,6 +52,7 @@ class Agent{
     this.criminality=this._criminalBaseline;
     this.wanted=false; this.crime=null; this.crimeTick=0; this.captured=false;
     this._dissolving=false;
+    this.underground=false; this.mineJob=null;
   }
 
   remember(s){ this.memory.push(s); if(this.memory.length>6) this.memory.shift(); }
@@ -63,7 +64,7 @@ class Agent{
   driftFaction(){
     // shift toward the faction of nearby agents after a "powerful experience"
     const counts=[0,0,0,0];
-    for(const o of Agents){ if(o===this) continue; if(dist2(this.x,this.y,o.x,o.y)<240*240) counts[o.faction]++; }
+    for(const o of Agents){ if(o===this || o.underground) continue; if(dist2(this.x,this.y,o.x,o.y)<240*240) counts[o.faction]++; }
     let best=this.faction,bv=-1;
     for(let f=0;f<4;f++){ if(f!==this.faction && counts[f]>bv){ bv=counts[f]; best=f; } }
     if(bv>2 && Math.random()<0.5){ this.faction=best; this.remember('drifted toward '+Factions[best].name.toLowerCase()); this.speed=(0.9+Math.random()*0.4)*(best===1?1.25:1); }
@@ -128,6 +129,10 @@ class Agent{
 
   // ── per-tick update ─────────────────────────────────────────────────────--
   update(){
+    // an agent down in the mine runs a small self-contained loop instead of the
+    // normal weighted Behaviors system — the cave isn't wired into chooseTask's
+    // surface-only node/site lookups, and the trip is short and bounded anyway
+    if(this.underground){ this.updateUnderground(); return; }
     // needs — a granary's food-security aura slows hunger growth for everyone near it
     const bonus=this.settlementBonus();
     this.hunger=Math.min(100,this.hunger+Math.max(0.004,0.012-bonus.foodSec*0.0015));
@@ -204,31 +209,68 @@ class Agent{
     this.y=Math.max(6,Math.min(World.h-6,this.y));
   }
 
+  // self-contained descend → find ore → mine → return-to-entrance → ascend loop,
+  // run instead of chooseTask while this.underground is true (see update() above)
+  updateUnderground(){
+    this.hunger=Math.min(100,this.hunger+0.006);
+    this.age+=1/World.dayLen;
+    if(this.energy<-30){ this.die(); return; }
+    const job=this.mineJob;
+    if(!job){ Underground.ascend(this); return; }
+    if(job.stage==='toOre'){
+      const ore=job.oreTarget||(job.oreTarget=Underground.nearestOre(this.x,this.y));
+      if(!ore || ore.amount<0.2){ job.stage='toExit'; job.oreTarget=null; }
+      else {
+        const d=Math.hypot(ore.x-this.x,ore.y-this.y);
+        if(d<14){ job.stage='mining'; job.t=0; }
+        else { const sp=this.speed*0.8; this.x+=(ore.x-this.x)/d*sp; this.y+=(ore.y-this.y)/d*sp; }
+      }
+    } else if(job.stage==='mining'){
+      job.t++;
+      if(job.t%30===0 && job.oreTarget && job.oreTarget.amount>0.2){
+        job.oreTarget.amount-=0.3; this.inv.ore=(this.inv.ore||0)+1;
+      }
+      if(job.t>=150 || (this.inv.ore||0)>=4 || !job.oreTarget || job.oreTarget.amount<0.2) job.stage='toExit';
+    } else if(job.stage==='toExit'){
+      const ent=job.entrance;
+      const d=Math.hypot(ent.x-this.x,ent.y-this.y);
+      if(d<14) Underground.ascend(this);
+      else { const sp=this.speed*0.8; this.x+=(ent.x-this.x)/d*sp; this.y+=(ent.y-this.y)/d*sp; }
+    }
+  }
+
   die(){
     this.dead=true;
     World.totalDied=(World.totalDied||0)+1;
     if(this.job&&this.job.siteRef&&this.job.siteRef.workers){ const idx=this.job.siteRef.workers.indexOf(this.id); if(idx>=0) this.job.siteRef.workers.splice(idx,1); }
+    // a death underground has no surface coordinates of its own — the Mesh field
+    // (and other agents' grieving radius) only make sense on the surface, so a
+    // dissolving-in-the-mine death is felt at the mine's entrance instead
+    const wx=this.underground&&this.mineJob ? this.mineJob.site.x : this.x;
+    const wy=this.underground&&this.mineJob ? this.mineJob.site.y : this.y;
     if(this._dissolving){
       // ceremonial dissolution at the Altar is a merciful re-integration, not a tragedy —
       // a spike of friction as the localized self lets go, then (scheduled in World) a coherence surge
-      Mesh.broadcast(this.x,this.y,'dissonance-spike',1,'#ff5a5a');
-      Mesh.writeField(this.x,this.y,'dissonance',0.3,140);
+      Mesh.broadcast(wx,wy,'dissonance-spike',1,'#ff5a5a');
+      Mesh.writeField(wx,wy,'dissonance',0.3,140);
     } else {
-      Mesh.broadcast(this.x,this.y,'grief',0.9,Factions[this.faction].color);
+      Mesh.broadcast(wx,wy,'grief',0.9,Factions[this.faction].color);
       Mesh.grief=Math.min(1,Mesh.grief+0.25);
-      Mesh.writeField(this.x,this.y,'grief',0.5,180);
+      Mesh.writeField(wx,wy,'grief',0.5,180);
     }
     // bonded partner grieves hardest
     for(const o of Agents){ if(o.bond===this.id){ o.bond=null; o.grieving=1; o.remember('lost '+this.name);} }
-    // nearby feel it
-    for(const o of Agents){ if(o!==this && dist2(this.x,this.y,o.x,o.y)<420*420){ o.grieving=Math.min(1,o.grieving+0.4); } }
+    // nearby feel it (skipped for underground deaths — "nearby" has no meaning across the two maps)
+    if(!this.underground){
+      for(const o of Agents){ if(o!==this && !o.underground && dist2(this.x,this.y,o.x,o.y)<420*420){ o.grieving=Math.min(1,o.grieving+0.4); } }
+    }
   }
 }
 
 function nearestAgent(a,filter){
   let best=null,bd=Infinity;
   for(const o of Agents){
-    if(o.dead) continue;
+    if(o.dead || o.underground) continue;
     if(filter && !filter(o)) continue;
     const d=dist2(a.x,a.y,o.x,o.y);
     if(d<bd){ bd=d; best=o; }

@@ -141,6 +141,16 @@ const SITE_DEFS={
               {needWood:13, needStone:10, buildDur:190, cap:2, effRate:0.30},
               {needWood:17, needStone:11, buildDur:260, cap:2, effRate:0.45},
               {needWood:15, needStone:13, buildDur:210, cap:2, effRate:0.60}
+            ] },
+  // the mine doesn't hold ambient workers like the other functional structures —
+  // its built presence is an entrance: agents physically descend through it into
+  // Underground's separate cave map, mine ore there, then resurface and carry it back
+  mine: { levels:[
+              {needWood:14, needStone:10, buildDur:240, cap:1},
+              {needWood:18, needStone:14, buildDur:270, cap:1},
+              {needWood:16, needStone:18, buildDur:200, cap:2},
+              {needWood:20, needStone:22, buildDur:280, cap:2},
+              {needWood:18, needStone:26, buildDur:220, cap:2}
             ] }
 };
 const FUNCTIONAL_TYPES=['workshop','market','shrineHall','loreHall','huntingLodge','smithy','barracks','harbor','temple','tavern','quarry'];
@@ -157,6 +167,7 @@ function mkSite(x,y,type,gather){
   if(type==='farm') Object.assign(s,{stage:'empty',stageT:0,growTicks:lvl.growTicks,yieldAmt:lvl.yieldAmt});
   if(type==='granary') Object.assign(s,{workers:[],log:[],contrib:0});
   if(FUNCTIONAL_TYPES.includes(type)) Object.assign(s,{capacity:lvl.cap, effRate:lvl.effRate, workers:[],log:[],contrib:0});
+  if(type==='mine') Object.assign(s,{capacity:lvl.cap, undergroundAnchor:null, oreMined:0});
   return s;
 }
 // called when a site's progress reaches 1 — applies the level just finished,
@@ -173,6 +184,7 @@ function applySiteLevel(s,ag){
   else if(FUNCTIONAL_TYPES.includes(s.type)){ s.capacity=def.cap; s.effRate=def.effRate; ag.inv.beauty+=2*s.level; }
   else if(s.type==='masonry'){ s.stoneRate=def.stoneRate; ag.inv.beauty+=3*s.level; raiseResonance(0.015*s.level); }
   else if(s.type==='townHall'){ s.auraR=def.auraR; ag.inv.beauty+=3*s.level; raiseResonance(0.015*s.level); }
+  else if(s.type==='mine'){ s.capacity=def.cap; ag.inv.beauty+=2*s.level; if(!s.undergroundAnchor) s.undergroundAnchor=Underground.addEntrance(s); }
   ag.remember('raised a '+s.type+' to level '+s.level);
   Mesh.broadcast(s.x,s.y,'discovery',0.7,Factions[ag.faction].color); raiseResonance(0.02);
   if(s.level<s.maxLevel){
@@ -526,9 +538,11 @@ const World={
       if(!hasTownHallSite && masonryBuilt>=1 && huts>=8) this.placeSite(g.x,g.y,60,140,'townHall',gi,60);
       const townHallBuilt=this.sites.filter(s=>s.type==='townHall'&&built(s)).length;
 
-      // smithy unlocks once a mine exists (Phase 3) — placing this check now is
-      // harmless and forward-compatible: mineBuilt stays 0 (and smithy stays
-      // unplaced) until a 'mine' SITE_DEFS type and its placement logic land.
+      // mine unlocks once a settlement has raised a town hall — the same maturity
+      // bar as barracks — and gates smithy (which needs a built mine) for tiers
+      // beyond GUILDHOLD; its first level-up carves a real entrance into Underground
+      const hasMineSite=this.sites.some(s=>s.type==='mine'&&s.gather===gi);
+      if(!hasMineSite && townHallBuilt>=1) this.placeSite(g.x,g.y,70,200,'mine',gi,50);
       const mineBuilt=this.sites.filter(s=>s.type==='mine'&&built(s)).length;
       const hasSmithySite=this.sites.some(s=>s.type==='smithy'&&s.gather===gi);
       if(!hasSmithySite && mineBuilt>=1) this.placeSite(g.x,g.y,70,170,'smithy',gi,50);

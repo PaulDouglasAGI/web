@@ -44,6 +44,11 @@
   <button id="field-toggle" title="show the field beneath">◌ field</button>
 </div>
 
+<!-- underground view toggle — switches the camera to the mine's separate cave map -->
+<div id="mine-ctl">
+  <button id="mine-toggle" title="view the mine below">⛏ mine</button>
+</div>
+
 <!-- Agent inspector (deep panel — tap an agent to open) -->
 <div id="agent-panel">
   <button id="panel-close" aria-label="close">✕</button>
@@ -67,6 +72,7 @@
 
 <!-- Engine — classic scripts, ordered by dependency -->
 <script src="src/world.js"></script>
+<script src="src/underground.js"></script>
 <script src="src/factions.js"></script>
 <script src="src/economy.js"></script>
 <script src="src/behaviors.js"></script>

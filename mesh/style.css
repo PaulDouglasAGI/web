@@ -33,6 +33,12 @@ canvas.dragging{cursor:grabbing;}
 #field-ctl button.active{background:rgba(220,160,200,0.25);color:#f0d8ea;border-color:rgba(220,180,220,0.5);}
 #field-ctl button:hover{color:#cfe8e0;}
 
+/* Underground (mine) view toggle — switches the camera between the surface and the cave map */
+#mine-ctl{position:absolute;bottom:96px;left:18px;z-index:30;display:flex;gap:6px;}
+#mine-ctl button{height:28px;padding:0 10px;border-radius:5px;border:1px solid rgba(120,160,150,0.25);background:rgba(8,12,16,0.65);color:#7a8e88;font-size:10px;letter-spacing:1px;cursor:pointer;transition:.2s;}
+#mine-ctl button.active{background:rgba(220,170,90,0.25);color:#f0dcb0;border-color:rgba(220,180,120,0.5);}
+#mine-ctl button:hover{color:#cfe8e0;}
+
 /* Deep agent inspector panel */
 #agent-panel{position:absolute;top:0;right:0;height:100%;width:270px;max-width:86vw;background:rgba(6,10,13,0.9);border-left:1px solid rgba(120,160,150,0.2);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:40;padding:20px 18px;transform:translateX(100%);transition:transform .3s ease;overflow-y:auto;}
 #agent-panel.show{transform:translateX(0);}

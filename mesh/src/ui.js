@@ -51,6 +51,21 @@ const UI={
       this.el.fieldToggle.classList.toggle('active',Renderer.showField);
     });
 
+    this.el.mineToggle=document.getElementById('mine-toggle');
+    this.el.mineToggle.addEventListener('click',()=>{
+      if(Renderer.viewMode==='surface'){
+        Renderer._savedCam={x:Camera.x,y:Camera.y,zoom:Camera.zoom};
+        Renderer.viewMode='underground';
+        Camera.x=Underground.w/2; Camera.y=Underground.h/2; Camera.zoom=1.3;
+      } else {
+        Renderer.viewMode='surface';
+        const sc=Renderer._savedCam;
+        if(sc){ Camera.x=sc.x; Camera.y=sc.y; Camera.zoom=sc.zoom; }
+      }
+      this.el.mineToggle.classList.toggle('active',Renderer.viewMode==='underground');
+      this.deselect();
+    });
+
     this.bindCamera();
   },
 
@@ -85,13 +100,18 @@ const UI={
     const wx=Renderer.worldX(px), wy=Renderer.worldY(py);
     const tol=26/Camera.zoom;
     let best=null,bd=Infinity,kind=null;
-    for(const a of Agents){ const d=dist2(a.x,a.y,wx,wy); if(d<bd){ bd=d; best=a; kind='agent'; } }
-    for(const s of World.sites){ const d=dist2(s.x,s.y,wx,wy); if(d<bd){ bd=d; best=s; kind='site'; } }
-    for(const nd of World.nodes){ const d=dist2(nd.x,nd.y,wx,wy); if(d<bd){ bd=d; best=nd; kind='node'; } }
-    for(const an of World.animals){ if(!an.alive) continue; const d=dist2(an.x,an.y,wx,wy); if(d<bd){ bd=d; best=an; kind='animal'; } }
-    for(const m of Marks){ const d=dist2(m.x,m.y,wx,wy); if(d<bd){ bd=d; best=m; kind='mark'; } }
-    for(const g of World.gathers){ const d=dist2(g.x,g.y,wx,wy); if(d<bd){ bd=d; best=g; kind='settlement'; } }
-    { const d=dist2(World.altar.x,World.altar.y,wx,wy); if(d<bd){ bd=d; best=World.altar; kind='altar'; } }
+    const underg=Renderer.viewMode==='underground';
+    for(const a of Agents){ if(!!a.underground!==underg) continue; const d=dist2(a.x,a.y,wx,wy); if(d<bd){ bd=d; best=a; kind='agent'; } }
+    if(underg){
+      for(const nd of Underground.oreNodes){ const d=dist2(nd.x,nd.y,wx,wy); if(d<bd){ bd=d; best=nd; kind='node'; } }
+    } else {
+      for(const s of World.sites){ const d=dist2(s.x,s.y,wx,wy); if(d<bd){ bd=d; best=s; kind='site'; } }
+      for(const nd of World.nodes){ const d=dist2(nd.x,nd.y,wx,wy); if(d<bd){ bd=d; best=nd; kind='node'; } }
+      for(const an of World.animals){ if(!an.alive) continue; const d=dist2(an.x,an.y,wx,wy); if(d<bd){ bd=d; best=an; kind='animal'; } }
+      for(const m of Marks){ const d=dist2(m.x,m.y,wx,wy); if(d<bd){ bd=d; best=m; kind='mark'; } }
+      for(const g of World.gathers){ const d=dist2(g.x,g.y,wx,wy); if(d<bd){ bd=d; best=g; kind='settlement'; } }
+      { const d=dist2(World.altar.x,World.altar.y,wx,wy); if(d<bd){ bd=d; best=World.altar; kind='altar'; } }
+    }
     if(best && bd<tol*tol) this.select(best,kind);
     else this.deselect();
   },
@@ -162,7 +182,7 @@ const UI={
 
   renderSitePanel(s){
     this.setExtras(false);
-    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY',workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE',masonry:'MASONRY',townHall:'TOWN HALL',smithy:'SMITHY',barracks:'BARRACKS',harbor:'HARBOR',temple:'TEMPLE',tavern:'TAVERN',quarry:'QUARRY'};
+    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY',workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE',masonry:'MASONRY',townHall:'TOWN HALL',smithy:'SMITHY',barracks:'BARRACKS',harbor:'HARBOR',temple:'TEMPLE',tavern:'TAVERN',quarry:'QUARRY',mine:'MINE'};
     this.el.pName.textContent=SITE_LABEL[s.type]||s.type.toUpperCase();
     if(s.faction!=null){ this.el.pFaction.textContent=Factions[s.faction].name; this.el.pFaction.style.color=Factions[s.faction].color; }
     else { this.el.pFaction.textContent='unclaimed'; this.el.pFaction.style.color='#9aa6a2'; }
@@ -256,7 +276,7 @@ const UI={
     this.setExtras(false);
     this.setMemSection(false);
     const gi=World.gathers.indexOf(g);
-    const pop=Agents.filter(a=>!a.dead && World.nearestOf(World.gathers,a.x,a.y)===g).length;
+    const pop=Agents.filter(a=>!a.dead && !a.underground && World.nearestOf(World.gathers,a.x,a.y)===g).length;
     const sites=World.sites.filter(s=>s.gather===gi);
     const built=sites.filter(s=>s.built);
     const counts={}; for(const s of built) counts[s.type]=(counts[s.type]||0)+1;

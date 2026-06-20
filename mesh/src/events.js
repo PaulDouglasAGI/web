@@ -35,7 +35,7 @@ const Events={
         Mesh.dissonance=Math.min(1,Mesh.dissonance+0.15);
         break;
       case 'discovery': {
-        const a=pick(Agents); if(a){ this.banner='A DISCOVERY SPREADS'; Mesh.broadcast(a.x,a.y,'discovery',0.9,'#e6b455'); a.remember('made a discovery'); raiseResonance(0.04);
+        const a=pick(Agents.filter(o=>!o.underground)); if(a){ this.banner='A DISCOVERY SPREADS'; Mesh.broadcast(a.x,a.y,'discovery',0.9,'#e6b455'); a.remember('made a discovery'); raiseResonance(0.04);
           // a new resource node appears
           World.nodes.push({type:'food',sub:'berry',x:a.x,y:a.y,amount:1,max:1,regen:0.00008}); }
         break; }

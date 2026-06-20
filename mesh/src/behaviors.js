@@ -130,6 +130,13 @@ const Behaviors=[
   { id:'mineStone', label:'mining stone', glyph:'◈', cat:'survival',
     weight:a=> 8+(a.faction===2?6:0),
     make:a=> gotoNode(a,'mining stone','◈','survival',World.nearestNode(a.x,a.y,'stone'),'stone') },
+  // a real trip down into Underground's separate cave map, not an ambient effect —
+  // the agent vanishes from the surface for the duration (see Agent.updateUnderground)
+  { id:'mineOre', label:'descending to the mine', glyph:'⛏', cat:'survival',
+    weight:a=> { if(a.underground) return 0; const mine=World.nearestSite(a.x,a.y,s=>s.type==='mine'&&s.built); return mine ? 12+(a.faction===2?8:0) : 0; },
+    make:a=> { const mine=World.nearestSite(a.x,a.y,s=>s.type==='mine'&&s.built); if(!mine) return null;
+      return { label:'descending to the mine',glyph:'⛏',cat:'survival', pose:'work', target:{x:mine.x,y:mine.y}, arrive:14, dur:99999,
+        onArrive(ag){ Underground.descend(ag,mine); } }; } },
   { id:'herbs', label:'collecting herbs', glyph:'❧', cat:'survival',
     weight:a=> 7+(a.faction===3?5:0),
     make:a=> gotoNode(a,'collecting herbs','❧','survival',World.nearestNode(a.x,a.y,'herb'),'herb') },
@@ -225,10 +232,17 @@ const Behaviors=[
               siteLog(st, ag.name+' taught '+pupil.name);
             }
           }
-          if(st.type==='smithy' && ag.task._t%45===0 && (ag.inv.ore||0)>0 && Math.random()<(st.effRate||0.05)){
-            ag.inv.ore-=1; ag.inv.weapons=(ag.inv.weapons||0)+1;
-            st.weaponsForged=(st.weaponsForged||0)+1;
-            siteLog(st, ag.name+' forged a weapon');
+          if(st.type==='smithy' && ag.task._t%45===0 && Math.random()<(st.effRate||0.05)){
+            const gg=World.gathers[st.gather];
+            if((ag.inv.ore||0)>0){
+              ag.inv.ore-=1; ag.inv.weapons=(ag.inv.weapons||0)+1;
+              st.weaponsForged=(st.weaponsForged||0)+1;
+              siteLog(st, ag.name+' forged a weapon');
+            } else if(gg && (gg.oreStock||0)>0){
+              gg.oreStock-=1; ag.inv.weapons=(ag.inv.weapons||0)+1;
+              st.weaponsForged=(st.weaponsForged||0)+1;
+              siteLog(st, ag.name+' forged a weapon from stockpiled ore');
+            }
           }
           if(st.type==='barracks' && ag.task._t%50===0){
             const target=nearestAgent(ag, o=>o!==ag && o.wanted && !o.captured && !o.dead && dist2(o.x,o.y,st.x,st.y)<260*260);
@@ -366,6 +380,14 @@ const Behaviors=[
             const gg=World.gathers[st.gather];
             if(gg && gg.stoneStock>0){ const n=Math.min(gg.stoneStock,st.needStone-st.matsStone); gg.stoneStock-=n; st.matsStone+=n; }
           }
+        } }; } },
+  { id:'deliverOre', label:'hauling ore to the smithy', glyph:'⛏', cat:'creative',
+    weight:a=> { if((a.inv.ore||0)<=0) return 0; const st=World.nearestSite(a.x,a.y,s=>s.type==='smithy'&&s.built); return st ? 22+(a.faction===2?10:0) : 0; },
+    make:a=> { const st=World.nearestSite(a.x,a.y,s=>s.type==='smithy'&&s.built); if(!st) return null;
+      return { label:'hauling ore to the smithy',glyph:'⛏',cat:'creative', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:50,
+        onArrive(ag){
+          const gg=World.gathers[st.gather];
+          if(gg && (ag.inv.ore||0)>0){ gg.oreStock=(gg.oreStock||0)+ag.inv.ore; ag.inv.ore=0; ag.remember('delivered ore to the smithy'); }
         } }; } },
   { id:'construct', label:'raising a structure', glyph:'⌗', cat:'creative',
     weight:a=> { const st=World.nearestSite(a.x,a.y, s=>s.level<s.maxLevel && s.matsWood>=s.needWood && s.matsStone>=s.needStone);

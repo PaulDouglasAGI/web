@@ -5,6 +5,7 @@ const Sim={ running:true, speed:0.35 };
 
 function boot(){
   World.init();
+  Underground.init();
   Mesh.reset();
   Renderer.init();
   UI.init();
@@ -28,6 +29,7 @@ function loop(){
   tickAcc+=Sim.speed;
   while(tickAcc>=1){
     World.update();
+    Underground.update();
     Mesh.update();
     updateAgents();
     Events.update();

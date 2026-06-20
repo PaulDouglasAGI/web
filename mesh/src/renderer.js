@@ -6,6 +6,7 @@ const Camera={ x:0, y:0, zoom:1, minZoom:0.35, maxZoom:3.2 };
 const Renderer={
   cnv:null, ctx:null, W:0, H:0, dpr:1,
   showField:false, // off by default — the field overlay is an opt-in deeper look, not the default view
+  viewMode:'surface', // 'surface' | 'underground' — toggled by #mine-toggle (ui.js)
 
   // base terrain colors [r,g,b]
   TCOL:{
@@ -67,7 +68,78 @@ const Renderer={
     }
   },
 
+  // the cave map — its own tile palette + ore-vein glows + entrance markers +
+  // whichever agents are currently underground. No threads/signals/weather here;
+  // the Mesh field and day/night cycle are surface-only concepts.
+  drawUnderground(){
+    const ctx=this.ctx, W=this.W, H=this.H, z=Camera.zoom;
+    ctx.fillStyle='#0a0908'; ctx.fillRect(0,0,W,H);
+
+    const ts=Underground.ts;
+    const x0=Math.max(0,((this.worldX(0))/ts|0)-1);
+    const y0=Math.max(0,((this.worldY(0))/ts|0)-1);
+    const x1=Math.min(Underground.cols-1,((this.worldX(W))/ts|0)+1);
+    const y1=Math.min(Underground.rows-1,((this.worldY(H))/ts|0)+1);
+    const tilePx=ts*z+1;
+    const UCOL={ 0:[34,28,26], 1:[54,46,38], 2:[80,60,30] }; // rock, floor, ore
+    for(let r=y0;r<=y1;r++){
+      for(let c=x0;c<=x1;c++){
+        const tt=Underground.tiles[r*Underground.cols+c];
+        const b=UCOL[tt];
+        ctx.fillStyle='rgb('+b[0]+','+b[1]+','+b[2]+')';
+        ctx.fillRect(this.sx(c*ts)|0, this.sy(r*ts)|0, Math.ceil(tilePx), Math.ceil(tilePx));
+      }
+    }
+
+    // ore vein glows
+    for(const nd of Underground.oreNodes){
+      const sx=this.sx(nd.x), sy=this.sy(nd.y);
+      if(sx<-20||sx>W+20||sy<-20||sy>H+20) continue;
+      const a=0.18+nd.amount*0.35;
+      const g=ctx.createRadialGradient(sx,sy,0,sx,sy,10*z);
+      g.addColorStop(0,'rgba(220,170,90,'+a+')'); g.addColorStop(1,'rgba(220,170,90,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,10*z,0,7); ctx.fill();
+      if(UI.selected===nd){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,13*z,0,7); ctx.stroke(); }
+    }
+
+    // entrances back to the surface
+    for(const e of Underground.entrances){
+      const sx=this.sx(e.x), sy=this.sy(e.y);
+      if(sx<-20||sx>W+20||sy<-20||sy>H+20) continue;
+      ctx.strokeStyle='rgba(230,210,180,0.6)'; ctx.lineWidth=Math.max(1,1.2*z);
+      ctx.beginPath(); ctx.arc(sx,sy,9*z,0,7); ctx.stroke();
+      if(z>0.7){
+        ctx.fillStyle='rgba(230,210,180,0.85)';
+        ctx.font=(9*z)+'px "Exo 2",sans-serif'; ctx.textAlign='center';
+        ctx.fillText('▲ surface', sx, sy-13*z);
+        ctx.textAlign='left';
+      }
+    }
+
+    // agents currently down here
+    for(const a of Agents){
+      if(!a.underground) continue;
+      const sx=this.sx(a.x), sy=this.sy(a.y);
+      if(sx<-20||sx>W+20||sy<-20||sy>H+20) continue;
+      const fc=Factions[a.faction];
+      const rad=Math.max(2.4,3.2*z);
+      ctx.fillStyle=fc.color;
+      ctx.beginPath(); ctx.arc(sx,sy,rad,0,7); ctx.fill();
+      if(a.inv && a.inv.ore>0){
+        ctx.fillStyle='#e6b455'; ctx.font=(8*Math.min(z,2))+'px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('⛏', sx, sy-rad*2);
+        ctx.textAlign='left';
+      }
+      if(UI.selected===a){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,rad*2.3,0,7); ctx.stroke(); }
+    }
+
+    const vg=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.35,W/2,H/2,Math.max(W,H)*0.7);
+    vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.55)');
+    ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+  },
+
   draw(){
+    if(this.viewMode==='underground'){ this.drawUnderground(); return; }
     const ctx=this.ctx, W=this.W, H=this.H, z=Camera.zoom;
     const day=World.daylight();
 
@@ -132,10 +204,12 @@ const Renderer={
     ctx.lineWidth=Math.max(0.4, 0.8*z);
     for(let i=0;i<Agents.length;i++){
       const a=Agents[i];
+      if(a.underground) continue;
       const asx=this.sx(a.x), asy=this.sy(a.y);
       if(asx<-60||asx>W+60||asy<-60||asy>H+60) continue;
       for(let j=i+1;j<Agents.length;j++){
         const b=Agents[j];
+        if(b.underground) continue;
         const d2=dist2(a.x,a.y,b.x,b.y);
         if(d2>tr2) continue;
         const bsx=this.sx(b.x), bsy=this.sy(b.y);
@@ -319,6 +393,7 @@ const Renderer={
     // ── AGENTS ────────────────────────────────────────────────────────────--
     const showGlyph=z>1.15;
     for(const a of Agents){
+      if(a.underground) continue;
       const sx=this.sx(a.x), sy=this.sy(a.y);
       if(sx<-20||sx>W+20||sy<-30||sy>H+20) continue;
       const fc=Factions[a.faction];
@@ -403,7 +478,7 @@ const Renderer={
       }
       // carried-resource indicator
       if(z>1 && a.inv){
-        const carry = a.inv.wood>0?['╪','#c89060'] : a.inv.stone>0?['◈','#aab0bc'] : a.inv.food>0?['✿','#9fd08a'] : a.inv.water>0?['≈','#7fb8d8'] : null;
+        const carry = a.inv.wood>0?['╪','#c89060'] : a.inv.stone>0?['◈','#aab0bc'] : (a.inv.ore||0)>0?['⛏','#e6b455'] : a.inv.food>0?['✿','#9fd08a'] : a.inv.water>0?['≈','#7fb8d8'] : null;
         if(carry){ ctx.fillStyle=carry[1]; ctx.font=(8*Math.min(z,2))+'px sans-serif'; ctx.textAlign='center'; ctx.fillText(carry[0], sx+rad*1.15, sy-rad*1.7); ctx.textAlign='left'; }
       }
       // grieving marker

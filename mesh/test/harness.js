@@ -7,7 +7,7 @@ const path=require('path');
 const vm=require('vm');
 
 const SRC=path.join(__dirname,'..','src');
-const FILES=['world.js','factions.js','economy.js','behaviors.js','mesh.js','agents.js','events.js'];
+const FILES=['world.js','underground.js','factions.js','economy.js','behaviors.js','mesh.js','agents.js','events.js'];
 
 function buildContext(){
   const sandbox={ console, Math, Float32Array, Object };
@@ -25,7 +25,7 @@ function assert(cond,msg){
 }
 
 function freshWorld(ctx,seed){
-  vm.runInContext(`World.init(${seed}); Mesh.reset();`, ctx);
+  vm.runInContext(`World.init(${seed}); Underground.init(${seed}); Mesh.reset();`, ctx);
 }
 
 // ── Test 1: diffusion in isolation ──────────────────────────────────────────
@@ -127,6 +127,7 @@ function freshWorld(ctx,seed){
         for(let i=0;i<2000;i++){
           World.tick++;
           World.update();
+          Underground.update();
           Mesh.update();
           updateAgents();
           Events.update();
