@@ -40,6 +40,7 @@ class Agent{
     this.reeval=0;
     this.meshMuted=0;
     this.driftScore=[0,0,0,0];
+    this.lastCat=null; this.catStreak=0; this.lastBehaviorId=null;   // commitment/memory: see chooseTask()
     this.speed=(0.9+Math.random()*0.4)*(faction===1?1.25:1);
     this.skin=SKIN_TONES[(Math.random()*SKIN_TONES.length)|0];
     this.hair=HAIR_COLORS[(Math.random()*HAIR_COLORS.length)|0];
@@ -105,19 +106,42 @@ class Agent{
       if(localDis>0.4 && b.cat==='survival') w*=1.15;
       // personal overwhelm
       if(this.overwhelmed>0.5 && b.cat!=='inner') w*=0.5;
+      // commitment: an agent who just settled into a category sticks with it through the next
+      // reroll instead of a clean-slate coin flip — without this, every task-end looks like
+      // aimless flip-flopping even when the same need (e.g. hunger) is still driving them.
+      // (tried adding a streak-fatigue penalty on top of this to force variety after a few reps,
+      // but measured it actually *increasing* total category switches — it cut off long
+      // need-driven runs before the need was resolved, so agents got yanked off, then immediately
+      // pulled right back. needs-driven persistence should run its course; dropped that half.)
+      if(b.cat===this.lastCat && this.catStreak<2) w*=1.4;
+      // short-term memory: the exact same behavior just played out — even while staying in the
+      // same category, doing the *identical* thing again right away (wander, then wander to
+      // another spot, then wander again) reads as a mindless loop rather than a varied sequence
+      // of choices, so nudge toward a different behavior within that category instead
+      if(b.id===this.lastBehaviorId) w*=0.6;
       // noise so they feel alive
       w*=0.55+Math.random()*0.9;
       scored.push({b,w});
     }
-    if(!scored.length){ this.task=this.fallback(); return; }
-    scored.sort((p,q)=>q.w-p.w);
-    const top=scored.slice(0,5);
-    let sum=0; for(const s of top) sum+=s.w;
-    let r=Math.random()*sum, chosen=top[0];
-    for(const s of top){ r-=s.w; if(r<=0){ chosen=s; break; } }
-    const task=chosen.b.make(this);
-    this.task=task||this.fallback();
-    if(this.task) this.task._t=0;
+    let chosenId=null;
+    if(!scored.length){ this.task=this.fallback(); }
+    else {
+      scored.sort((p,q)=>q.w-p.w);
+      const top=scored.slice(0,5);
+      let sum=0; for(const s of top) sum+=s.w;
+      let r=Math.random()*sum, chosen=top[0];
+      for(const s of top){ r-=s.w; if(r<=0){ chosen=s; break; } }
+      const task=chosen.b.make(this);
+      this.task=task||this.fallback();
+      chosenId=chosen.b.id;
+    }
+    if(this.task){
+      this.task._t=0;
+      const cat=this.task.cat;
+      this.catStreak=(cat===this.lastCat)?this.catStreak+1:1;
+      this.lastCat=cat;
+      this.lastBehaviorId=chosenId;
+    }
   }
   fallback(){ const p=wanderPoint(this,200); const t=gotoPoint(this,'wandering','~','inner',p.x,p.y,80); t._t=0; return t; }
 
