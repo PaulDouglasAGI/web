@@ -1,0 +1,23 @@
+# config/default.yaml — runtime configuration for the Hybrid Primordial Matrix.
+#
+# Keys are split automatically between core.environment.EnvironmentConfig
+# (the physics of the universe) and core.initializer.PrimordialMatrixConfig
+# (how the universe is first populated). See core/initializer.py:_split_config.
+
+# --- Environment physics --------------------------------------------------
+width: 256
+height: 256
+baseline_resource: 6.0
+max_resource: 40.0
+diffusion_rate: 0.15
+regen_rate: 0.02
+initial_energy: 400.0
+offspring_energy_share: 0.5
+mutation_rate: 0.0025
+probe_spawn_count: 4
+probe_genome_length: 24
+
+# --- Primordial matrix seeding ---------------------------------------------
+noise_fraction: 0.5
+seed_instances: 24
+random_seed: 1729

@@ -1,0 +1,4 @@
+numpy>=2.0
+PyYAML>=6.0
+pygame>=2.6
+pytest>=8.0
