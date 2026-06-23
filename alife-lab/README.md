@@ -136,11 +136,21 @@ genomes themselves.
 - **Allocation locality.** `request_allocation` tries the two cells
   immediately touching the parent's own genome first, then a bounded
   neighborhood out to `local_search_radius` genome-lengths on each side
-  (nearest free slot wins), and only falls back to a uniformly random free
-  position anywhere in the universe if nothing is free nearby. Without the
-  middle tier, a colony gets exactly one generation of adjacent growth
-  before every later offspring is scattered across the map — starving
-  every lineage of the chance to ever hold contiguous territory.
+  (nearest free slot wins), then a handful of randomly-positioned windows,
+  and only falls back to an exhaustive scan of the whole lattice if every
+  one of those misses. Without the middle tier, a colony gets exactly one
+  generation of adjacent growth before every later offspring is scattered
+  across the map — starving every lineage of the chance to ever hold
+  contiguous territory.
+- **"No room" caching.** At steady-state population the universe routinely
+  has free *cells* in aggregate but no contiguous free *run* as long as a
+  genome anywhere — external fragmentation, the same pathology a heap
+  allocator can suffer from — so every search tier above is doomed to fail
+  honestly on every `ALLOC` call. `Environment._no_room_for_length` records
+  the smallest length the last exhaustive scan confirmed has no free run,
+  letting later calls for that length (or longer) skip straight to failure
+  instead of re-paying for the full search; it's cleared the instant any
+  organism dies, since freeing memory can only make a free run longer.
 - **Copy-fidelity mutation.** Every committed write has an independent
   chance (`mutation_rate`) of landing as a random byte instead — the sole
   source of genetic novelty in the lab.
@@ -150,6 +160,14 @@ genomes themselves.
   interpreting whatever bytes are already there as a genome — the only
   mechanism by which the Pure Noise Sector has any chance, however small,
   of producing a self-sustaining replicator.
+- **Senescence.** A population that fully occupies every contiguous run
+  the lattice can offer reaches a state where nobody has room to
+  reproduce *and* every survivor's harvested energy exactly offsets its
+  spend, so nobody dies either — turnover (and all further mutation and
+  speciation) halts completely. `senescence_rate` deducts a small fixed
+  energy amount from every living thread each cycle, independent of
+  whatever instruction it executed, so energy balance is never a stable
+  equilibrium and territory keeps recycling indefinitely.
 - **Deallocation.** A thread that dies (energy exhaustion or terminal
   illegal-opcode cost) has its claimed memory overwritten with fresh
   random bytes and returned to the unclaimed pool — exactly like raw
@@ -264,6 +282,7 @@ passed via `--config`):
 | `probe_spawn_count` | 4 | Spontaneous-abiogenesis probe threads opened per cycle |
 | `probe_genome_length` | 24 | Genome length interpreted by each probe |
 | `local_search_radius` | 12 | Genome-lengths searched on each side of a parent for a free slot before falling back to a random one anywhere |
+| `senescence_rate` | 0.0001 | Flat per-cycle energy decay applied to every living thread, independent of instruction cost, guaranteeing eventual death (and territory turnover) even at perfect energy balance |
 | `noise_fraction` | 0.5 | Fraction of the lattice that is the Pure Noise Sector |
 | `seed_instances` | 24 | Number of Ancestor copies seeded into the Seeded Sector |
 | `random_seed` | 1729 | RNG seed, for reproducible runs |

@@ -33,6 +33,32 @@ Design notes
   this middle tier, a colony gets exactly one generation of adjacent growth
   before every later offspring is scattered far from its own kin — which
   starves lineages of the chance to ever accumulate contiguous territory.
+* **Bounded random window probing before the exhaustive global scan.**
+  Once a colony's local neighborhood saturates, the global fallback above
+  is reached on a growing fraction of every ``ALLOC`` call as population
+  scales up. A handful of randomly-positioned windows
+  (:data:`GLOBAL_ALLOCATION_PROBE_WINDOWS` of them,
+  :data:`GLOBAL_ALLOCATION_PROBE_WINDOW_SIZE` cells each) are scanned with
+  the same sliding-window-sum technique as the local search first; the
+  exhaustive scan only runs if every one of those misses.
+* **Caching "no room" so a real fragmentation ceiling doesn't get
+  re-discovered from scratch on every call.** At steady-state population,
+  the universe routinely has plenty of free *cells* in aggregate but no
+  single contiguous free *run* as long as a genome — classic external
+  fragmentation, the same pathology a heap allocator can suffer from. When
+  that's the actual state of the world, every search tier above (local,
+  windowed, *and* exhaustive) is doomed to fail honestly, and re-running
+  all of them on every single ``ALLOC`` call was, empirically, the
+  dominant cost of the entire simulation once population reached the low
+  thousands — far more than the per-cycle CPU-execution loop itself.
+  :attr:`Environment._no_room_for_length` records the smallest length the
+  exhaustive scan has most recently confirmed has no free run anywhere;
+  since a free run long enough for length ``L`` is necessarily long
+  enough for every shorter length too, "no room for ``L``" implies "no
+  room for anything >= ``L``" as well, so later calls requesting such a
+  length skip straight to failure. The only thing that can ever make a
+  longer run newly possible is freeing memory, so :meth:`Environment._reclaim`
+  clears the cache the moment any organism dies.
 * **Copy fidelity.** Mutation is modeled here, not in the VM: every
   committed write has a small independent chance
   (``EnvironmentConfig.mutation_rate``) of being corrupted to a random
@@ -46,6 +72,19 @@ Design notes
   gives the Pure Noise Sector a chance — vanishingly small, as it should be
   — at producing a self-sustaining replicator, instead of noise being
   permanently decorative.
+* **Senescence (background mortality).** A population that fully occupies
+  every contiguous run the memory lattice can offer reaches a state where
+  nobody has room to reproduce *and* every survivor's energy income/expense
+  has settled into balance, so nobody dies either — turnover, and with it
+  all further mutation and speciation, halts completely. Every living
+  thread loses a small fixed amount of energy each cycle
+  (``EnvironmentConfig.senescence_rate``), independent of whatever
+  instruction it happened to execute, guaranteeing that energy balance
+  alone is never a stable equilibrium: eventually every organism dies of
+  old age, freeing its memory and re-opening the fragmentation/reproduction
+  cycle for its neighbors. Applied in :meth:`Environment.step`, not
+  :mod:`core.vm`, to keep it a property of the environment's physics
+  rather than the CPU substrate.
 """
 
 from __future__ import annotations
@@ -69,6 +108,12 @@ STRAIN_NONE = 0
 STRAIN_SEED = 1
 STRAIN_NOISE = 2
 
+#: How many randomly-positioned windows Environment.request_allocation
+#: scans before resorting to an exhaustive O(universe size) scan, and how
+#: large each one is. See the "Allocation locality" design note below.
+GLOBAL_ALLOCATION_PROBE_WINDOWS = 4
+GLOBAL_ALLOCATION_PROBE_WINDOW_SIZE = 1024
+
 _STRAIN_NAME_TO_CODE = {"seed": STRAIN_SEED, "noise": STRAIN_NOISE}
 
 
@@ -88,6 +133,7 @@ class EnvironmentConfig:
     probe_spawn_count: int = 4
     probe_genome_length: int = 24
     local_search_radius: int = 12
+    senescence_rate: float = 0.0
 
     @property
     def size(self) -> int:
@@ -153,6 +199,20 @@ class Environment:
         #: cycle, for the dashboard's phosphor-burn decay layer to consume.
         self.last_executed_addresses: List[int] = []
 
+        #: the smallest genome length for which the exhaustive scan in
+        #: :meth:`request_allocation` has most recently confirmed "no
+        #: contiguous free run exists anywhere in the universe" — or
+        #: ``None`` if no such confirmation is currently on file. Since any
+        #: free run long enough for length ``L`` is also long enough for
+        #: every length below ``L``, "no room for L" implies "no room for
+        #: anything >= L" too, so this lets later calls requesting a length
+        #: at or above the cached value skip straight to failure instead of
+        #: re-running the (expensive, at scale) local/windowed/exhaustive
+        #: search tiers to rediscover the same answer. Cleared by
+        #: :meth:`_reclaim` the moment any memory is freed, since a freed
+        #: cell can only make new free runs longer, never shorter.
+        self._no_room_for_length: Optional[int] = None
+
     # ------------------------------------------------------------------
     # Substrate protocol implementation (see core.vm.Substrate)
     # ------------------------------------------------------------------
@@ -184,6 +244,13 @@ class Environment:
         length = thread.genome_length
         size = self.memory.size
         with self._lock:
+            if self._no_room_for_length is not None and length >= self._no_room_for_length:
+                # A previous exhaustive scan already established that no
+                # free run this long (or longer) exists anywhere, and
+                # nothing has been freed since. Re-running any search tier
+                # — even the cheap adjacent-slot check — can only rediscover
+                # the same "no" once more, so skip straight to failure.
+                return None
             for candidate_start in (
                 (thread.genome_start + thread.genome_length) % size,  # immediately to the right
                 (thread.genome_start - length) % size,  # immediately to the left
@@ -214,7 +281,39 @@ class Environment:
                     indices = self.range_indices(candidate_start, length)
                     self.owner[indices] = thread.thread_id
                     return candidate_start
-            # No room nearby either — exhaustively (but cheaply, via a
+            # No room nearby either. Before paying for a full O(universe)
+            # exhaustive scan, try a handful of randomly-positioned windows
+            # (the same sliding-window-sum technique as the local search
+            # above, just centered at a uniformly random point instead of
+            # the parent) — each one checks every offset within it at once,
+            # so it finds a free run almost as reliably as the exhaustive
+            # scan whenever meaningful free space exists anywhere, at a
+            # fraction of the cost. This matters a lot at scale: once
+            # colonies saturate their own neighborhoods, this fallback is
+            # reached on a large fraction of every ALLOC call as population
+            # grows, and an exhaustive rescan on every one of those misses
+            # became the dominant cost of the entire simulation — far more
+            # than the per-cycle CPU-execution loop itself — once population
+            # climbed into the thousands. (A pointwise random-start probe
+            # was tried first and rejected: free space exists in scattered
+            # genome-length-sized runs, so the odds of a single random byte
+            # landing exactly on a run's start are far lower than the odds
+            # of *some* offset within a random window matching one.)
+            kernel = np.ones(length, dtype=np.int64)
+            for _ in range(GLOBAL_ALLOCATION_PROBE_WINDOWS):
+                window_start = int(self.rng.integers(0, size))
+                window_size = min(GLOBAL_ALLOCATION_PROBE_WINDOW_SIZE, size)
+                probe_indices = self.range_indices(window_start, window_size)
+                free_probe = (self.owner[probe_indices] == -1).astype(np.int64)
+                window_sum = np.convolve(free_probe, kernel, mode="valid")
+                valid_offsets = np.flatnonzero(window_sum == length)
+                if valid_offsets.size > 0:
+                    best_offset = int(valid_offsets[0])
+                    candidate_start = (window_start + best_offset) % size
+                    indices = self.range_indices(candidate_start, length)
+                    self.owner[indices] = thread.thread_id
+                    return candidate_start
+            # Every random window missed — exhaustively (but cheaply, via a
             # vectorized sliding-window sum) find every toroidal starting
             # position whose next `length` cells are all free, and pick one
             # at random. This is deterministic in the sense that it only
@@ -225,6 +324,8 @@ class Environment:
             window_sum = np.convolve(extended, np.ones(length, dtype=np.int64), mode="valid")[:size]
             candidates = np.flatnonzero(window_sum == length)
             if candidates.size == 0:
+                if self._no_room_for_length is None or length < self._no_room_for_length:
+                    self._no_room_for_length = length
                 return None
             candidate_start = int(self.rng.choice(candidates))
             indices = self.range_indices(candidate_start, length)
@@ -324,6 +425,12 @@ class Environment:
                 continue
             self.last_executed_addresses.append(thread.absolute_ip())
             result = self.cpu.execute(thread, self)
+            if not result.died and self.config.senescence_rate > 0.0:
+                thread.energy -= self.config.senescence_rate
+                if thread.energy <= EXHAUSTION_THRESHOLD:
+                    thread.alive = False
+                    result.died = True
+                    result.note = "senescence exhausted thread"
             stats.record(result)
             if result.died:
                 self._reclaim(thread)
@@ -395,6 +502,10 @@ class Environment:
             self.lineage[indices] = -1
             self.strain[indices] = STRAIN_NONE
             self.threads.pop(thread.thread_id, None)
+            # Freeing memory can only lengthen (or create) free runs, never
+            # shorten them, so any previously-confirmed "no room" verdict is
+            # no longer trustworthy and must be re-earned by the next scan.
+            self._no_room_for_length = None
 
     # ------------------------------------------------------------------
     # Read-only views for analytics / visualization

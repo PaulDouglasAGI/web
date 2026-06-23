@@ -133,6 +133,66 @@ def test_request_allocation_returns_none_when_universe_is_full() -> None:
     assert env.request_allocation(thread) is None
 
 
+def test_request_allocation_random_probe_finds_a_distant_free_region() -> None:
+    # Regression guard for the bounded-random-probe optimization ahead of
+    # the exhaustive global scan: a free region far outside both the
+    # immediate-adjacent slots and the local search radius must still be
+    # found (not just "None returned because the cheap path gave up").
+    config = EnvironmentConfig(
+        width=256, height=256, probe_spawn_count=0, mutation_rate=0.0, local_search_radius=2
+    )
+    env = Environment(config=config, rng=np.random.default_rng(3))
+    thread = Thread(thread_id=1, genome_start=0, genome_length=4, energy=10.0)
+    env.threads[1] = thread
+    env.owner[:] = 99  # nothing nearby or adjacent is free
+    free_region_start, free_region_length = 40000, 2000
+    env.owner[free_region_start:free_region_start + free_region_length] = -1
+    start = env.request_allocation(thread)
+    assert start is not None
+    assert free_region_start <= start <= free_region_start + free_region_length - thread.genome_length
+    assert np.all(env.owner[start:start + thread.genome_length] == thread.thread_id)
+
+
+def test_request_allocation_caches_no_room_to_skip_repeated_full_scans() -> None:
+    # Once an exhaustive scan confirms no free run exists anywhere, a
+    # second call for the same (or longer) length must short-circuit
+    # straight to None rather than repeating the expensive search tiers.
+    env = make_env()
+    thread = Thread(thread_id=1, genome_start=0, genome_length=4, energy=10.0)
+    env.threads[1] = thread
+    env.owner[:] = 99  # not a single free byte anywhere
+    assert env.request_allocation(thread) is None
+    assert env._no_room_for_length == 4
+
+    # Quietly free a slot directly, bypassing _reclaim, so the only way
+    # this could be found is if the cache were (incorrectly) consulted —
+    # i.e. confirm the short-circuit is actually taken, not just harmless.
+    env.owner[10:14] = -1
+    assert env.request_allocation(thread) is None
+
+
+def test_request_allocation_no_room_cache_clears_after_reclaim() -> None:
+    config = EnvironmentConfig(
+        width=256, height=256, probe_spawn_count=0, mutation_rate=0.0, local_search_radius=2
+    )
+    env = Environment(config=config, rng=np.random.default_rng(3))
+    thread = Thread(thread_id=1, genome_start=0, genome_length=4, energy=10.0)
+    env.threads[1] = thread
+    env.owner[:] = 99  # not a single free byte anywhere
+    assert env.request_allocation(thread) is None
+    assert env._no_room_for_length == 4
+
+    dead = Thread(thread_id=2, genome_start=40000, genome_length=4, energy=0.0)
+    env.threads[2] = dead
+    env.owner[40000:40004] = 2
+    env._reclaim(dead)
+    assert env._no_room_for_length is None
+
+    start = env.request_allocation(thread)
+    assert start == 40000
+    assert np.all(env.owner[40000:40004] == thread.thread_id)
+
+
 def test_finalize_offspring_splits_energy_and_registers_child() -> None:
     env = make_env(offspring_energy_share=0.4)
     parent = Thread(thread_id=1, genome_start=0, genome_length=4, energy=100.0, lineage_id=7, strain="seed")
@@ -182,6 +242,39 @@ def test_step_reclaims_dead_threads_into_background_noise() -> None:
     assert np.all(env.owner[0:4] == -1)
     assert np.all(env.lineage[0:4] == -1)
     assert np.all(env.strain[0:4] == 0)
+
+
+def test_senescence_kills_a_thread_with_ample_resources_over_time() -> None:
+    # With senescence_rate set, energy harvested to exactly cover each
+    # instruction's cost (the normal steady-state case, since baseline
+    # resource is abundant) must still drain away and eventually kill the
+    # thread — the whole point of senescence is that it bypasses the
+    # harvest/cost balance that would otherwise let energy stay flat
+    # forever.
+    env = make_env(baseline_resource=1000.0, max_resource=1000.0, senescence_rate=1.0)
+    thread = Thread(thread_id=1, genome_start=0, genome_length=4, energy=2.0)
+    env.threads[1] = thread
+    env.owner[0:4] = 1
+    env.memory[0:4] = Opcode.NOP
+
+    stats = env.step()
+    assert thread.energy == pytest.approx(1.0)  # NOP cost (1.0) fully harvested, then senescence
+    assert stats.deaths == 0
+
+    stats = env.step()
+    assert stats.deaths == 1
+    assert 1 not in env.threads
+
+
+def test_senescence_rate_zero_leaves_energy_unaffected() -> None:
+    env = make_env(baseline_resource=1000.0, max_resource=1000.0, senescence_rate=0.0)
+    thread = Thread(thread_id=1, genome_start=0, genome_length=4, energy=2.5)
+    env.threads[1] = thread
+    env.owner[0:4] = 1
+    env.memory[0:4] = Opcode.NOP
+
+    env.step()
+    assert thread.energy == pytest.approx(2.5)  # NOP cost fully offset by harvest, no decay
 
 
 def test_population_by_strain_counts_only_living_threads() -> None:
