@@ -82,7 +82,7 @@ die within a few cycles.
 | `WRITE_HEAD` | `0x06` | 2.5 | Write active register to offspring buffer at write-head, advance write-head |
 | `SHARE` | `0x07` | 1.8 | Donate up to 10% of own energy (max 2.0) to the next address |
 
-Four ambiguities in the original ISA spec were resolved as explicit,
+Five ambiguities in the original ISA spec were resolved as explicit,
 documented design decisions (full rationale in `core/vm.py`'s module
 docstring):
 
@@ -90,7 +90,11 @@ docstring):
    exists, so the active register for `INC`/`DEC`/`READ_HEAD`/`WRITE_HEAD`
    is a pure function of the *instruction's own address*: even addresses
    touch `RegA`, odd addresses touch `RegB`. A genome's layout implicitly
-   chooses its own register usage.
+   chooses its own register usage — which means `READ_HEAD` and
+   `WRITE_HEAD` must sit at *matching* address parity (an even number of
+   bytes apart) or `WRITE_HEAD` will always read a register `READ_HEAD`
+   never populated, silently copying zeros forever. The Ancestor genome
+   below is laid out with this constraint in mind.
 2. **Head auto-advance.** `READ_HEAD`/`WRITE_HEAD` each advance their own
    head pointer after every access, satisfying the Ancestor genome's
    "INC pointers" step without a separate opcode.
@@ -103,6 +107,11 @@ docstring):
    `ILLEGAL_OPCODE_COST` (6.0) energy and let exhaustion — not an
    exception — be the actual cause of death, keeping noise-derived order
    scientifically honest: rare, and self-terminating when it fails.
+5. **ALLOC is re-entrant.** Calling `ALLOC` while a previous offspring
+   buffer is still being written is a cheap no-op (priced like `NOP`)
+   rather than an error or a clobber, so a genome can safely call `ALLOC`
+   on every pass through its own copy loop and keep reproducing for as
+   long as it lives, instead of getting exactly one offspring per lifetime.
 
 Every instruction harvests local ambient energy from the substrate
 *before* its cost is charged — see `core/environment.py` for where that
@@ -156,17 +165,22 @@ receives `seed_instances` evenly-spaced copies of the canonical 24-byte
 **Ancestor** genome:
 
 ```
-ALLOC, NOP, READ_HEAD, WRITE_HEAD, JMP, 0xFF, INC × 18
-       ^loop label                  ^template (complement 0x00 = the NOP above)
+NOP, ALLOC, READ_HEAD, INC, WRITE_HEAD, JMP, 0xFF, INC × 17
+^loop label                                ^template (complement 0x00 = the NOP above)
 ```
 
-`ALLOC` runs exactly once per organism, outside the loop, exactly as
-specified — every offspring is a full genome copy that starts its own
-execution at its own `ALLOC`, so the *lineage* keeps reproducing across
-generations even though no single individual ever allocates twice. The 18
-trailing bytes are `INC`, never `NOP`, specifically so they can't
-accidentally satisfy the loop's own jump template before genuinely
-wrapping around to the real label.
+`ALLOC` sits *inside* the loop — re-entrant `ALLOC` (design decision #5)
+means each pass either opens a fresh offspring buffer the moment the
+previous one finalizes, or quietly no-ops while one is still in progress,
+so a single organism keeps reproducing for as long as it lives rather than
+getting exactly one offspring in its entire lifetime. The single `INC`
+between `READ_HEAD` and `WRITE_HEAD` is a parity spacer, not filler: it
+keeps both instructions' addresses at matching parity (design decision #1)
+so `WRITE_HEAD` always writes out the very byte `READ_HEAD` just read,
+rather than an always-zero register it never touched. The 17 trailing
+bytes are `INC`, never `NOP`, specifically so they can't accidentally
+satisfy the loop's own jump template before genuinely wrapping around to
+the real label.
 
 ### `analytics/metrics.py` — phylogenetics & information theory
 
@@ -240,8 +254,8 @@ passed via `--config`):
 | Key | Default | Meaning |
 |---|---|---|
 | `width`, `height` | 256, 256 | Lattice dimensions (toroidal) |
-| `baseline_resource` | 6.0 | Steady-state energy density per cell |
-| `max_resource` | 40.0 | Cap on harvestable energy per cell |
+| `baseline_resource` | 18.0 | Steady-state energy density per cell |
+| `max_resource` | 120.0 | Cap on harvestable energy per cell |
 | `diffusion_rate` | 0.15 | Per-cycle blend toward 4-neighbor average |
 | `regen_rate` | 0.02 | Per-cycle pull back toward `baseline_resource` |
 | `initial_energy` | 400.0 | Starting energy for a freshly-spawned organism |

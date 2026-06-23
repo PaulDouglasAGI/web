@@ -7,8 +7,8 @@
 # --- Environment physics --------------------------------------------------
 width: 256
 height: 256
-baseline_resource: 6.0
-max_resource: 40.0
+baseline_resource: 18.0
+max_resource: 120.0
 diffusion_rate: 0.15
 regen_rate: 0.02
 initial_energy: 400.0
