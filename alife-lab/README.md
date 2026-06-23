@@ -66,7 +66,7 @@ the real world's physics.
 
 ### `core/vm.py` — the CPU substrate
 
-An 8-bit, 8-instruction closed ISA. Byte values `0x08`-`0xFF` are not
+An 8-bit, 10-instruction closed ISA. Byte values `0x0A`-`0xFF` are not
 instructions; landing on one is an *illegal opcode*, not a crash — it
 costs steep energy and is exactly how noise-derived "organisms" usually
 die within a few cycles.
@@ -81,8 +81,10 @@ die within a few cycles.
 | `READ_HEAD` | `0x05` | 2.0 | Read genome byte at read-head into active register, advance read-head |
 | `WRITE_HEAD` | `0x06` | 2.5 | Write active register to offspring buffer at write-head, advance write-head |
 | `SHARE` | `0x07` | 1.8 | Donate up to 10% of own energy (max 2.0) to the next address |
+| `SENSE_RESOURCE` | `0x08` | 0.0 | Read local resource density (quantized 0-255) into the active register — a free, non-mutating probe |
+| `IO_OUT` | `0x09` | 1.3 | Output the active register; reward a newly-matched Boolean task on the last two sensed readings (see below) |
 
-Five ambiguities in the original ISA spec were resolved as explicit,
+Six ambiguities in the original ISA spec were resolved as explicit,
 documented design decisions (full rationale in `core/vm.py`'s module
 docstring):
 
@@ -112,6 +114,16 @@ docstring):
    rather than an error or a clobber, so a genome can safely call `ALLOC`
    on every pass through its own copy loop and keep reproducing for as
    long as it lives, instead of getting exactly one offspring per lifetime.
+6. **Sensing/output is split into mechanics vs. reward.** `SENSE_RESOURCE`
+   records each reading onto a 2-entry rolling window
+   (`Thread.recent_inputs`); `IO_OUT` checks its output against a small
+   fixed set of Boolean functions of that window (`core/vm.py`'s `TASKS`:
+   `not`, `and`, `nand`) and reports any newly-matched task name, but it is
+   `core/environment.py`'s `_award_task_bonus` that decides what a match is
+   *worth* — the same vm.py-decides-what / environment.py-decides-how-much
+   split the energy economy already uses elsewhere. Each task pays out at
+   most once per thread (`Thread.tasks_completed`), so this rewards
+   *discovering* a computation, not repeating one.
 
 Every instruction harvests local ambient energy from the substrate
 *before* its cost is charged — see `core/environment.py` for where that
@@ -168,6 +180,13 @@ genomes themselves.
   energy amount from every living thread each cycle, independent of
   whatever instruction it executed, so energy balance is never a stable
   equilibrium and territory keeps recycling indefinitely.
+- **Task bonuses.** A matching `IO_OUT` (design decision #6 above) pays
+  `task_bonus_energy` into the resource field at the rewarded thread's own
+  current address, via the same negative-amount `harvest_energy` deposit
+  convention `SHARE` already uses — so the reward stays inside the single
+  thermodynamic field model instead of becoming a second, parallel
+  currency, and the thread (or a neighbor) has to harvest it the ordinary
+  way on a later instruction.
 - **Deallocation.** A thread that dies (energy exhaustion or terminal
   illegal-opcode cost) has its claimed memory overwritten with fresh
   random bytes and returned to the unclaimed pool — exactly like raw
@@ -283,6 +302,7 @@ passed via `--config`):
 | `probe_genome_length` | 24 | Genome length interpreted by each probe |
 | `local_search_radius` | 12 | Genome-lengths searched on each side of a parent for a free slot before falling back to a random one anywhere |
 | `senescence_rate` | 0.0001 | Flat per-cycle energy decay applied to every living thread, independent of instruction cost, guaranteeing eventual death (and territory turnover) even at perfect energy balance |
+| `task_bonus_energy` | 15.0 | Energy deposited into the resource field on a newly-matched `IO_OUT` Boolean task (paid once per task per thread) |
 | `noise_fraction` | 0.5 | Fraction of the lattice that is the Pure Noise Sector |
 | `seed_instances` | 24 | Number of Ancestor copies seeded into the Seeded Sector |
 | `random_seed` | 1729 | RNG seed, for reproducible runs |

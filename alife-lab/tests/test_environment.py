@@ -277,6 +277,49 @@ def test_senescence_rate_zero_leaves_energy_unaffected() -> None:
     assert thread.energy == pytest.approx(2.5)  # NOP cost fully offset by harvest, no decay
 
 
+def test_task_bonus_deposits_resource_at_threads_address_on_match() -> None:
+    env = make_env(baseline_resource=0.0, max_resource=1000.0, task_bonus_energy=10.0)
+    thread = Thread(thread_id=1, genome_start=0, genome_length=1, energy=10.0)
+    thread.recent_inputs = [0x0F, 0xF0]
+    thread.reg_a = 0x0F  # IO_OUT at address 0 (even -> reg_a) outputs NOT(0xF0) & 0xFF
+    env.threads[1] = thread
+    env.owner[0] = 1
+    env.memory[0] = Opcode.IO_OUT
+
+    stats = env.step()
+    assert "not" in thread.tasks_completed
+    assert env.resource[0] == pytest.approx(10.0)
+    assert stats.deaths == 0
+
+
+def test_task_bonus_is_not_paid_twice_for_an_already_completed_task() -> None:
+    env = make_env(baseline_resource=0.0, max_resource=1000.0, task_bonus_energy=10.0)
+    thread = Thread(thread_id=1, genome_start=0, genome_length=1, energy=10.0)
+    thread.recent_inputs = [0x0F, 0xF0]
+    thread.reg_a = 0x0F
+    thread.tasks_completed = {"not"}  # already rewarded in a previous cycle
+    env.threads[1] = thread
+    env.owner[0] = 1
+    env.memory[0] = Opcode.IO_OUT
+
+    env.step()
+    assert env.resource[0] == pytest.approx(0.0)  # no second payout
+
+
+def test_task_bonus_energy_zero_pays_nothing() -> None:
+    env = make_env(baseline_resource=0.0, max_resource=1000.0, task_bonus_energy=0.0)
+    thread = Thread(thread_id=1, genome_start=0, genome_length=1, energy=10.0)
+    thread.recent_inputs = [0x0F, 0xF0]
+    thread.reg_a = 0x0F
+    env.threads[1] = thread
+    env.owner[0] = 1
+    env.memory[0] = Opcode.IO_OUT
+
+    env.step()
+    assert "not" in thread.tasks_completed  # task semantics still recorded
+    assert env.resource[0] == pytest.approx(0.0)  # but no payout when disabled
+
+
 def test_population_by_strain_counts_only_living_threads() -> None:
     env = make_env()
     env.threads = {

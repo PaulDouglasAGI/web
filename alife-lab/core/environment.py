@@ -85,6 +85,15 @@ Design notes
   cycle for its neighbors. Applied in :meth:`Environment.step`, not
   :mod:`core.vm`, to keep it a property of the environment's physics
   rather than the CPU substrate.
+* **Task bonuses.** ``core.vm`` decides *whether* an IO_OUT matched a task
+  (substrate-agnostic CPU semantics) but deliberately knows nothing about
+  energy rewards; :meth:`Environment._award_task_bonus` decides *how
+  much*. The payout reuses SHARE's existing negative-``harvest_energy``
+  deposit convention — it lands in the resource field at the rewarded
+  thread's own address rather than being added to its energy balance
+  directly — so task rewards stay inside the same single thermodynamic
+  field every other energy transaction in the lab goes through, instead
+  of becoming a second, harvest-bypassing currency.
 """
 
 from __future__ import annotations
@@ -134,6 +143,7 @@ class EnvironmentConfig:
     probe_genome_length: int = 24
     local_search_radius: int = 12
     senescence_rate: float = 0.0
+    task_bonus_energy: float = 0.0
 
     @property
     def size(self) -> int:
@@ -343,6 +353,13 @@ class Environment:
         self.resource[idx] = min(self.config.max_resource, float(self.resource[idx]) + deposit)
         return 0.0
 
+    def sense_resource(self, address: int) -> int:
+        idx = address % self.resource.size
+        if self.config.max_resource <= 0:
+            return 0
+        density = float(self.resource[idx]) / self.config.max_resource
+        return int(np.clip(density, 0.0, 1.0) * 255)
+
     def finalize_offspring(self, parent: Thread) -> None:
         if parent.offspring_start is None:
             raise EnergyExhaustionError(parent.thread_id, parent.energy)
@@ -423,8 +440,11 @@ class Environment:
             thread = self.threads.get(thread_id)
             if thread is None or not thread.alive:
                 continue
-            self.last_executed_addresses.append(thread.absolute_ip())
+            address = thread.absolute_ip()
+            self.last_executed_addresses.append(address)
             result = self.cpu.execute(thread, self)
+            if result.tasks_completed:
+                self._award_task_bonus(address, len(result.tasks_completed))
             if not result.died and self.config.senescence_rate > 0.0:
                 thread.energy -= self.config.senescence_rate
                 if thread.energy <= EXHAUSTION_THRESHOLD:
@@ -439,6 +459,22 @@ class Environment:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    def _award_task_bonus(self, address: int, task_count: int) -> None:
+        """Pay out :data:`EnvironmentConfig.task_bonus_energy` once per
+        newly-completed task, via the same negative-``harvest_energy``
+        deposit convention :meth:`CPUCore.execute`'s SHARE handling already
+        uses: the bonus lands in the resource field at the rewarded
+        thread's own current address rather than being credited to its
+        energy balance directly, so it stays inside the substrate's single
+        thermodynamic-field model instead of becoming a second, parallel
+        currency. The thread (or any neighbor) then harvests it the
+        ordinary way on a subsequent instruction.
+        """
+        bonus = self.config.task_bonus_energy * task_count
+        if bonus <= 0.0:
+            return
+        self.harvest_energy(address, -bonus)
 
     def range_indices(self, start: int, length: int) -> np.ndarray:
         size = self.memory.size

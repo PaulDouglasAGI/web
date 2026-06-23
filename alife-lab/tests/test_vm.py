@@ -32,13 +32,14 @@ class FakeSubstrate:
     opcode's semantics without pulling in core/environment.py.
     """
 
-    def __init__(self, memory: bytes, alloc_at: Optional[int] = None) -> None:
+    def __init__(self, memory: bytes, alloc_at: Optional[int] = None, resource_byte: int = 0) -> None:
         self.memory: bytearray = bytearray(memory)
         self._alloc_at = alloc_at
         self.finalized: List[int] = []
         self.write_log: List[Tuple[int, int]] = []
         self.block_writes_to: set[int] = set()
         self.allocation_requests: int = 0
+        self.resource_byte = resource_byte
 
     def read_byte(self, address: int) -> int:
         return self.memory[address % len(self.memory)]
@@ -62,6 +63,9 @@ class FakeSubstrate:
 
     def finalize_offspring(self, parent: Thread) -> None:
         self.finalized.append(parent.thread_id)
+
+    def sense_resource(self, address: int) -> int:
+        return self.resource_byte
 
 
 def make_thread(genome_start: int, genome_length: int, **overrides) -> Thread:
@@ -243,3 +247,58 @@ def test_absolute_write_head_requires_claimed_buffer() -> None:
     thread = make_thread(0, 4)
     with pytest.raises(VMError):
         thread.absolute_write_head()
+
+
+def test_sense_resource_loads_active_register_at_no_energy_cost() -> None:
+    substrate = FakeSubstrate(bytes([Opcode.SENSE_RESOURCE]), resource_byte=0x77)
+    thread = make_thread(0, 1, energy=100.0)
+    CPUCore().execute(thread, substrate)
+    assert thread.reg_a == 0x77  # address 0 is even -> reg_a
+    assert thread.recent_inputs == [0x77]
+    assert thread.energy == pytest.approx(100.0)  # a pure probe: zero cost
+
+
+def test_sense_resource_keeps_only_the_last_two_readings() -> None:
+    substrate = FakeSubstrate(bytes([Opcode.SENSE_RESOURCE]))
+    thread = make_thread(0, 1)
+    for reading in (0x10, 0x20, 0x30):
+        substrate.resource_byte = reading
+        CPUCore().execute(thread, substrate)
+    assert thread.recent_inputs == [0x20, 0x30]
+
+
+def test_io_out_rewards_a_matching_task_exactly_once() -> None:
+    # SENSE_RESOURCE at offset 0 (even address -> reg_a) loads 0x0F, which
+    # happens to equal NOT(0xF0) & 0xFF. SENSE_RESOURCE at offset 1 (odd
+    # address -> reg_b) then loads 0xF0 as the "newer" reading, leaving
+    # reg_a untouched. IO_OUT at offset 2 (even address -> reg_a) outputs
+    # that untouched 0x0F, which should satisfy the "not" task against
+    # the two sensed readings (older=0x0F, newer=0xF0).
+    genome = bytes([Opcode.SENSE_RESOURCE, Opcode.SENSE_RESOURCE, Opcode.IO_OUT])
+    substrate = FakeSubstrate(genome)
+    thread = make_thread(0, len(genome))
+
+    substrate.resource_byte = 0x0F
+    CPUCore().execute(thread, substrate)  # ip 0 -> reg_a=0x0F, recent_inputs=[0x0F]
+    substrate.resource_byte = 0xF0
+    CPUCore().execute(thread, substrate)  # ip 1 -> reg_b=0xF0, recent_inputs=[0x0F, 0xF0]
+    assert thread.reg_a == 0x0F
+
+    result = CPUCore().execute(thread, substrate)  # ip 2: IO_OUT
+    assert "not" in result.tasks_completed
+    assert "not" in thread.tasks_completed
+
+    # Re-running IO_OUT with the same matching output must not reward the
+    # same task a second time.
+    thread.ip = 2
+    result_again = CPUCore().execute(thread, substrate)
+    assert result_again.tasks_completed == []
+
+
+def test_io_out_with_fewer_than_two_sensed_inputs_completes_no_tasks() -> None:
+    genome = bytes([Opcode.IO_OUT])
+    substrate = FakeSubstrate(genome)
+    thread = make_thread(0, 1)
+    result = CPUCore().execute(thread, substrate)
+    assert result.tasks_completed == []
+    assert thread.tasks_completed == set()

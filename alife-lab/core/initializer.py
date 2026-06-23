@@ -77,16 +77,26 @@ def build_ancestor_genome() -> bytes:
 
 def validate_genome(genome: bytes, data_offsets: frozenset[int] = frozenset()) -> None:
     """Raise :class:`IllegalOpcodeError` if a hand-crafted genome contains a
-    byte outside the closed 0x00-0x07 ISA, other than at ``data_offsets``
-    (positions known to hold instruction operands rather than opcodes —
-    e.g. a JMP's template byte). This is an authoring-time error boundary;
-    it has nothing to do with the runtime "illegal opcode" event that
-    noise-derived organisms routinely (and correctly) trigger.
+    byte outside the closed ISA (whatever :class:`~core.vm.Opcode` currently
+    defines), other than at ``data_offsets`` (positions known to hold
+    instruction operands rather than opcodes — e.g. a JMP's template byte).
+    This is an authoring-time error boundary; it has nothing to do with the
+    runtime "illegal opcode" event that noise-derived organisms routinely
+    (and correctly) trigger.
+
+    Checked by membership in :class:`Opcode` itself, the same test
+    ``core.vm.CPUCore.execute`` uses at runtime, rather than a hardcoded
+    upper-bound byte value — so this stays correct automatically whenever
+    the ISA grows, instead of silently under-validating against a bound
+    that was only ever accurate for whatever the ISA happened to contain
+    when it was written.
     """
     for offset, byte_value in enumerate(genome):
         if offset in data_offsets:
             continue
-        if byte_value > Opcode.SHARE:
+        try:
+            Opcode(byte_value)
+        except ValueError:
             raise IllegalOpcodeError(offset, byte_value)
 
 

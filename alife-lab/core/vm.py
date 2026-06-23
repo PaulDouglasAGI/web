@@ -18,8 +18,9 @@ Design decisions made to resolve ambiguity in the ISA specification
 1. **Active register selection.** The ISA exposes two general-purpose
    registers (RegA, RegB) but only one "active register" notion for
    INC/DEC/READ_HEAD/WRITE_HEAD, with no dedicated register-select opcode.
-   To keep the 8-opcode ISA closed (no 9th instruction invented), the
-   active register is a pure function of the instruction's own address:
+   To keep the original 8-opcode ISA closed (no extra register-select
+   instruction invented), the active register is a pure function of the
+   instruction's own address:
    even addresses operate on RegA, odd addresses operate on RegB
    (:func:`Thread.active_register_name`). This is deterministic,
    reproducible, and lets a genome's *layout* implicitly choose which
@@ -44,15 +45,18 @@ Design decisions made to resolve ambiguity in the ISA specification
    template byte of ``0xFF`` (the complement of ``0x00``) finds the
    nearest NOP "landing pad". If no complement is found, the jump is a
    no-op other than its energy cost.
-4. **Illegal opcodes.** Only byte values ``0x00``-``0x07`` are valid
-   instructions. A genome (or noise region) byte outside that range is an
-   illegal opcode: it costs :data:`ILLEGAL_OPCODE_COST` energy and raises
-   no exception that halts the simulation — the calling environment is
-   expected to catch :class:`IllegalOpcodeError`, charge the thread, and
-   let energy exhaustion (not a hard crash) be the cause of death. This
-   keeps the 248/256 non-instruction byte values scientifically honest:
-   spontaneous order arising from raw noise is *possible* but, as in
-   reality, vanishingly rare and self-terminating.
+4. **Illegal opcodes.** Only byte values defined as :class:`Opcode` members
+   are valid instructions — originally ``0x00``-``0x07``, now also
+   ``0x08``-``0x09`` (:data:`Opcode.SENSE_RESOURCE`/:data:`Opcode.IO_OUT`,
+   added for richer evolution; see design decision #6). A genome (or noise
+   region) byte outside the defined set is an illegal opcode: it costs
+   :data:`ILLEGAL_OPCODE_COST` energy and raises no exception that halts
+   the simulation — the calling environment is expected to catch
+   :class:`IllegalOpcodeError`, charge the thread, and let energy
+   exhaustion (not a hard crash) be the cause of death. This keeps the
+   246/256 non-instruction byte values (still 96% of the alphabet)
+   scientifically honest: spontaneous order arising from raw noise is
+   *possible* but, as in reality, vanishingly rare and self-terminating.
 5. **ALLOC is re-entrant, not one-shot.** Calling ALLOC while a previous
    offspring buffer is still being written is a no-op (the existing
    buffer is left alone) rather than clobbering it or erroring, and is
@@ -63,18 +67,36 @@ Design decisions made to resolve ambiguity in the ISA specification
    long as it lives — real colony growth from a single persistent parent,
    rather than each organism only ever getting one offspring in its entire
    life.
+6. **Sensing and tasks give organisms something to act on besides raw
+   copy speed.** :data:`Opcode.SENSE_RESOURCE` reads a quantized local
+   resource reading into the active register at no energy cost (a pure
+   probe — sensing the world shouldn't itself be metabolically punishing)
+   and records it on :attr:`Thread.recent_inputs`, a 2-entry rolling
+   window. :data:`Opcode.IO_OUT` "outputs" the active register's current
+   value and checks it against :data:`TASKS`, a tiny fixed set of
+   Avida-style Boolean logic functions of the two most recently sensed
+   bytes; the first time a thread's output happens to match a given
+   task's expected value, that task is recorded on
+   :attr:`Thread.tasks_completed` (each task pays out at most once per
+   thread) and reported via :attr:`ExecutionResult.tasks_completed` for
+   the environment layer to reward — see ``core/environment.py``'s
+   task-bonus design note. Task *semantics* (what counts as a match) live
+   here in the substrate-agnostic CPU; task *rewards* (how much energy,
+   and how it's paid out) are an environment-physics concern and
+   deliberately live one layer up, mirroring the existing mutation-lives-
+   in-the-environment split.
 """
 
 from __future__ import annotations
 
 import enum
 from dataclasses import dataclass, field
-from typing import Optional, Protocol, runtime_checkable
+from typing import Callable, Optional, Protocol, runtime_checkable
 
 
 class Opcode(enum.IntEnum):
-    """The complete, closed 8-instruction ISA. Values outside this range
-    (0x08-0xFF) are not instructions and are illegal opcodes by design."""
+    """The complete, closed 10-instruction ISA. Values outside this defined
+    set (0x0A-0xFF) are not instructions and are illegal opcodes by design."""
 
     NOP = 0x00
     INC = 0x01
@@ -84,6 +106,8 @@ class Opcode(enum.IntEnum):
     READ_HEAD = 0x05
     WRITE_HEAD = 0x06
     SHARE = 0x07
+    SENSE_RESOURCE = 0x08
+    IO_OUT = 0x09
 
 
 #: Thermodynamic energy cost charged for executing each opcode. ALLOC is the
@@ -99,6 +123,23 @@ INSTRUCTION_COSTS: dict[Opcode, float] = {
     Opcode.READ_HEAD: 2.0,
     Opcode.WRITE_HEAD: 2.5,
     Opcode.SHARE: 1.8,
+    # SENSE_RESOURCE is a pure probe: sensing the world shouldn't itself be
+    # metabolically punishing, so it is the only opcode priced at zero.
+    Opcode.SENSE_RESOURCE: 0.0,
+    Opcode.IO_OUT: 1.3,
+}
+
+#: A tiny fixed set of Avida-style Boolean logic tasks, each a pure
+#: function of the two most recently SENSE_RESOURCE'd bytes (older, newer).
+#: IO_OUT checks its output against every task a thread hasn't already
+#: completed; a match is what the environment layer rewards. Kept
+#: deliberately small (matching classic Avida's easiest tasks) since the
+#: point is to give evolution *something* to discover, not to hand-design
+#: a curriculum.
+TASKS: dict[str, Callable[[int, int], int]] = {
+    "not": lambda older, newer: (~newer) & 0xFF,
+    "and": lambda older, newer: older & newer,
+    "nand": lambda older, newer: (~(older & newer)) & 0xFF,
 }
 
 #: Energy charged for landing on a byte that is not a valid opcode.
@@ -177,6 +218,12 @@ class Substrate(Protocol):
         Returns the amount actually harvested (may be less than requested).
         """
 
+    def sense_resource(self, address: int) -> int:
+        """Return a 0-255 quantized reading of local resource density at
+        ``address``, for SENSE_RESOURCE. A pure probe: must not mutate
+        any state (unlike :meth:`harvest_energy`, which is destructive).
+        """
+
     def finalize_offspring(self, parent: "Thread") -> None:
         """Called once a parent's offspring buffer has been fully written,
         to spawn the child as a new living thread in the substrate.
@@ -211,6 +258,12 @@ class Thread:
     offspring_progress: int = 0
     age_cycles: int = 0
     alive: bool = True
+    #: rolling window of the last 2 SENSE_RESOURCE readings (older, newer),
+    #: the raw material IO_OUT checks against TASKS.
+    recent_inputs: list[int] = field(default_factory=list)
+    #: names of TASKS this thread has already been rewarded for; each task
+    #: pays out at most once per thread (see IO_OUT's handling below).
+    tasks_completed: set[str] = field(default_factory=set)
 
     def absolute_ip(self) -> int:
         """The IP expressed as an absolute address in global memory."""
@@ -257,6 +310,11 @@ class ExecutionResult:
     jumped: bool = False
     died: bool = False
     note: str = ""
+    #: names of TASKS newly completed by this instruction (usually empty;
+    #: only ever populated by an IO_OUT that matched something new). The
+    #: environment layer is responsible for turning this into an energy
+    #: reward — see core/environment.py's task-bonus design note.
+    tasks_completed: list[str] = field(default_factory=list)
 
 
 class CPUCore:
@@ -370,6 +428,23 @@ class CPUCore:
             neighbor_address = address + 1
             thread.energy -= share_amount
             substrate.harvest_energy(neighbor_address, -share_amount)
+
+        elif opcode is Opcode.SENSE_RESOURCE:
+            sensed = substrate.sense_resource(address) & 0xFF
+            thread.set_active_register(address, sensed)
+            thread.recent_inputs.append(sensed)
+            del thread.recent_inputs[:-2]
+
+        elif opcode is Opcode.IO_OUT:
+            output = thread.get_active_register(address)
+            if len(thread.recent_inputs) == 2:
+                older, newer = thread.recent_inputs
+                for task_name, task_fn in TASKS.items():
+                    if task_name in thread.tasks_completed:
+                        continue
+                    if task_fn(older, newer) == output:
+                        thread.tasks_completed.add(task_name)
+                        result.tasks_completed.append(task_name)
 
         if advance_ip:
             thread.ip = (thread.ip + 1) % thread.genome_length

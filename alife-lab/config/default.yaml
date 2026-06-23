@@ -18,6 +18,7 @@ probe_spawn_count: 4
 probe_genome_length: 24
 local_search_radius: 12
 senescence_rate: 0.0001
+task_bonus_energy: 15.0
 
 # --- Primordial matrix seeding ---------------------------------------------
 noise_fraction: 0.5
