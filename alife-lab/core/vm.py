@@ -53,6 +53,16 @@ Design decisions made to resolve ambiguity in the ISA specification
    keeps the 248/256 non-instruction byte values scientifically honest:
    spontaneous order arising from raw noise is *possible* but, as in
    reality, vanishingly rare and self-terminating.
+5. **ALLOC is re-entrant, not one-shot.** Calling ALLOC while a previous
+   offspring buffer is still being written is a no-op (the existing
+   buffer is left alone) rather than clobbering it or erroring, and is
+   priced at :data:`ALLOC_RETRY_COST` instead of the full allocation cost.
+   This lets a genome safely place ALLOC *inside* its own copy loop (call
+   it every iteration) so the organism opens a fresh offspring buffer
+   again the moment its current one finalizes, and keeps doing so for as
+   long as it lives — real colony growth from a single persistent parent,
+   rather than each organism only ever getting one offspring in its entire
+   life.
 """
 
 from __future__ import annotations
@@ -96,6 +106,15 @@ INSTRUCTION_COSTS: dict[Opcode, float] = {
 #: noise burns out within a handful of cycles, while a well-formed genome
 #: (which never contains illegal bytes by construction) never pays it.
 ILLEGAL_OPCODE_COST: float = 6.0
+
+#: Energy charged for an ALLOC executed while a previous offspring buffer
+#: is still being written. Re-running ALLOC every loop iteration (so a
+#: genome can sit it inside its own copy loop and keep reproducing for as
+#: long as it lives) must not re-pay the full allocation cost on every one
+#: of those iterations — only the iteration that actually opens a new
+#: buffer should. This is priced the same as NOP, since that's all an
+#: in-progress-buffer ALLOC actually does.
+ALLOC_RETRY_COST: float = INSTRUCTION_COSTS[Opcode.NOP]
 
 #: A thread whose energy balance falls to or below this value is
 #: considered metabolically exhausted and must be deallocated.
@@ -274,7 +293,8 @@ class CPUCore:
                 )
             return ExecutionResult(thread.thread_id, None, ILLEGAL_OPCODE_COST, illegal=True)
 
-        cost = INSTRUCTION_COSTS[opcode]
+        alloc_already_in_progress = opcode is Opcode.ALLOC and thread.offspring_start is not None
+        cost = ALLOC_RETRY_COST if alloc_already_in_progress else INSTRUCTION_COSTS[opcode]
         harvested = substrate.harvest_energy(address, cost)
         thread.energy += harvested
         thread.energy -= cost
@@ -314,12 +334,15 @@ class CPUCore:
                 advance_ip = False
 
         elif opcode is Opcode.ALLOC:
-            start = substrate.request_allocation(thread)
-            if start is not None:
-                thread.offspring_start = start
-                thread.offspring_length = thread.genome_length
-                thread.offspring_progress = 0
-                thread.write_head = 0
+            if not alloc_already_in_progress:
+                start = substrate.request_allocation(thread)
+                if start is not None:
+                    thread.offspring_start = start
+                    thread.offspring_length = thread.genome_length
+                    thread.offspring_progress = 0
+                    thread.write_head = 0
+            # else: a buffer is already open from a previous pass through
+            # this same ALLOC — this pass is a no-op, see ALLOC_RETRY_COST.
 
         elif opcode is Opcode.READ_HEAD:
             byte_value = substrate.read_byte(thread.absolute_read_head())

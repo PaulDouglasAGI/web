@@ -124,6 +124,14 @@ genomes themselves.
   happens under a single lock, so the (currently single-threaded)
   round-robin scheduler can later move onto a real thread/process pool
   without touching this module.
+- **Allocation locality.** `request_allocation` tries the two cells
+  immediately touching the parent's own genome first, then a bounded
+  neighborhood out to `local_search_radius` genome-lengths on each side
+  (nearest free slot wins), and only falls back to a uniformly random free
+  position anywhere in the universe if nothing is free nearby. Without the
+  middle tier, a colony gets exactly one generation of adjacent growth
+  before every later offspring is scattered across the map — starving
+  every lineage of the chance to ever hold contiguous territory.
 - **Copy-fidelity mutation.** Every committed write has an independent
   chance (`mutation_rate`) of landing as a random byte instead — the sole
   source of genetic novelty in the lab.
@@ -241,6 +249,7 @@ passed via `--config`):
 | `mutation_rate` | 0.0025 | Per-write chance of corruption to a random byte |
 | `probe_spawn_count` | 4 | Spontaneous-abiogenesis probe threads opened per cycle |
 | `probe_genome_length` | 24 | Genome length interpreted by each probe |
+| `local_search_radius` | 12 | Genome-lengths searched on each side of a parent for a free slot before falling back to a random one anywhere |
 | `noise_fraction` | 0.5 | Fraction of the lattice that is the Pure Noise Sector |
 | `seed_instances` | 24 | Number of Ancestor copies seeded into the Seeded Sector |
 | `random_seed` | 1729 | RNG seed, for reproducible runs |

@@ -38,6 +38,7 @@ class FakeSubstrate:
         self.finalized: List[int] = []
         self.write_log: List[Tuple[int, int]] = []
         self.block_writes_to: set[int] = set()
+        self.allocation_requests: int = 0
 
     def read_byte(self, address: int) -> int:
         return self.memory[address % len(self.memory)]
@@ -50,6 +51,7 @@ class FakeSubstrate:
         return True
 
     def request_allocation(self, thread: Thread) -> Optional[int]:
+        self.allocation_requests += 1
         return self._alloc_at
 
     def harvest_energy(self, address: int, amount: float) -> float:
@@ -128,6 +130,26 @@ def test_alloc_failure_leaves_thread_without_offspring() -> None:
     thread = make_thread(0, 1)
     CPUCore().execute(thread, substrate)
     assert thread.offspring_start is None
+
+
+def test_alloc_while_offspring_in_progress_is_a_cheap_no_op() -> None:
+    from core.vm import ALLOC_RETRY_COST, INSTRUCTION_COSTS
+
+    substrate = FakeSubstrate(bytes([Opcode.ALLOC]), alloc_at=100)
+    thread = make_thread(0, 1, offspring_start=50, offspring_length=4, offspring_progress=1)
+    CPUCore().execute(thread, substrate)
+    assert substrate.allocation_requests == 0  # never re-requested
+    assert thread.offspring_start == 50  # the in-progress buffer is untouched
+    assert thread.energy == pytest.approx(100.0 - ALLOC_RETRY_COST)
+    assert ALLOC_RETRY_COST < INSTRUCTION_COSTS[Opcode.ALLOC]
+
+
+def test_alloc_opens_a_new_buffer_once_the_previous_one_is_clear() -> None:
+    substrate = FakeSubstrate(bytes([Opcode.ALLOC]), alloc_at=100)
+    thread = make_thread(0, 1, offspring_start=None)  # previous offspring already finalized
+    CPUCore().execute(thread, substrate)
+    assert substrate.allocation_requests == 1
+    assert thread.offspring_start == 100
 
 
 def test_read_head_loads_register_and_advances() -> None:

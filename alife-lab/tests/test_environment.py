@@ -97,6 +97,22 @@ def test_request_allocation_prefers_adjacent_free_space() -> None:
     assert np.all(env.owner[4:8] == 1)
 
 
+def test_request_allocation_prefers_nearby_slot_over_far_fallback() -> None:
+    config = EnvironmentConfig(
+        width=32, height=32, probe_spawn_count=0, mutation_rate=0.0, local_search_radius=2
+    )
+    env = Environment(config=config, rng=np.random.default_rng(42))
+    thread = Thread(thread_id=1, genome_start=500, genome_length=4, energy=10.0)
+    env.threads[1] = thread
+    env.owner[:] = 99  # occupy the entire universe by default
+    env.owner[496:508] = 1  # the organism's own genome plus both adjacent slots
+    env.owner[492:496] = -1  # one free slot within the local search radius
+    env.owner[600:604] = -1  # a free slot far outside the local search radius
+    start = env.request_allocation(thread)
+    assert start == 492  # the nearby slot wins over the distant one
+    assert np.all(env.owner[492:496] == 1)
+
+
 def test_request_allocation_falls_back_to_random_free_region() -> None:
     env = make_env()
     thread = Thread(thread_id=1, genome_start=0, genome_length=4, energy=10.0)
@@ -186,13 +202,26 @@ def test_population_by_strain_counts_only_living_threads() -> None:
 def test_build_ancestor_genome_has_correct_length_and_structure() -> None:
     genome = build_ancestor_genome()
     assert len(genome) == ANCESTOR_GENOME_LENGTH
-    assert genome[0] == Opcode.ALLOC
-    assert genome[1] == Opcode.NOP
+    assert genome[0] == Opcode.NOP
+    assert genome[1] == Opcode.ALLOC
     assert genome[2] == Opcode.READ_HEAD
-    assert genome[3] == Opcode.WRITE_HEAD
-    assert genome[4] == Opcode.JMP
-    assert genome[5] == 0xFF
-    assert all(b == Opcode.INC for b in genome[6:])
+    assert genome[3] == Opcode.INC  # parity spacer
+    assert genome[4] == Opcode.WRITE_HEAD
+    assert genome[5] == Opcode.JMP
+    assert genome[6] == 0xFF
+    assert all(b == Opcode.INC for b in genome[7:])
+
+
+def test_ancestor_genome_keeps_read_and_write_head_at_matching_address_parity() -> None:
+    # The bug this guards against: if READ_HEAD and WRITE_HEAD ever end up at
+    # opposite address parity, WRITE_HEAD always reads a register READ_HEAD
+    # never wrote to, so every byte copied into an offspring is silently 0
+    # regardless of the parent's actual genome — see core/vm.py design
+    # decision #1 and core/initializer.py's "Ancestor genome" docstring.
+    genome = build_ancestor_genome()
+    read_head_offset = genome.index(Opcode.READ_HEAD)
+    write_head_offset = genome.index(Opcode.WRITE_HEAD)
+    assert read_head_offset % 2 == write_head_offset % 2
 
 
 def test_validate_genome_raises_on_illegal_byte() -> None:
@@ -269,3 +298,67 @@ def test_single_ancestor_replicates_within_a_bounded_number_of_cycles() -> None:
 
     assert total_replications > 0
     assert len(env.threads) >= 2
+
+
+def test_replicated_offspring_genome_faithfully_copies_the_parent() -> None:
+    # Regression guard for a previously latent bug: WRITE_HEAD must read the
+    # very register READ_HEAD last populated, or every copied byte is
+    # silently 0 regardless of the parent's real genome (see
+    # core/initializer.py's "Ancestor genome" docstring).
+    config = EnvironmentConfig(
+        width=32,
+        height=32,
+        probe_spawn_count=0,
+        mutation_rate=0.0,
+        baseline_resource=8.0,
+        max_resource=64.0,
+        initial_energy=400.0,
+    )
+    env = Environment(config=config, rng=np.random.default_rng(7))
+    env.memory[:] = 0
+    ancestor = build_ancestor_genome()
+    parent = env.spawn_organism(genome=ancestor, address=0, strain="seed")
+
+    for _ in range(2000):
+        stats = env.step()
+        if stats.replications > 0:
+            break
+
+    children = [t for t in env.threads.values() if t.parent_id == parent.thread_id]
+    assert len(children) >= 1
+    child = children[0]
+    child_genome = bytes(env.memory[child.genome_start:child.genome_start + child.genome_length])
+    assert child_genome == ancestor
+
+
+def test_single_ancestor_reproduces_more_than_once_in_its_lifetime() -> None:
+    """ALLOC is re-entrant (core/vm.py design decision #5): the founding
+    Ancestor's loop body keeps calling ALLOC, so the same parent thread
+    should still be alive and spawn a second offspring after its first,
+    rather than becoming a sterile zombie after exactly one reproduction.
+    """
+    config = EnvironmentConfig(
+        width=64,
+        height=64,
+        probe_spawn_count=0,
+        mutation_rate=0.0,
+        baseline_resource=8.0,
+        max_resource=64.0,
+        initial_energy=4000.0,
+    )
+    env = Environment(config=config, rng=np.random.default_rng(7))
+    env.memory[:] = 0
+    ancestor = build_ancestor_genome()
+    parent = env.spawn_organism(genome=ancestor, address=0, strain="seed")
+
+    total_replications = 0
+    for _ in range(6000):
+        stats = env.step()
+        total_replications += stats.replications
+        if total_replications >= 2:
+            break
+
+    assert total_replications >= 2
+    assert parent.alive  # the same parent is still alive after its first birth
+    children_of_parent = [t for t in env.threads.values() if t.parent_id == parent.thread_id]
+    assert len(children_of_parent) >= 2

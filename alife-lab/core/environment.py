@@ -25,6 +25,14 @@ Design notes
   even though the reference round-robin scheduler in :meth:`Environment.step`
   is itself single-threaded — the lock is what makes it safe to later move
   execution onto a real thread/process pool without touching this module.
+* **Allocation locality.** :meth:`Environment.request_allocation` first
+  tries the two cells immediately touching the parent's own genome, then
+  searches a bounded neighborhood (``EnvironmentConfig.local_search_radius``
+  genome-lengths on each side) for the *nearest* free slot before resorting
+  to a uniformly random free position anywhere in the universe. Without
+  this middle tier, a colony gets exactly one generation of adjacent growth
+  before every later offspring is scattered far from its own kin — which
+  starves lineages of the chance to ever accumulate contiguous territory.
 * **Copy fidelity.** Mutation is modeled here, not in the VM: every
   committed write has a small independent chance
   (``EnvironmentConfig.mutation_rate``) of being corrupted to a random
@@ -79,6 +87,7 @@ class EnvironmentConfig:
     mutation_rate: float = 0.0025
     probe_spawn_count: int = 4
     probe_genome_length: int = 24
+    local_search_radius: int = 12
 
     @property
     def size(self) -> int:
@@ -183,12 +192,34 @@ class Environment:
                 if np.all(self.owner[indices] == -1):
                     self.owner[indices] = thread.thread_id
                     return candidate_start
-            # neither adjacent slot is free — exhaustively (but cheaply,
-            # via a vectorized sliding-window sum) find every toroidal
-            # starting position whose next `length` cells are all free,
-            # and pick one at random. This is deterministic in the sense
-            # that it only returns None when the universe is genuinely
-            # full, never due to an unlucky random probe.
+            # Neither immediately-adjacent slot is free. Before giving up on
+            # locality entirely, search a bounded neighborhood around the
+            # parent's own genome for the *nearest* free slot — this is what
+            # lets a colony keep expanding outward generation after
+            # generation instead of every later offspring being flung to a
+            # uniformly random point in the universe the moment its parent's
+            # two immediate neighbors fill up.
+            span = length * self.config.local_search_radius
+            if span > 0:
+                local_size = min(2 * span + length, size)
+                window_start = (thread.genome_start - span) % size
+                local_indices = self.range_indices(window_start, local_size)
+                free_local = (self.owner[local_indices] == -1).astype(np.int64)
+                window_sum = np.convolve(free_local, np.ones(length, dtype=np.int64), mode="valid")
+                valid_offsets = np.flatnonzero(window_sum == length)
+                if valid_offsets.size > 0:
+                    distances = np.abs(valid_offsets - span)
+                    best_offset = int(valid_offsets[np.argmin(distances)])
+                    candidate_start = (window_start + best_offset) % size
+                    indices = self.range_indices(candidate_start, length)
+                    self.owner[indices] = thread.thread_id
+                    return candidate_start
+            # No room nearby either — exhaustively (but cheaply, via a
+            # vectorized sliding-window sum) find every toroidal starting
+            # position whose next `length` cells are all free, and pick one
+            # at random. This is deterministic in the sense that it only
+            # returns None when the universe is genuinely full, never due to
+            # an unlucky random probe.
             free = (self.owner == -1).astype(np.int64)
             extended = np.concatenate([free, free[: length - 1]]) if length > 1 else free
             window_sum = np.convolve(extended, np.ones(length, dtype=np.int64), mode="valid")[:size]

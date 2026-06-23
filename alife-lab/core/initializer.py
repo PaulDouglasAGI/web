@@ -8,21 +8,35 @@ by a runtime YAML or JSON configuration file.
 
 The Ancestor genome
 --------------------
-Exactly the 24-byte loop specified: ``ALLOC`` once, then an infinite loop
-of ``READ_HEAD -> WRITE_HEAD -> JMP back to the loop``. Per
-``core/vm.py``'s design decisions, READ_HEAD/WRITE_HEAD auto-advance their
-own heads (satisfying the "INC pointers" step) and JMP locates the loop
-entry point via complement-template matching against a single NOP "label"
-byte placed immediately after ALLOC. ALLOC is intentionally outside the
-loop, exactly as specified — each organism gets exactly one allocation
-attempt per lifetime, but every offspring is a full genome copy that
-starts its own execution at its own ALLOC, so the lineage as a whole keeps
-reproducing across generations even though no single individual does more
-than once. The 18 bytes of padding after the JMP template are filled with
-INC (0x01), never NOP (0x00), specifically so they cannot accidentally
-satisfy the loop's own jump template before genuinely wrapping around to
-the real loop label — and because INC is harmless filler if a stray IP
-or mutation ever wanders into it.
+A 24-byte infinite loop: ``ALLOC -> READ_HEAD -> [spacer] -> WRITE_HEAD ->
+JMP back to the loop``. Per ``core/vm.py``'s design decisions, READ_HEAD/
+WRITE_HEAD auto-advance their own heads (satisfying the "INC pointers"
+step) and JMP locates the loop entry point via complement-template
+matching against a single NOP "label" byte placed immediately *before*
+ALLOC. Because ALLOC is re-entrant (a no-op, at reduced cost, whenever a
+previous offspring buffer is still being written — see ``core/vm.py``'s
+design decision #5), putting it inside the loop is safe: each pass either
+opens a fresh offspring buffer (the moment the previous one finalizes) or
+quietly does nothing (while a copy is still in progress), so a single
+organism keeps spawning new offspring for as long as it lives, instead of
+getting only one reproduction event in its entire lifetime.
+
+READ_HEAD and WRITE_HEAD are deliberately *not* adjacent. Per
+``core/vm.py``'s design decision #1, the active register for these
+instructions is a pure function of the instruction's own absolute address
+parity — and since address parity always alternates between consecutive
+bytes, two genuinely adjacent instructions would always land on opposite
+registers, making WRITE_HEAD permanently read a register READ_HEAD never
+wrote to (silently copying zeros forever). A one-byte INC spacer between
+them keeps both at the same parity (their addresses differ by 2, not 1),
+so WRITE_HEAD always reads the very value READ_HEAD just loaded,
+regardless of where this genome is placed in memory. The spacer INC
+operates on the *other* register (by construction, the one parity away)
+and is otherwise harmless. The remaining padding after the JMP template is
+filled with INC (0x01), never NOP (0x00), specifically so it cannot
+accidentally satisfy the loop's own jump template before genuinely
+wrapping around to the real loop label — and because INC is harmless
+filler if a stray IP or mutation ever wanders into it.
 """
 
 from __future__ import annotations
@@ -45,18 +59,19 @@ def build_ancestor_genome() -> bytes:
     """Construct the canonical 24-byte ALLOC / READ_HEAD / WRITE_HEAD / JMP
     self-replicator described in the lab specification."""
     genome = bytearray(ANCESTOR_GENOME_LENGTH)
-    genome[0] = Opcode.ALLOC
-    genome[1] = Opcode.NOP  # loop label: JMP's landing pad
+    genome[0] = Opcode.NOP  # loop label: JMP's landing pad
+    genome[1] = Opcode.ALLOC
     genome[2] = Opcode.READ_HEAD
-    genome[3] = Opcode.WRITE_HEAD
-    genome[4] = Opcode.JMP
-    genome[5] = 0xFF  # template whose complement (0x00) matches the loop label
-    for offset in range(6, ANCESTOR_GENOME_LENGTH):
+    genome[3] = Opcode.INC  # parity spacer — keeps WRITE_HEAD's address parity == READ_HEAD's
+    genome[4] = Opcode.WRITE_HEAD
+    genome[5] = Opcode.JMP
+    genome[6] = 0xFF  # template whose complement (0x00) matches the loop label
+    for offset in range(7, ANCESTOR_GENOME_LENGTH):
         genome[offset] = Opcode.INC
-    # offset 5 is JMP's operand byte — pure data, never landed on as an IP
+    # offset 6 is JMP's operand byte — pure data, never landed on as an IP
     # position by this program's own control flow, so it is exempt from
     # opcode validation.
-    validate_genome(bytes(genome), data_offsets=frozenset({5}))
+    validate_genome(bytes(genome), data_offsets=frozenset({6}))
     return bytes(genome)
 
 
