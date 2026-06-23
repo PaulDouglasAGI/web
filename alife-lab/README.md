@@ -43,11 +43,13 @@ alife-lab/
 │   ├── vm.py            CPU substrate: ISA, Thread state, CPUCore.execute()
 │   ├── environment.py    Concrete Substrate: memory lattice, energy field,
 │   │                     collision arbitration, organism lifecycle
-│   └── initializer.py    Hybrid Primordial Matrix: config loading, Ancestor
-│                         genome construction, noise/seed sector seeding
+│   ├── initializer.py    Hybrid Primordial Matrix: config loading, Ancestor
+│   │                     genome construction, noise/seed sector seeding
+│   └── persistence.py    Checkpoint save/load (Environment + tracer state)
 ├── analytics/
-│   └── metrics.py        Shannon entropy, Kolmogorov complexity proxy,
-│                         PhylogeneticTracer (lineages, speciation, takeovers)
+│   ├── metrics.py        Shannon entropy, Kolmogorov complexity proxy,
+│   │                     PhylogeneticTracer (lineages, speciation, takeovers)
+│   └── export.py         Incrementally-appending CSV metrics writer
 ├── viz/
 │   └── dashboard.py      Read-only Pygame spectrogram + sidebar telemetry
 ├── config/
@@ -261,6 +263,8 @@ cross-strain takeovers, and per-lineage population share.
 ```
 python main.py --mode headless  --config config/default.yaml --cycles 0 --report-interval 500
 python main.py --mode dashboard --config config/default.yaml --cycles 0
+python main.py --mode headless --cycles 50000 --checkpoint-out runs/save --metrics-csv runs/metrics.csv
+python main.py --mode headless --resume-from runs/save --cycles 50000
 ```
 
 `--mode headless` never imports Pygame at all and runs at maximum
@@ -282,6 +286,41 @@ rejected: the Ancestors are seeded from inside that function, before it
 returns, so any caller-side closure that captures its own not-yet-assigned
 `Environment` reference would raise on the very first founding birth.
 Wiring hooks after construction and replaying once has no such hazard.)
+
+`--checkpoint-out PATH` saves a full checkpoint (via
+`core/persistence.py`) once the run ends, whether by reaching `--cycles`
+or by interruption; `--resume-from PATH` loads one instead of seeding a
+fresh universe via `resume_traced_environment()` (the same
+wire-hooks-after-construction pattern as `build_traced_environment()`,
+minus the founder replay — a loaded tracer's lineage records already
+reflect everything up to the save point). `--metrics-csv PATH` appends
+one row per periodic report to a CSV file via `analytics/export.py`'s
+`MetricsCSVWriter`, independent of either flag above.
+
+### `core/persistence.py` — checkpoint / resume
+
+`save_checkpoint(environment, tracer, path)` writes a single `.npz` file
+containing the five numpy state arrays (`memory`, `owner`, `lineage`,
+`strain`, `resource`) plus a JSON-encoded `meta` array holding everything
+else needed to resume exactly: every live `Thread`, the RNG's own
+bit-generator state, the `EnvironmentConfig`, and the tracer's
+lineage/speciation/overwrite history. JSON rather than `pickle`, so
+`np.load`'s safe default `allow_pickle=False` still works and the
+non-array state stays plain-text-inspectable. Never serialized:
+`on_birth`/`on_death`/`on_overwrite` (closures over a specific tracer
+instance, meaningless across a save/load boundary) and the
+allocation-search `_no_room_for_length` cache (cheap to re-derive, safer
+left unset than trusted blindly after a restore). `load_checkpoint(path)`
+reverses all of it; callers re-wire the lifecycle hooks afterward exactly
+as `main.py`'s `resume_traced_environment()` does.
+
+### `analytics/export.py` — CSV metrics export
+
+`MetricsCSVWriter(path)` appends one row per `MetricsSnapshot` to a CSV
+file, opening it in append mode on every write rather than holding a long
+run's full snapshot history in memory. Writes the header once, on first
+use against a fresh or empty file; resuming a run that points at an
+already-populated CSV file correctly skips re-writing the header.
 
 ## Configuration
 

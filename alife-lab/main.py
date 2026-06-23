@@ -24,6 +24,12 @@ tracer explicitly so the ancestry tree is complete from cycle zero —
 see that function's docstring for why hooking the tracer in any earlier
 (e.g. by threading callback parameters through ``build_environment``
 itself) is not actually possible without a closure-ordering hazard.
+
+``--resume-from PATH`` loads a prior ``--checkpoint-out`` save instead of
+seeding a fresh universe (see :func:`resume_traced_environment` and
+``core/persistence.py``); ``--checkpoint-out PATH`` saves one at the end
+of the run. ``--metrics-csv PATH`` appends one row per periodic report to
+a CSV file via ``analytics/export.py``, independent of either mode.
 """
 
 from __future__ import annotations
@@ -33,9 +39,11 @@ import threading
 import time
 from typing import List, Optional, Tuple
 
+from analytics.export import MetricsCSVWriter
 from analytics.metrics import PhylogeneticTracer, take_snapshot
 from core.environment import Environment
 from core.initializer import build_environment
+from core.persistence import load_checkpoint, save_checkpoint
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -66,6 +74,21 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         default=500,
         help="headless mode only: print a metrics snapshot every N cycles (default: 500)",
     )
+    parser.add_argument(
+        "--resume-from",
+        default=None,
+        help="path to a checkpoint previously written by --checkpoint-out; resumes instead of seeding a fresh universe",
+    )
+    parser.add_argument(
+        "--checkpoint-out",
+        default=None,
+        help="path to save a checkpoint to once the run ends (interrupted or cycle-limited)",
+    )
+    parser.add_argument(
+        "--metrics-csv",
+        default=None,
+        help="headless mode only: append one CSV row per periodic report to this path",
+    )
     return parser.parse_args(argv)
 
 
@@ -84,26 +107,56 @@ def build_traced_environment(config_path: str) -> Tuple[Environment, Phylogeneti
     return environment, tracer
 
 
-def run_headless(environment: Environment, tracer: PhylogeneticTracer, cycles: int, report_interval: int) -> None:
+def resume_traced_environment(checkpoint_path: str) -> Tuple[Environment, PhylogeneticTracer]:
+    """Load a checkpoint written by :func:`core.persistence.save_checkpoint`
+    and re-wire its tracer's lifecycle hooks onto the restored Environment.
+
+    Unlike :func:`build_traced_environment`, founding births are never
+    replayed here — the loaded tracer's lineage records already reflect
+    every birth up to the moment the checkpoint was saved.
+    """
+    environment, tracer = load_checkpoint(checkpoint_path)
+    environment.on_birth = lambda child, parent: tracer.on_birth(child, parent, environment)
+    environment.on_death = tracer.on_death
+    environment.on_overwrite = tracer.on_overwrite
+    return environment, tracer
+
+
+def run_headless(
+    environment: Environment,
+    tracer: PhylogeneticTracer,
+    cycles: int,
+    report_interval: int,
+    metrics_writer: Optional[MetricsCSVWriter] = None,
+) -> None:
     """Advance the simulation at full speed with no rendering at all,
     printing a metrics line every ``report_interval`` cycles. Runs forever
     if ``cycles`` is 0, until interrupted.
     """
     start_time = time.monotonic()
     cycle_count = 0
+    already_reported_this_cycle = False
     try:
         while cycles <= 0 or cycle_count < cycles:
             tracer.set_cycle(environment.cycle)
             environment.step()
             cycle_count += 1
-            if cycle_count % report_interval == 0:
-                _print_report(environment, tracer, start_time)
+            already_reported_this_cycle = cycle_count % report_interval == 0
+            if already_reported_this_cycle:
+                _print_report(environment, tracer, start_time, metrics_writer)
     except KeyboardInterrupt:
         print("\ninterrupted")
-    _print_report(environment, tracer, start_time)
+        already_reported_this_cycle = False
+    if not already_reported_this_cycle:
+        _print_report(environment, tracer, start_time, metrics_writer)
 
 
-def _print_report(environment: Environment, tracer: PhylogeneticTracer, start_time: float) -> None:
+def _print_report(
+    environment: Environment,
+    tracer: PhylogeneticTracer,
+    start_time: float,
+    metrics_writer: Optional[MetricsCSVWriter] = None,
+) -> None:
     snapshot = take_snapshot(environment, tracer)
     elapsed = max(time.monotonic() - start_time, 1e-9)
     rate = snapshot.cycle / elapsed
@@ -120,6 +173,8 @@ def _print_report(environment: Environment, tracer: PhylogeneticTracer, start_ti
         f"seed>noise={snapshot.seed_defeats_noise:>4} "
         f"dominant=[{dominant}]"
     )
+    if metrics_writer is not None:
+        metrics_writer.write(snapshot)
 
 
 def run_dashboard(environment: Environment, tracer: PhylogeneticTracer, cycles: int) -> None:
@@ -155,12 +210,22 @@ def run_dashboard(environment: Environment, tracer: PhylogeneticTracer, cycles: 
 
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
-    environment, tracer = build_traced_environment(args.config)
+    if args.resume_from:
+        environment, tracer = resume_traced_environment(args.resume_from)
+    else:
+        environment, tracer = build_traced_environment(args.config)
 
     if args.mode == "headless":
-        run_headless(environment, tracer, cycles=args.cycles, report_interval=args.report_interval)
+        metrics_writer = MetricsCSVWriter(args.metrics_csv) if args.metrics_csv else None
+        run_headless(
+            environment, tracer, cycles=args.cycles, report_interval=args.report_interval, metrics_writer=metrics_writer
+        )
     else:
         run_dashboard(environment, tracer, cycles=args.cycles)
+
+    if args.checkpoint_out:
+        save_checkpoint(environment, tracer, args.checkpoint_out)
+        print(f"checkpoint saved to {args.checkpoint_out}")
 
 
 if __name__ == "__main__":
