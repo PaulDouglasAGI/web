@@ -1,7 +1,7 @@
 """main.py — Laboratory Executive Controller.
 
-The single entry point for running the digital evolution lab, in either of
-two mutually exclusive modes:
+The single entry point for running the digital evolution lab, in any of
+three mutually exclusive modes:
 
 * ``--mode headless`` — run the simulation as fast as Python/numpy can
   manage, printing periodic textual metrics reports. ``viz/dashboard.py``
@@ -14,8 +14,14 @@ two mutually exclusive modes:
   the dashboard never calls ``Environment.step()``, and the simulation
   never waits on the renderer. The two are coupled only by the shared,
   lock-protected ``Environment``/``PhylogeneticTracer`` objects.
+* ``--mode dashboard-server --host --port`` — the same decoupled
+  simulation-thread pattern as ``--mode dashboard``, but instead of a
+  local Pygame window, a stdlib ``http.server`` (see ``viz/server.py``)
+  streams the identical lineage-color + phosphor-burn visualization as
+  MJPEG, so any phone or browser on the network can watch a run live with
+  no app and no Pygame on the client.
 
-Both modes share :func:`build_traced_environment`, which constructs the
+All three modes share :func:`build_traced_environment`, which constructs the
 Environment via ``core.initializer.build_environment`` and then attaches a
 fresh :class:`~analytics.metrics.PhylogeneticTracer` to its lifecycle
 hooks. Because the Ancestors are already seeded by the time
@@ -53,9 +59,21 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--mode",
-        choices=["headless", "dashboard"],
+        choices=["headless", "dashboard", "dashboard-server"],
         default="headless",
-        help="run as a fast textual benchmark (default), or open the read-only spectrogram dashboard",
+        help="run as a fast textual benchmark (default), open the read-only spectrogram dashboard, "
+        "or serve a live MJPEG dashboard over HTTP for remote/mobile viewing",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="dashboard-server mode only: address to bind the HTTP server to (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="dashboard-server mode only: port to bind the HTTP server to (default: 8000)",
     )
     parser.add_argument(
         "--config",
@@ -208,6 +226,47 @@ def run_dashboard(environment: Environment, tracer: PhylogeneticTracer, cycles: 
         sim_thread.join(timeout=2.0)
 
 
+def run_dashboard_server(
+    environment: Environment, tracer: PhylogeneticTracer, cycles: int, host: str, port: int
+) -> None:
+    """Run the simulation on a background thread while a stdlib HTTP server
+    streams the same lineage-color + phosphor-burn visualization as MJPEG
+    on the main thread, fully decoupled from each other's clock rates —
+    the same pattern :func:`run_dashboard` uses for the Pygame window.
+    """
+    from viz.server import DashboardServerConfig, FrameProducer, build_server
+
+    stop_requested = threading.Event()
+
+    def simulate() -> None:
+        cycle_count = 0
+        while not stop_requested.is_set() and (cycles <= 0 or cycle_count < cycles):
+            tracer.set_cycle(environment.cycle)
+            environment.step()
+            cycle_count += 1
+
+    sim_thread = threading.Thread(target=simulate, name="alife-sim", daemon=True)
+    sim_thread.start()
+
+    producer = FrameProducer(environment, DashboardServerConfig(host=host, port=port))
+    producer.start()
+    server = build_server(environment, tracer, producer, DashboardServerConfig(host=host, port=port))
+    print(f"dashboard-server listening on http://{host}:{port}/")
+    server_thread = threading.Thread(target=server.serve_forever, name="alife-http", daemon=True)
+    server_thread.start()
+    try:
+        while sim_thread.is_alive():
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        print("\ninterrupted")
+    finally:
+        stop_requested.set()
+        server.shutdown()
+        server.server_close()
+        producer.stop()
+        sim_thread.join(timeout=2.0)
+
+
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
     if args.resume_from:
@@ -220,8 +279,10 @@ def main(argv: Optional[List[str]] = None) -> None:
         run_headless(
             environment, tracer, cycles=args.cycles, report_interval=args.report_interval, metrics_writer=metrics_writer
         )
-    else:
+    elif args.mode == "dashboard":
         run_dashboard(environment, tracer, cycles=args.cycles)
+    else:
+        run_dashboard_server(environment, tracer, cycles=args.cycles, host=args.host, port=args.port)
 
     if args.checkpoint_out:
         save_checkpoint(environment, tracer, args.checkpoint_out)

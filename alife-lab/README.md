@@ -51,11 +51,12 @@ alife-lab/
 │   │                     PhylogeneticTracer (lineages, speciation, takeovers)
 │   └── export.py         Incrementally-appending CSV metrics writer
 ├── viz/
-│   └── dashboard.py      Read-only Pygame spectrogram + sidebar telemetry
+│   ├── dashboard.py      Read-only Pygame spectrogram + sidebar telemetry
+│   └── server.py         Stdlib HTTP server streaming the same view as MJPEG
 ├── config/
 │   └── default.yaml      Tuned default physical constants
 ├── tests/                pytest suite, one file per module above
-├── main.py                CLI entry point: headless benchmark or dashboard
+├── main.py                CLI entry point: headless / dashboard / dashboard-server
 └── requirements.txt
 ```
 
@@ -258,11 +259,39 @@ frame and decays exponentially (`phosphor_decay`) thereafter, upscale by
 generation delta, Shannon entropy, births/deaths, speciation events,
 cross-strain takeovers, and per-lineage population share.
 
+### `viz/server.py` — the mobile/cloud live dashboard server
+
+Streams the exact same lineage-color + phosphor-burn visualization as
+`viz/dashboard.py`, over plain HTTP instead of a local Pygame window, so
+any phone or browser can watch a running simulation live via a plain
+`<img>` tag — no app, no Pygame on the client, and no new dependencies
+beyond what `viz/dashboard.py` already needs.
+
+Three independently-clocked threads share the same live
+`Environment`/`PhylogeneticTracer` objects: the simulation thread (driven
+by `main.py`, exactly as in `--mode dashboard`); `FrameProducer`, which
+renders and JPEG-encodes one frame at `DashboardServerConfig.target_fps`
+on its own thread, reusing `viz/dashboard.py`'s pure-numpy
+`build_strain_color_image`/`apply_phosphor_overlay`/`PhosphorDecayLayer`
+untouched (none of those ever touch Pygame's display/font subsystems —
+only `Dashboard.__init__` does, and this module never imports `Dashboard`
+at all); and `DashboardHTTPServer`, a stdlib `ThreadingHTTPServer` that
+serves the single latest frame to every connected MJPEG viewer and
+`/stats.json` poller, so N simultaneous viewers never re-render or
+re-encode anything themselves.
+
+JPEG encoding happens with `SDL_VIDEODRIVER=dummy` set (this module sets
+the default itself), confirmed empirically to encode a `Surface` to JPEG
+bytes with no real display ever opened — safe in any headless container.
+`--mode headless` still never imports Pygame: `viz/server.py` is only
+ever imported once `--mode dashboard-server` actually runs.
+
 ### `main.py` — the Lab Executive Controller
 
 ```
 python main.py --mode headless  --config config/default.yaml --cycles 0 --report-interval 500
 python main.py --mode dashboard --config config/default.yaml --cycles 0
+python main.py --mode dashboard-server --host 0.0.0.0 --port 8000
 python main.py --mode headless --cycles 50000 --checkpoint-out runs/save --metrics-csv runs/metrics.csv
 python main.py --mode headless --resume-from runs/save --cycles 50000
 ```
@@ -272,9 +301,12 @@ throughput, printing a metrics line every `--report-interval` cycles.
 `--mode dashboard` advances the simulation on an independent background
 thread while the Pygame window renders on the main thread at its own pace
 — the two share the `Environment`/`PhylogeneticTracer` instances but
-never block on each other. `--cycles 0` (the default) runs until
-interrupted (Ctrl+C in headless mode, window close / Esc in dashboard
-mode).
+never block on each other. `--mode dashboard-server` uses the same
+decoupled background-thread simulation, but renders into an MJPEG stream
+served by `viz/server.py` over `--host`/`--port` instead of a local
+window — open `http://<host>:<port>/` in any browser to watch. `--cycles
+0` (the default) runs until interrupted (Ctrl+C in headless/server mode,
+window close / Esc in dashboard mode).
 
 `build_traced_environment()` constructs the `Environment` via
 `core.initializer.build_environment()` — which has already seeded the
