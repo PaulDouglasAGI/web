@@ -144,6 +144,19 @@ class EnvironmentConfig:
     local_search_radius: int = 12
     senescence_rate: float = 0.0
     task_bonus_energy: float = 0.0
+    #: Fraction of the lattice that may be claimed before
+    #: :meth:`Environment.request_allocation` refuses all new allocations,
+    #: regardless of how much free space remains. Diagnostics on a tuned
+    #: long run showed occupancy settling near ~90% almost immediately and
+    #: staying there: at that density, free cells exist but are fragmented
+    #: into runs shorter than a genome almost everywhere, so ALLOC failure
+    #: rates climb into the millions-per-5000-cycles range while the
+    #: population sits one mutation away from a runaway illegal-opcode
+    #: death cascade (a freed cell triggers a birth burst, ~5-6% of which
+    #: are fatally mutated, feeding the cascade). Capping occupancy well
+    #: below that gridlock threshold keeps enough slack space that
+    #: genome-length free runs stay findable, so the gridlock never forms.
+    max_occupancy_fraction: float = 0.65
     #: Starting energy granted to a spontaneous abiogenesis probe. Kept as a
     #: small fixed budget — deliberately *not* a multiple of
     #: ``baseline_resource`` — so that retuning the resource field's richness
@@ -231,6 +244,15 @@ class Environment:
         #: cell can only make new free runs longer, never shorter.
         self._no_room_for_length: Optional[int] = None
 
+        #: running count of cells currently claimed by some thread's genome
+        #: or offspring buffer (``owner != -1``). Kept as an O(1) counter,
+        #: incremented/decremented at every claim/release site, since the
+        #: occupancy-ceiling check in :meth:`request_allocation` runs on
+        #: every ALLOC call — millions of times per benchmark window — and
+        #: an ``(self.owner != -1).sum()`` rescan at that frequency would be
+        #: far too expensive.
+        self._occupied_cells: int = 0
+
     # ------------------------------------------------------------------
     # Substrate protocol implementation (see core.vm.Substrate)
     # ------------------------------------------------------------------
@@ -269,6 +291,14 @@ class Environment:
                 # — even the cheap adjacent-slot check — can only rediscover
                 # the same "no" once more, so skip straight to failure.
                 return None
+            if self._occupied_cells / size >= self.config.max_occupancy_fraction:
+                # Refuse to grow any denser than the configured ceiling,
+                # even though free space technically still exists: past
+                # this density, remaining free cells are fragmented into
+                # runs shorter than a genome almost everywhere, which is
+                # the gridlock that precedes a mutation-driven death
+                # cascade (see max_occupancy_fraction's docstring).
+                return None
             for candidate_start in (
                 (thread.genome_start + thread.genome_length) % size,  # immediately to the right
                 (thread.genome_start - length) % size,  # immediately to the left
@@ -276,6 +306,7 @@ class Environment:
                 indices = self.range_indices(candidate_start, length)
                 if np.all(self.owner[indices] == -1):
                     self.owner[indices] = thread.thread_id
+                    self._occupied_cells += length
                     return candidate_start
             # Neither immediately-adjacent slot is free. Before giving up on
             # locality entirely, search a bounded neighborhood around the
@@ -298,6 +329,7 @@ class Environment:
                     candidate_start = (window_start + best_offset) % size
                     indices = self.range_indices(candidate_start, length)
                     self.owner[indices] = thread.thread_id
+                    self._occupied_cells += length
                     return candidate_start
             # No room nearby either. Before paying for a full O(universe)
             # exhaustive scan, try a handful of randomly-positioned windows
@@ -330,6 +362,7 @@ class Environment:
                     candidate_start = (window_start + best_offset) % size
                     indices = self.range_indices(candidate_start, length)
                     self.owner[indices] = thread.thread_id
+                    self._occupied_cells += length
                     return candidate_start
             # Every random window missed — exhaustively (but cheaply, via a
             # vectorized sliding-window sum) find every toroidal starting
@@ -348,6 +381,7 @@ class Environment:
             candidate_start = int(self.rng.choice(candidates))
             indices = self.range_indices(candidate_start, length)
             self.owner[indices] = thread.thread_id
+            self._occupied_cells += length
             return candidate_start
 
     def harvest_energy(self, address: int, amount: float) -> float:
@@ -393,6 +427,10 @@ class Environment:
             )
             self.threads[child_id] = child
             indices = self.range_indices(child.genome_start, child.genome_length)
+            # These cells were already counted in self._occupied_cells when
+            # request_allocation reserved them for the parent's offspring
+            # buffer; this only re-labels ownership to the new child, so no
+            # further increment is needed here.
             self.owner[indices] = child_id
             self.lineage[indices] = child.lineage_id
             self.strain[indices] = _STRAIN_NAME_TO_CODE.get(child.strain, STRAIN_NONE)
@@ -423,6 +461,7 @@ class Environment:
             self.owner[indices] = self.next_thread_id
             self.lineage[indices] = resolved_lineage
             self.strain[indices] = _STRAIN_NAME_TO_CODE.get(strain, STRAIN_NONE)
+            self._occupied_cells += length
             thread = Thread(
                 thread_id=self.next_thread_id,
                 genome_start=address % self.memory.size,
@@ -530,6 +569,7 @@ class Environment:
                 self.owner[indices] = self.next_thread_id
                 self.lineage[indices] = lineage_id
                 self.strain[indices] = STRAIN_NOISE
+                self._occupied_cells += length
                 thread = Thread(
                     thread_id=self.next_thread_id,
                     genome_start=start,
@@ -561,6 +601,7 @@ class Environment:
         self.owner[indices] = -1
         self.lineage[indices] = -1
         self.strain[indices] = STRAIN_NONE
+        self._occupied_cells -= int(indices.size)
 
     def _reclaim(self, thread: Thread) -> None:
         """Return a dead organism's memory — and any unfinished offspring

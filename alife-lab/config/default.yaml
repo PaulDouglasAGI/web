@@ -19,6 +19,7 @@ probe_genome_length: 24
 local_search_radius: 12
 senescence_rate: 0.00005
 task_bonus_energy: 15.0
+max_occupancy_fraction: 0.65
 
 # --- Primordial matrix seeding ---------------------------------------------
 noise_fraction: 0.5

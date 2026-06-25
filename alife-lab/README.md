@@ -166,6 +166,21 @@ genomes themselves.
   letting later calls for that length (or longer) skip straight to failure
   instead of re-paying for the full search; it's cleared the instant any
   organism dies, since freeing memory can only make a free run longer.
+- **Occupancy ceiling.** Diagnosing a long-run collapse traced it to exactly
+  the fragmentation pathology described above: occupancy climbs to ~90% of
+  the lattice almost immediately and stays there, at which point free cells
+  exist but are fragmented into runs shorter than a genome nearly
+  everywhere, so `ALLOC` failure rates run into the millions per few
+  thousand cycles. The population then sits one mutation away from a
+  runaway death cascade — a death frees a slot, the resulting birth burst
+  is ~5-6% fatally mutated, and those deaths free more slots. `request_allocation`
+  now refuses all new allocations once occupancy reaches `max_occupancy_fraction`
+  of the lattice, regardless of how much free space remains, keeping enough
+  slack that genome-length free runs stay findable and the gridlock never
+  forms. Tracked via an O(1) `Environment._occupied_cells` counter (the
+  ceiling check runs on every `ALLOC` call, far too often for an
+  `(owner != -1).sum()` rescan) incremented at every claim site and
+  decremented in `_free_region`.
 - **Copy-fidelity mutation.** Every committed write has an independent
   chance (`mutation_rate`) of landing as a random byte instead — the sole
   source of genetic novelty in the lab.
@@ -374,6 +389,7 @@ passed via `--config`):
 | `local_search_radius` | 12 | Genome-lengths searched on each side of a parent for a free slot before falling back to a random one anywhere |
 | `senescence_rate` | 0.00005 | Flat per-cycle energy decay applied to every living thread, independent of instruction cost, guaranteeing eventual death (and territory turnover) even at perfect energy balance |
 | `task_bonus_energy` | 15.0 | Energy deposited into the resource field on a newly-matched `IO_OUT` Boolean task (paid once per task per thread) |
+| `max_occupancy_fraction` | 0.65 | Fraction of the lattice that may be claimed before `request_allocation` refuses all new allocations, preventing the fragmentation gridlock that otherwise forms near ~90% occupancy |
 | `noise_fraction` | 0.5 | Fraction of the lattice that is the Pure Noise Sector |
 | `seed_instances` | 16 | Number of Ancestor copies seeded into the Seeded Sector |
 | `random_seed` | 1729 | RNG seed, for reproducible runs |

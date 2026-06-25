@@ -200,6 +200,66 @@ def test_request_allocation_no_room_cache_clears_after_reclaim() -> None:
     assert np.all(env.owner[40000:40004] == thread.thread_id)
 
 
+def test_request_allocation_respects_max_occupancy_fraction_even_with_free_space() -> None:
+    # Free space exists (cells 40:44), but the occupancy ceiling must still
+    # refuse the allocation once _occupied_cells/size has reached it — this
+    # is what prevents the lattice from ever reaching the fragmentation
+    # gridlock the diagnostic identified as the collapse's root cause.
+    env = make_env(max_occupancy_fraction=0.5)
+    thread = Thread(thread_id=1, genome_start=0, genome_length=4, energy=10.0)
+    env.threads[1] = thread
+    size = env.memory.size
+    env.owner[:] = 99
+    env.owner[40:44] = -1
+    env._occupied_cells = int(size * 0.5)  # exactly at the ceiling
+    assert env.request_allocation(thread) is None
+
+
+def test_occupied_cells_counter_decrements_on_reclaim_restoring_allocation_success() -> None:
+    config = EnvironmentConfig(
+        width=8, height=8, probe_spawn_count=0, mutation_rate=0.0, max_occupancy_fraction=0.5
+    )
+    env = Environment(config=config, rng=np.random.default_rng(42))
+    size = env.memory.size
+    thread = Thread(thread_id=1, genome_start=0, genome_length=4, energy=10.0)
+    env.threads[1] = thread
+    env.owner[:] = 99
+    env.owner[40:44] = -1
+    env._occupied_cells = int(size * 0.5)
+    assert env.request_allocation(thread) is None  # blocked at the ceiling
+
+    dead = Thread(thread_id=2, genome_start=10, genome_length=4, energy=0.0)
+    env.threads[2] = dead
+    env.owner[10:14] = 2
+    env._reclaim(dead)  # frees 4 cells, dropping occupancy back below the ceiling
+
+    start = env.request_allocation(thread)
+    assert start is not None
+    assert np.all(env.owner[start:start + 4] == thread.thread_id)
+
+
+def test_occupied_cells_tracks_real_allocation_and_reclaim_through_full_lifecycle() -> None:
+    # Integration check on the bookkeeping itself: after a spawn, a
+    # request_allocation claim, and a reclaim, _occupied_cells must equal
+    # an actual recount of env.owner, not just "behave correctly" at the
+    # two ceiling boundaries exercised above.
+    env = make_env()
+    parent = env.spawn_organism(bytes(4), address=0, strain="seed")
+    assert env._occupied_cells == int((env.owner != -1).sum())
+
+    start = env.request_allocation(parent)
+    assert start is not None
+    # Mirror what CPUCore.execute's ALLOC branch does on success, so the
+    # offspring buffer is actually attributed to the parent and therefore
+    # reclaimable below — calling request_allocation directly bypasses that.
+    parent.offspring_start = start
+    parent.offspring_length = parent.genome_length
+    assert env._occupied_cells == int((env.owner != -1).sum())
+
+    env._reclaim(parent)
+    assert env._occupied_cells == int((env.owner != -1).sum())
+
+
 def test_finalize_offspring_splits_energy_and_registers_child() -> None:
     env = make_env(offspring_energy_share=0.4)
     parent = Thread(thread_id=1, genome_start=0, genome_length=4, energy=100.0, lineage_id=7, strain="seed")
