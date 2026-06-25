@@ -362,20 +362,20 @@ passed via `--config`):
 | Key | Default | Meaning |
 |---|---|---|
 | `width`, `height` | 256, 256 | Lattice dimensions (toroidal) |
-| `baseline_resource` | 18.0 | Steady-state energy density per cell |
+| `baseline_resource` | 24.0 | Steady-state energy density per cell |
 | `max_resource` | 120.0 | Cap on harvestable energy per cell |
 | `diffusion_rate` | 0.15 | Per-cycle blend toward 4-neighbor average |
-| `regen_rate` | 0.02 | Per-cycle pull back toward `baseline_resource` |
+| `regen_rate` | 0.06 | Per-cycle pull back toward `baseline_resource` |
 | `initial_energy` | 400.0 | Starting energy for a freshly-spawned organism |
-| `offspring_energy_share` | 0.5 | Fraction of parent's remaining energy handed to a new offspring |
+| `offspring_energy_share` | 0.4 | Fraction of parent's remaining energy handed to a new offspring |
 | `mutation_rate` | 0.0025 | Per-write chance of corruption to a random byte |
 | `probe_spawn_count` | 4 | Spontaneous-abiogenesis probe threads opened per cycle |
 | `probe_genome_length` | 24 | Genome length interpreted by each probe |
 | `local_search_radius` | 12 | Genome-lengths searched on each side of a parent for a free slot before falling back to a random one anywhere |
-| `senescence_rate` | 0.0001 | Flat per-cycle energy decay applied to every living thread, independent of instruction cost, guaranteeing eventual death (and territory turnover) even at perfect energy balance |
+| `senescence_rate` | 0.00005 | Flat per-cycle energy decay applied to every living thread, independent of instruction cost, guaranteeing eventual death (and territory turnover) even at perfect energy balance |
 | `task_bonus_energy` | 15.0 | Energy deposited into the resource field on a newly-matched `IO_OUT` Boolean task (paid once per task per thread) |
 | `noise_fraction` | 0.5 | Fraction of the lattice that is the Pure Noise Sector |
-| `seed_instances` | 24 | Number of Ancestor copies seeded into the Seeded Sector |
+| `seed_instances` | 16 | Number of Ancestor copies seeded into the Seeded Sector |
 | `random_seed` | 1729 | RNG seed, for reproducible runs |
 
 ## Running the tests
