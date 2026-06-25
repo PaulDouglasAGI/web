@@ -144,6 +144,14 @@ class EnvironmentConfig:
     local_search_radius: int = 12
     senescence_rate: float = 0.0
     task_bonus_energy: float = 0.0
+    #: Starting energy granted to a spontaneous abiogenesis probe. Kept as a
+    #: small fixed budget — deliberately *not* a multiple of
+    #: ``baseline_resource`` — so that retuning the resource field's richness
+    #: never silently inflates how long pure-noise probes survive. A probe is
+    #: almost all illegal bytes, so at ``ILLEGAL_OPCODE_COST`` per cycle (now
+    #: unrefunded) this budget buys it only the handful of cycles it needs to
+    #: prove it can sustain itself before it burns out.
+    probe_initial_energy: float = 30.0
 
     @property
     def size(self) -> int:
@@ -350,8 +358,13 @@ class Environment:
             self.resource[idx] -= drawn
             return drawn
         deposit = -amount
-        self.resource[idx] = min(self.config.max_resource, float(self.resource[idx]) + deposit)
-        return 0.0
+        before = float(self.resource[idx])
+        self.resource[idx] = min(self.config.max_resource, before + deposit)
+        # Report how much actually landed: a cell already at max_resource
+        # absorbs less than requested (or nothing), and callers depositing
+        # energy they would otherwise lose can use this to avoid silently
+        # destroying the overflow.
+        return float(self.resource[idx]) - before
 
     def sense_resource(self, address: int) -> int:
         idx = address % self.resource.size
@@ -363,25 +376,28 @@ class Environment:
     def finalize_offspring(self, parent: Thread) -> None:
         if parent.offspring_start is None:
             raise EnergyExhaustionError(parent.thread_id, parent.energy)
-        child_id = self.next_thread_id
-        self.next_thread_id += 1
         child_energy = parent.energy * self.config.offspring_energy_share
         parent.energy -= child_energy
-        child = Thread(
-            thread_id=child_id,
-            genome_start=parent.offspring_start,
-            genome_length=parent.offspring_length,
-            energy=child_energy,
-            generation=parent.generation + 1,
-            lineage_id=parent.lineage_id,
-            parent_id=parent.thread_id,
-            strain=parent.strain,
-        )
-        self.threads[child_id] = child
-        indices = self.range_indices(child.genome_start, child.genome_length)
-        self.owner[indices] = child_id
-        self.lineage[indices] = child.lineage_id
-        self.strain[indices] = _STRAIN_NAME_TO_CODE.get(child.strain, STRAIN_NONE)
+        with self._lock:
+            child_id = self.next_thread_id
+            self.next_thread_id += 1
+            child = Thread(
+                thread_id=child_id,
+                genome_start=parent.offspring_start,
+                genome_length=parent.offspring_length,
+                energy=child_energy,
+                generation=parent.generation + 1,
+                lineage_id=parent.lineage_id,
+                parent_id=parent.thread_id,
+                strain=parent.strain,
+            )
+            self.threads[child_id] = child
+            indices = self.range_indices(child.genome_start, child.genome_length)
+            self.owner[indices] = child_id
+            self.lineage[indices] = child.lineage_id
+            self.strain[indices] = _STRAIN_NAME_TO_CODE.get(child.strain, STRAIN_NONE)
+        # on_birth is invoked outside the lock: it runs the tracer's own
+        # (separately-locked) bookkeeping and must never nest the two locks.
         if self.on_birth is not None:
             self.on_birth(child, parent)
 
@@ -518,7 +534,7 @@ class Environment:
                     thread_id=self.next_thread_id,
                     genome_start=start,
                     genome_length=length,
-                    energy=self.config.baseline_resource * length * 0.5,
+                    energy=self.config.probe_initial_energy,
                     lineage_id=lineage_id,
                     strain="noise",
                 )
@@ -527,16 +543,47 @@ class Environment:
             if self.on_birth is not None:
                 self.on_birth(thread, None)
 
+    def _free_region(self, start: int, length: int, owner_id: Optional[int] = None) -> None:
+        """Reset a contiguous toroidal region back to unclaimed background
+        noise. Must be called with ``self._lock`` already held.
+
+        If ``owner_id`` is given, only cells *currently* owned by that thread
+        are cleared and the rest are left untouched — a higher-energy foreign
+        writer may have legitimately stolen part of the region while the
+        owner was still alive, and those cells are not ours to reclaim.
+        """
+        indices = self.range_indices(start, length)
+        if owner_id is not None:
+            indices = indices[self.owner[indices] == owner_id]
+            if indices.size == 0:
+                return
+        self.memory[indices] = self.rng.integers(0, 256, size=indices.size, dtype=np.uint8)
+        self.owner[indices] = -1
+        self.lineage[indices] = -1
+        self.strain[indices] = STRAIN_NONE
+
     def _reclaim(self, thread: Thread) -> None:
-        """Return a dead organism's memory to raw background noise."""
+        """Return a dead organism's memory — and any unfinished offspring
+        cradle it had already claimed — to raw background noise.
+
+        A thread that dies mid-replication still owns the offspring buffer it
+        reserved back at ``ALLOC`` time (see :meth:`request_allocation`,
+        which stamps ``owner`` immediately, long before the copy finishes).
+        Releasing only the parent's own genome here, as earlier versions did,
+        left that buffer claimed by a thread that no longer exists —
+        permanently removing those cells from the allocatable pool. Under
+        steady energy pressure, organisms die mid-copy constantly, so the
+        leak compounds cycle after cycle and silently strangles the
+        universe's effective carrying capacity. Free both regions.
+        """
         if self.on_death is not None:
             self.on_death(thread)
-        indices = self.range_indices(thread.genome_start, thread.genome_length)
         with self._lock:
-            self.memory[indices] = self.rng.integers(0, 256, size=indices.size, dtype=np.uint8)
-            self.owner[indices] = -1
-            self.lineage[indices] = -1
-            self.strain[indices] = STRAIN_NONE
+            self._free_region(thread.genome_start, thread.genome_length)
+            if thread.offspring_start is not None and thread.offspring_length:
+                self._free_region(
+                    thread.offspring_start, thread.offspring_length, owner_id=thread.thread_id
+                )
             self.threads.pop(thread.thread_id, None)
             # Freeing memory can only lengthen (or create) free runs, never
             # shorten them, so any previously-confirmed "no room" verdict is
@@ -548,11 +595,18 @@ class Environment:
     # ------------------------------------------------------------------
 
     def living_threads(self) -> List[Thread]:
-        return [t for t in self.threads.values() if t.alive]
+        # Snapshot under the lock: in dashboard / dashboard-server modes the
+        # simulation thread mutates self.threads while this reader thread
+        # iterates, which would otherwise risk "dictionary changed size
+        # during iteration".
+        with self._lock:
+            return [t for t in self.threads.values() if t.alive]
 
     def population_by_strain(self) -> Dict[str, int]:
         counts = {"seed": 0, "noise": 0}
-        for t in self.threads.values():
+        with self._lock:
+            threads = list(self.threads.values())
+        for t in threads:
             if t.alive:
                 counts[t.strain] = counts.get(t.strain, 0) + 1
         return counts

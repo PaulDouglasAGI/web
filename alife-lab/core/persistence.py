@@ -49,6 +49,14 @@ def save_checkpoint(environment: Environment, tracer: PhylogeneticTracer, path: 
             "lineages": [asdict(r) for r in tracer.lineages.values()],
             "speciation_events": [asdict(e) for e in tracer.speciation_events],
             "overwrite_events": [asdict(e) for e in tracer.overwrite_events],
+            # Running totals are the source of truth for the metrics readout
+            # and are NOT recoverable by counting the (bounded, rolling) event
+            # histories above, so they must be persisted explicitly.
+            "total_births": tracer.total_births(),
+            "total_deaths": tracer.total_deaths(),
+            "speciation_count": tracer.speciation_count,
+            "noise_defeats_seed": tracer.noise_defeats_seed_count(),
+            "seed_defeats_noise": tracer.seed_defeats_noise_count(),
         },
     }
     out_path = Path(path)
@@ -91,8 +99,26 @@ def load_checkpoint(path: str) -> Tuple[Environment, PhylogeneticTracer]:
     tracer = PhylogeneticTracer(divergence_threshold=tracer_meta["divergence_threshold"])
     tracer.set_cycle(tracer_meta["cycle"])
     tracer.lineages = {record["lineage_id"]: LineageRecord(**record) for record in tracer_meta["lineages"]}
-    tracer.speciation_events = [SpeciationEvent(**event) for event in tracer_meta["speciation_events"]]
-    tracer.overwrite_events = [OverwriteEvent(**event) for event in tracer_meta["overwrite_events"]]
+    # Preserve the deques' bounded capacity rather than replacing them with
+    # plain lists, so a resumed run keeps the same memory ceiling.
+    tracer.speciation_events.extend(SpeciationEvent(**event) for event in tracer_meta["speciation_events"])
+    tracer.overwrite_events.extend(OverwriteEvent(**event) for event in tracer_meta["overwrite_events"])
+    # Restore the O(1) running totals. Fall back to deriving them from the
+    # lineage records for checkpoints written before these were persisted
+    # (the event-derived defeat counts can't be recovered that way, so they
+    # default to 0 — exact only going forward from such an old checkpoint).
+    tracer._total_births = tracer_meta.get(
+        "total_births", sum(r.total_births for r in tracer.lineages.values())
+    )
+    tracer._total_deaths = tracer_meta.get(
+        "total_deaths", sum(r.total_deaths for r in tracer.lineages.values())
+    )
+    tracer._speciation_count = tracer_meta.get("speciation_count", len(tracer.speciation_events))
+    tracer._noise_defeats_seed = tracer_meta.get("noise_defeats_seed", 0)
+    tracer._seed_defeats_noise = tracer_meta.get("seed_defeats_noise", 0)
+    tracer._live_lineage_ids = {
+        lid for lid, record in tracer.lineages.items() if record.alive_count > 0
+    }
     return environment, tracer
 
 

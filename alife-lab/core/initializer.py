@@ -57,7 +57,22 @@ ANCESTOR_GENOME_LENGTH = 24
 
 def build_ancestor_genome() -> bytes:
     """Construct the canonical 24-byte ALLOC / READ_HEAD / WRITE_HEAD / JMP
-    self-replicator described in the lab specification."""
+    self-replicator described in the lab specification.
+
+    Note on the task economy (``SENSE_RESOURCE``/``IO_OUT`` and
+    ``EnvironmentConfig.task_bonus_energy``): the Ancestor deliberately
+    contains *neither* of those opcodes, so a pristine seed lineage never
+    earns a task bonus. This is intentional, not an oversight — the
+    Avida-style tasks exist as something for *evolution to discover*, exactly
+    like classic Avida, rather than a reward the founder is born already
+    collecting. A descendant only gains access to the task economy if
+    mutation introduces the sensing/output machinery, which keeps the bonus a
+    genuine evolutionary innovation. (If a run is ever desired where the
+    founder can exercise tasks from cycle zero, that belongs in a separate,
+    explicitly sensor-equipped ancestor variant — not bolted onto the
+    canonical minimal replicator, whose copy loop depends on its exact
+    instruction/parity layout.)
+    """
     genome = bytearray(ANCESTOR_GENOME_LENGTH)
     genome[0] = Opcode.NOP  # loop label: JMP's landing pad
     genome[1] = Opcode.ALLOC

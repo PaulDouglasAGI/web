@@ -161,23 +161,28 @@ def run_headless(
             cycle_count += 1
             already_reported_this_cycle = cycle_count % report_interval == 0
             if already_reported_this_cycle:
-                _print_report(environment, tracer, start_time, metrics_writer)
+                _print_report(environment, tracer, start_time, cycle_count, metrics_writer)
     except KeyboardInterrupt:
         print("\ninterrupted")
         already_reported_this_cycle = False
     if not already_reported_this_cycle:
-        _print_report(environment, tracer, start_time, metrics_writer)
+        _print_report(environment, tracer, start_time, cycle_count, metrics_writer)
 
 
 def _print_report(
     environment: Environment,
     tracer: PhylogeneticTracer,
     start_time: float,
+    cycles_this_session: int,
     metrics_writer: Optional[MetricsCSVWriter] = None,
 ) -> None:
     snapshot = take_snapshot(environment, tracer)
     elapsed = max(time.monotonic() - start_time, 1e-9)
-    rate = snapshot.cycle / elapsed
+    # Rate is throughput for *this* session's work, so it divides by the
+    # cycles actually run now — not snapshot.cycle, which on a --resume-from
+    # run already includes every cycle from before the checkpoint and would
+    # report a wildly inflated rate.
+    rate = cycles_this_session / elapsed
     dominant = ", ".join(f"{lid}:{count}" for lid, count in snapshot.dominant_lineages[:3]) or "none"
     print(
         f"cycle={snapshot.cycle:>8} "

@@ -51,9 +51,16 @@ def test_harvest_energy_depletes_and_caps_resource() -> None:
     assert drawn == pytest.approx(3.0)
     assert env.resource[0] == pytest.approx(0.0)
 
+    # Depositing 100 into an empty cell capped at 10 absorbs only 10; the
+    # return value reports how much actually landed, so callers (e.g. SHARE)
+    # can avoid destroying the overflow.
     deposited = env.harvest_energy(0, -100.0)
-    assert deposited == 0.0
+    assert deposited == pytest.approx(10.0)
     assert env.resource[0] == pytest.approx(10.0)  # clamped to max_resource
+
+    # A deposit into an already-full cell absorbs nothing.
+    assert env.harvest_energy(0, -5.0) == pytest.approx(0.0)
+    assert env.resource[0] == pytest.approx(10.0)
 
 
 def test_write_byte_succeeds_into_unowned_space() -> None:
@@ -498,3 +505,162 @@ def test_single_ancestor_reproduces_more_than_once_in_its_lifetime() -> None:
     assert parent.alive  # the same parent is still alive after its first birth
     children_of_parent = [t for t in env.threads.values() if t.parent_id == parent.thread_id]
     assert len(children_of_parent) >= 2
+
+
+# ---------------------------------------------------------------------------
+# Phase-A regression guards: the territory leak and the immortal-noise bug
+# ---------------------------------------------------------------------------
+
+def test_illegal_opcode_is_a_net_drain_even_on_a_resource_rich_cell() -> None:
+    # Regression guard for the immortal-noise bug. Executing an illegal byte
+    # must NOT harvest the local cell to refund its own penalty: earlier the
+    # full cost was harvested back whenever the cell held at least that much,
+    # so pure-noise organisms (almost entirely illegal bytes) broke exactly
+    # even and persisted forever instead of burning out.
+    from core.vm import ILLEGAL_OPCODE_COST
+
+    env = make_env(baseline_resource=1000.0, max_resource=1000.0)
+    thread = Thread(thread_id=1, genome_start=0, genome_length=4, energy=100.0)
+    env.threads[1] = thread
+    env.owner[0:4] = 1
+    env.memory[0:4] = 0xEE  # an illegal opcode at every position
+    resource_before = float(env.resource[0])
+
+    result = env.cpu.execute(thread, env)
+
+    assert result.illegal is True
+    assert thread.energy == pytest.approx(100.0 - ILLEGAL_OPCODE_COST)
+    assert float(env.resource[0]) == pytest.approx(resource_before)  # cell untouched
+
+
+def test_pure_noise_thread_burns_out_despite_abundant_resource() -> None:
+    # The whole point of the fix: a lifeless all-illegal "organism" sitting on
+    # an energy-rich cell must still die within a handful of cycles.
+    env = make_env(baseline_resource=1000.0, max_resource=1000.0)
+    thread = Thread(thread_id=1, genome_start=0, genome_length=8, energy=30.0)
+    env.threads[1] = thread
+    env.owner[0:8] = 1
+    env.memory[0:8] = 0xEE
+    for _ in range(50):
+        if not thread.alive:
+            break
+        env.cpu.execute(thread, env)
+    assert thread.alive is False
+
+
+def test_reclaim_frees_unfinished_offspring_buffer() -> None:
+    # Regression guard for the territory leak: a parent that dies mid-copy
+    # must release the offspring cradle it claimed at ALLOC time, not only its
+    # own body — otherwise those cells stay owned by a dead thread forever.
+    env = make_env()
+    parent = Thread(thread_id=1, genome_start=0, genome_length=4, energy=0.0)
+    parent.offspring_start = 20
+    parent.offspring_length = 4
+    env.threads[1] = parent
+    env.owner[0:4] = 1     # the parent's own body
+    env.owner[20:24] = 1   # the claimed-but-unfinished offspring buffer
+    env.lineage[20:24] = 5
+    env.strain[20:24] = STRAIN_SEED
+
+    env._reclaim(parent)
+
+    assert np.all(env.owner[0:4] == -1)    # body freed (as before)
+    assert np.all(env.owner[20:24] == -1)  # cradle freed (the fix)
+    assert np.all(env.lineage[20:24] == -1)
+    assert np.all(env.strain[20:24] == 0)
+
+
+def test_reclaim_leaves_foreign_owned_cells_in_offspring_region_untouched() -> None:
+    # If a higher-energy foreign writer legitimately stole part of the cradle
+    # while the parent was alive, reclaim must not clobber it on the parent's
+    # death — only cells the dead parent still owns are ours to free.
+    env = make_env()
+    parent = Thread(thread_id=1, genome_start=0, genome_length=4, energy=0.0)
+    parent.offspring_start = 20
+    parent.offspring_length = 4
+    env.threads[1] = parent
+    env.owner[0:4] = 1
+    env.owner[20:24] = 1
+    env.owner[22] = 7      # a foreign thread now holds this one cell
+    env.memory[22] = 123
+
+    env._reclaim(parent)
+
+    assert np.all(env.owner[20:22] == -1)
+    assert env.owner[22] == 7          # foreign cell preserved
+    assert np.all(env.owner[23:24] == -1)
+    assert env.memory[22] == 123       # foreign cell's contents preserved
+
+
+def test_concurrent_snapshot_reads_during_stepping_do_not_raise() -> None:
+    # Thread-safety guard for dashboard / dashboard-server modes: a stats
+    # reader must be able to read the live environment + tracer while the
+    # simulation thread mutates the thread registry and the tracer, without
+    # hitting "dictionary changed size during iteration" or a torn read.
+    import threading
+
+    from analytics.metrics import PhylogeneticTracer, take_snapshot
+    from core.initializer import build_ancestor_genome
+
+    config = EnvironmentConfig(width=32, height=32, probe_spawn_count=2, probe_genome_length=24)
+    env = Environment(config=config, rng=np.random.default_rng(0))
+    env.memory[:] = np.random.default_rng(0).integers(0, 256, size=config.size, dtype=np.uint8)
+    tracer = PhylogeneticTracer()
+    env.on_birth = lambda child, parent: tracer.on_birth(child, parent, env)
+    env.on_death = tracer.on_death
+    env.on_overwrite = tracer.on_overwrite
+    ancestor = build_ancestor_genome()
+    for address in range(0, config.size - ANCESTOR_GENOME_LENGTH, 64):
+        env.spawn_organism(genome=ancestor, address=address, strain="seed")
+
+    errors: list = []
+    stop = threading.Event()
+
+    def simulate() -> None:
+        try:
+            for _ in range(400):
+                tracer.set_cycle(env.cycle)
+                env.step()
+        except Exception as exc:  # noqa: BLE001 — record any race for the assert
+            errors.append(exc)
+        finally:
+            stop.set()
+
+    def read() -> None:
+        try:
+            while not stop.is_set():
+                take_snapshot(env, tracer)
+                env.population_by_strain()
+                env.living_threads()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    sim_thread = threading.Thread(target=simulate)
+    read_thread = threading.Thread(target=read)
+    sim_thread.start()
+    read_thread.start()
+    sim_thread.join(timeout=60)
+    read_thread.join(timeout=5)
+
+    assert not errors, errors
+
+
+def test_probe_initial_energy_is_independent_of_baseline_resource() -> None:
+    # The probe budget must be a fixed value, not a multiple of the resource
+    # field's richness, so retuning resources never silently changes how long
+    # noise probes survive.
+    config = EnvironmentConfig(
+        width=8,
+        height=8,
+        mutation_rate=0.0,
+        baseline_resource=1000.0,
+        max_resource=2000.0,
+        probe_spawn_count=1,
+        probe_genome_length=8,
+        probe_initial_energy=30.0,
+    )
+    env = Environment(config=config, rng=np.random.default_rng(42))
+    env._spawn_probe_threads()
+    probes = [t for t in env.threads.values() if t.strain == "noise"]
+    assert len(probes) == 1
+    assert probes[0].energy == pytest.approx(30.0)

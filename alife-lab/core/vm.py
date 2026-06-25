@@ -142,8 +142,9 @@ TASKS: dict[str, Callable[[int, int], int]] = {
     "nand": lambda older, newer: (~(older & newer)) & 0xFF,
 }
 
-#: Energy charged for landing on a byte that is not a valid opcode.
-#: Deliberately steep so that a thread wandering through unstructured
+#: Energy charged for landing on a byte that is not a valid opcode, with no
+#: harvest offset (see CPUCore.execute's illegal-opcode branch) — a pure net
+#: drain. Deliberately steep so that a thread wandering through unstructured
 #: noise burns out within a handful of cycles, while a well-formed genome
 #: (which never contains illegal bytes by construction) never pays it.
 ILLEGAL_OPCODE_COST: float = 6.0
@@ -214,8 +215,12 @@ class Substrate(Protocol):
         """
 
     def harvest_energy(self, address: int, amount: float) -> float:
-        """Draw up to ``amount`` of local potential energy at ``address``.
-        Returns the amount actually harvested (may be less than requested).
+        """Draw up to ``amount`` of local potential energy at ``address``,
+        or *deposit* energy when ``amount`` is negative. Returns the
+        magnitude actually transferred (always >= 0): for a withdrawal, how
+        much was harvested (may be less than requested if the cell is nearly
+        empty); for a deposit, how much the cell could absorb before hitting
+        its capacity ceiling (may be less than requested if it is nearly full).
         """
 
     def sense_resource(self, address: int) -> int:
@@ -339,8 +344,15 @@ class CPUCore:
         try:
             opcode = Opcode(raw_byte)
         except ValueError:
-            harvested = substrate.harvest_energy(address, ILLEGAL_OPCODE_COST)
-            thread.energy += harvested
+            # An illegal byte is not a legitimate instruction, so it draws no
+            # energy from the substrate — executing nonsense is a pure net
+            # drain. (Earlier versions harvested ILLEGAL_OPCODE_COST here
+            # before charging it, which fully refunded the penalty whenever
+            # the local cell held at least that much energy. That let
+            # random-noise "organisms" — almost entirely illegal bytes — break
+            # exactly even and persist indefinitely as immortal squatters
+            # instead of burning out within a handful of cycles as the
+            # abiogenesis-probe design requires.)
             thread.energy -= ILLEGAL_OPCODE_COST
             thread.ip = (thread.ip + 1) % thread.genome_length
             if thread.energy <= EXHAUSTION_THRESHOLD:
@@ -426,8 +438,11 @@ class CPUCore:
         elif opcode is Opcode.SHARE:
             share_amount = min(thread.energy * 0.1, 2.0)
             neighbor_address = address + 1
-            thread.energy -= share_amount
-            substrate.harvest_energy(neighbor_address, -share_amount)
+            # Only give up what the neighbor cell can actually absorb: if it
+            # is already at max capacity the surplus stays with this thread
+            # instead of vanishing into a full cell.
+            deposited = substrate.harvest_energy(neighbor_address, -share_amount)
+            thread.energy -= deposited
 
         elif opcode is Opcode.SENSE_RESOURCE:
             sensed = substrate.sense_resource(address) & 0xFF

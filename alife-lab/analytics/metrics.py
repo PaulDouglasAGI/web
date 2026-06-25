@@ -21,11 +21,21 @@ environment's hot loop.
 
 from __future__ import annotations
 
+import threading
 import zlib
+from collections import deque
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Deque, Dict, List, Optional, Set, Tuple
 
 import numpy as np
+
+#: Upper bound on how many individual SpeciationEvent / OverwriteEvent records
+#: the tracer retains for inspection. The aggregate counts that drive the
+#: metrics readout are kept as O(1) running totals (see PhylogeneticTracer),
+#: so this only caps the rolling *detail* history — without it, a long run
+#: (e.g. a million cycles) would accumulate these event objects without limit
+#: and grow the process's memory unboundedly.
+MAX_RETAINED_EVENTS = 50_000
 
 from core.environment import Environment
 from core.vm import Thread
@@ -135,62 +145,104 @@ class PhylogeneticTracer:
         """
         self.divergence_threshold = divergence_threshold
         self.lineages: Dict[int, LineageRecord] = {}
-        self.speciation_events: List[SpeciationEvent] = []
-        self.overwrite_events: List[OverwriteEvent] = []
+        #: Bounded rolling detail history (see MAX_RETAINED_EVENTS); the
+        #: aggregate counts below are the source of truth for the readout.
+        self.speciation_events: Deque[SpeciationEvent] = deque(maxlen=MAX_RETAINED_EVENTS)
+        self.overwrite_events: Deque[OverwriteEvent] = deque(maxlen=MAX_RETAINED_EVENTS)
         self._cycle = 0
+
+        #: O(1) running totals — incremented in the hooks rather than
+        #: recomputed by scanning every lineage / every event on each
+        #: snapshot, so a periodic report stays cheap no matter how long the
+        #: run or how much history has accrued.
+        self._total_births = 0
+        self._total_deaths = 0
+        self._speciation_count = 0
+        self._noise_defeats_seed = 0
+        self._seed_defeats_noise = 0
+        #: ids of lineages with at least one living member, so dominant_lineages
+        #: only ever sorts the currently-alive lineages instead of every
+        #: lineage that has ever existed.
+        self._live_lineage_ids: Set[int] = set()
+
+        #: Guards all tracer state. The simulation thread mutates it through
+        #: the lifecycle hooks while the dashboard / HTTP-stats thread reads it
+        #: through the query methods (see viz/server.py, viz/dashboard.py);
+        #: the hooks are always invoked outside Environment._lock, so this
+        #: never nests with it.
+        self._lock = threading.Lock()
 
     def set_cycle(self, cycle: int) -> None:
         self._cycle = cycle
 
     def on_birth(self, child: Thread, parent: Optional[Thread], environment: Environment) -> None:
-        if parent is not None:
-            self._maybe_speciate(child, parent, environment)
-        if child.lineage_id not in self.lineages:
-            self.lineages[child.lineage_id] = LineageRecord(
-                lineage_id=child.lineage_id,
-                parent_lineage_id=parent.lineage_id if parent is not None else None,
-                origin_strain=child.strain,
-                birth_cycle=self._cycle,
-                founder_thread_id=child.thread_id,
-            )
-        record = self.lineages[child.lineage_id]
-        record.total_births += 1
-        record.alive_count += 1
+        with self._lock:
+            if parent is not None:
+                self._maybe_speciate(child, parent, environment)
+            if child.lineage_id not in self.lineages:
+                self.lineages[child.lineage_id] = LineageRecord(
+                    lineage_id=child.lineage_id,
+                    parent_lineage_id=parent.lineage_id if parent is not None else None,
+                    origin_strain=child.strain,
+                    birth_cycle=self._cycle,
+                    founder_thread_id=child.thread_id,
+                )
+            record = self.lineages[child.lineage_id]
+            record.total_births += 1
+            record.alive_count += 1
+            self._total_births += 1
+            if record.alive_count > 0:
+                self._live_lineage_ids.add(record.lineage_id)
 
     def on_death(self, thread: Thread) -> None:
-        record = self.lineages.get(thread.lineage_id)
-        if record is not None:
-            record.total_deaths += 1
-            record.alive_count = max(0, record.alive_count - 1)
+        with self._lock:
+            record = self.lineages.get(thread.lineage_id)
+            if record is not None:
+                record.total_deaths += 1
+                record.alive_count = max(0, record.alive_count - 1)
+                self._total_deaths += 1
+                if record.alive_count == 0:
+                    self._live_lineage_ids.discard(record.lineage_id)
 
     def on_overwrite(self, winner: Thread, loser: Thread) -> None:
-        self.overwrite_events.append(
-            OverwriteEvent(
-                cycle=self._cycle,
-                winner_lineage_id=winner.lineage_id,
-                loser_lineage_id=loser.lineage_id,
-                winner_strain=winner.strain,
-                loser_strain=loser.strain,
+        with self._lock:
+            if winner.strain == "noise" and loser.strain == "seed":
+                self._noise_defeats_seed += 1
+            elif winner.strain == "seed" and loser.strain == "noise":
+                self._seed_defeats_noise += 1
+            self.overwrite_events.append(
+                OverwriteEvent(
+                    cycle=self._cycle,
+                    winner_lineage_id=winner.lineage_id,
+                    loser_lineage_id=loser.lineage_id,
+                    winner_strain=winner.strain,
+                    loser_strain=loser.strain,
+                )
             )
-        )
 
     def dominant_lineages(self, top_n: int = 5) -> List[Tuple[int, int]]:
         """The ``top_n`` lineages by current living population, as
         ``(lineage_id, alive_count)`` pairs, highest first."""
-        ranked = sorted(self.lineages.values(), key=lambda r: r.alive_count, reverse=True)
-        return [(r.lineage_id, r.alive_count) for r in ranked[:top_n] if r.alive_count > 0]
+        with self._lock:
+            live = (self.lineages[lid] for lid in self._live_lineage_ids if lid in self.lineages)
+            ranked = sorted(live, key=lambda r: r.alive_count, reverse=True)
+            return [(r.lineage_id, r.alive_count) for r in ranked[:top_n] if r.alive_count > 0]
+
+    @property
+    def speciation_count(self) -> int:
+        return self._speciation_count
 
     def noise_defeats_seed_count(self) -> int:
-        return sum(1 for e in self.overwrite_events if e.winner_strain == "noise" and e.loser_strain == "seed")
+        return self._noise_defeats_seed
 
     def seed_defeats_noise_count(self) -> int:
-        return sum(1 for e in self.overwrite_events if e.winner_strain == "seed" and e.loser_strain == "noise")
+        return self._seed_defeats_noise
 
     def total_births(self) -> int:
-        return sum(r.total_births for r in self.lineages.values())
+        return self._total_births
 
     def total_deaths(self) -> int:
-        return sum(r.total_deaths for r in self.lineages.values())
+        return self._total_deaths
 
     def _maybe_speciate(self, child: Thread, parent: Thread, environment: Environment) -> None:
         length = child.genome_length
@@ -207,6 +259,7 @@ class PhylogeneticTracer:
             indices = environment.range_indices(child.genome_start, length)
             environment.lineage[indices] = new_lineage_id
             child.lineage_id = new_lineage_id
+            self._speciation_count += 1
             self.speciation_events.append(
                 SpeciationEvent(
                     cycle=self._cycle,
@@ -225,9 +278,12 @@ def dominant_strain_complexity(
     genome from each of the ``top_n`` most populous current lineages.
     """
     complexities: Dict[int, int] = {}
+    # Snapshot the thread set once under the environment lock so the
+    # simulation thread can't mutate it mid-iteration (dashboard modes).
+    living = environment.living_threads()
     for lineage_id, _count in tracer.dominant_lineages(top_n=top_n):
         representative = next(
-            (t for t in environment.threads.values() if t.alive and t.lineage_id == lineage_id), None
+            (t for t in living if t.lineage_id == lineage_id), None
         )
         if representative is None:
             continue
@@ -247,7 +303,7 @@ def take_snapshot(environment: Environment, tracer: PhylogeneticTracer) -> Metri
         population_by_strain=environment.population_by_strain(),
         total_births=tracer.total_births(),
         total_deaths=tracer.total_deaths(),
-        speciation_count=len(tracer.speciation_events),
+        speciation_count=tracer.speciation_count,
         noise_defeats_seed=tracer.noise_defeats_seed_count(),
         seed_defeats_noise=tracer.seed_defeats_noise_count(),
         dominant_lineages=tracer.dominant_lineages(),

@@ -56,9 +56,14 @@ class FakeSubstrate:
         return self._alloc_at
 
     def harvest_energy(self, address: int, amount: float) -> float:
-        # A barren fake world: no ambient energy to draw on, so every
-        # instruction's cost is a pure net deduction — keeps these isolated
-        # opcode-semantics tests independent of any resource-physics model.
+        # A barren fake world for *withdrawals*: no ambient energy to draw on,
+        # so every instruction's cost is a pure net deduction — keeps these
+        # isolated opcode-semantics tests independent of any resource-physics
+        # model. *Deposits* (negative amount) are absorbed in full, matching
+        # the real substrate's contract of returning the magnitude actually
+        # transferred, so SHARE's give-away semantics still exercise.
+        if amount < 0:
+            return -amount
         return 0.0
 
     def finalize_offspring(self, parent: Thread) -> None:

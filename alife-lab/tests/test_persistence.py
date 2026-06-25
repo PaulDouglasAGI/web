@@ -80,6 +80,32 @@ def test_checkpoint_preserves_tracer_lineage_and_event_history(tmp_path: Path) -
     assert restored_tracer.overwrite_events[0].winner_strain == tracer.overwrite_events[0].winner_strain
 
 
+def test_checkpoint_preserves_tracer_running_totals_and_live_set(tmp_path: Path) -> None:
+    # The O(1) running totals are the source of truth for the metrics readout
+    # and can't be recovered from the bounded rolling event history, so they
+    # must survive a save/load; the live-lineage set is rebuilt from the
+    # restored lineage records.
+    env, tracer = make_env(), _fake_tracer()
+    tracer._total_births = 7
+    tracer._total_deaths = 3
+    tracer._speciation_count = 2
+    tracer._noise_defeats_seed = 1
+    tracer._seed_defeats_noise = 4
+
+    checkpoint_path = tmp_path / "checkpoint"
+    save_checkpoint(env, tracer, str(checkpoint_path))
+    _restored_env, restored = load_checkpoint(str(checkpoint_path))
+
+    assert restored.total_births() == 7
+    assert restored.total_deaths() == 3
+    assert restored.speciation_count == 2
+    assert restored.noise_defeats_seed_count() == 1
+    assert restored.seed_defeats_noise_count() == 4
+    # lineage 1 in _fake_tracer has alive_count=2, so it is the sole live
+    # lineage and the dominant one after restore.
+    assert restored.dominant_lineages() == [(1, 2)]
+
+
 def test_resumed_environment_can_keep_stepping(tmp_path: Path) -> None:
     environment, tracer = build_traced_environment("config/default.yaml")
     run_headless(environment, tracer, cycles=20, report_interval=20)
