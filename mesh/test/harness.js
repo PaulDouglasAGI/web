@@ -326,6 +326,55 @@ function freshWorld(ctx,seed){
   assert(forger>cultivator, 'a Forger refines more goods per shift than a Cultivator ('+forger+' vs '+cultivator+')');
 })();
 
+// ── Test 19: a prosperous Stone Town unlocks a monument site ───────────────
+(function testMonumentUnlock(){
+  const ctx=buildContext();
+  freshWorld(ctx,70);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    g.tier=5; g.prosperity=0.5;
+    World.checkStructureUnlocks();
+    World.sites.some(s=>s.type==='monument'&&s.gather===0);
+  `, ctx);
+  assert(r===true, 'a prosperous Stone Town unlocked a monument build site');
+})();
+
+// ── Test 20: offering beauty completes a monument (beauty finally has a sink)─
+(function testMonumentBuild(){
+  const ctx=buildContext();
+  freshWorld(ctx,71);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const mon=mkSite(g.x,g.y,'monument',0); World.sites.push(mon);
+    mon.matsWood=mon.needWood; mon.matsStone=mon.needStone;
+    const a=new Agent(g.x,g.y,3); a.inv.beauty=50; Agents.push(a);
+    const w=BehaviorById['offerBeauty'].weight(a);
+    BehaviorById['offerBeauty'].make(a).onArrive(a);
+    const beautyFilled=mon.matsBeauty;        // capture before construction resets it for the next level
+    const ready=siteMatsReady(mon);
+    const ct=BehaviorById['construct'].make(a);
+    for(let i=0;i<400 && mon.level<1;i++){ ct.onTick(a); }
+    ({weight:w, matsBeauty:beautyFilled, ready, built:mon.built, level:mon.level});
+  `, ctx);
+  assert(r.weight>0, 'an agent carrying beauty seeks a monument to offer it to');
+  assert(r.matsBeauty>=10 && r.ready, 'offering beauty met the monument beauty requirement ('+r.matsBeauty+')');
+  assert(r.built && r.level>=1, 'the monument was raised once all materials were in (level '+r.level+')');
+})();
+
+// ── Test 21: monument + wonder + full economy reaches the BEACON tier ──────
+(function testBeaconTier(){
+  const ctx=buildContext();
+  freshWorld(ctx,72);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const req={hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1, monument:1, wonder:1};
+    for(const type in req){ for(let i=0;i<req[type];i++){ const s=mkSite(g.x,g.y,type,0); s.built=true; s.level=1; World.sites.push(s); } }
+    const t=World.tierOf(0);
+    ({tier:t, isLast:t===SETTLEMENT_TIERS.length-1, name:SETTLEMENT_TIERS[t].name});
+  `, ctx);
+  assert(r.isLast && r.name==='BEACON', 'a settlement crowned by a monument and the Wonder reaches BEACON (tier '+r.tier+' '+r.name+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){

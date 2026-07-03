@@ -294,6 +294,17 @@ const Renderer={
           ctx.beginPath();
           ctx.moveTo(sx-hw*0.85, sy-hh*0.15); ctx.lineTo(sx, sy-hh*1.6); ctx.lineTo(sx+hw*0.85, sy-hh*0.15);
           ctx.closePath(); ctx.fill();
+        } else if(s.type==='monument' || s.type==='wonder'){
+          // a glowing spire — the Wonder taller and brighter than a monument
+          const big=s.type==='wonder';
+          const h=(big?26:16)*z*lvlScale, w=(big?9:6)*z*lvlScale;
+          const gl=ctx.createRadialGradient(sx,sy,0,sx,sy,h*1.4);
+          gl.addColorStop(0,'rgba(255,233,176,'+(big?0.5:0.3)+')'); gl.addColorStop(1,'rgba(255,233,176,0)');
+          ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(sx,sy,h*1.4,0,7); ctx.fill();
+          ctx.fillStyle='#d8c9a8';
+          ctx.beginPath(); ctx.moveTo(sx-w,sy); ctx.lineTo(sx,sy-h); ctx.lineTo(sx+w,sy); ctx.closePath(); ctx.fill();
+          ctx.fillStyle='rgba(255,233,176,0.95)';
+          ctx.beginPath(); ctx.arc(sx,sy-h,w*0.5,0,7); ctx.fill();
         } else {
           const fc=Factions[s.faction!=null?s.faction:0];
           const hw=10*z*lvlScale, hh=8*z*lvlScale;

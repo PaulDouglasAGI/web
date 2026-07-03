@@ -151,6 +151,19 @@ const SITE_DEFS={
               {needWood:16, needStone:18, buildDur:200, cap:2},
               {needWood:20, needStone:22, buildDur:280, cap:2},
               {needWood:18, needStone:26, buildDur:220, cap:2}
+            ] },
+  // ── beauty structures (S5) — the only sinks for the beauty resource, and the
+  // endgame content. A monument needs beauty alongside wood/stone and radiates a
+  // coherence aura; the singular Wonder is colossal and, once raised, permanently
+  // lifts its settlement (see applySiteLevel). needBeauty is delivered by the
+  // offerBeauty behavior.
+  monument:{ levels:[
+              {needWood:12, needStone:18, needBeauty:10, buildDur:260, auraR:320},
+              {needWood:14, needStone:22, needBeauty:16, buildDur:300, auraR:420},
+              {needWood:16, needStone:26, needBeauty:24, buildDur:340, auraR:520}
+            ] },
+  wonder:{ levels:[
+              {needWood:40, needStone:60, needBeauty:50, buildDur:600}
             ] }
 };
 const FUNCTIONAL_TYPES=['workshop','market','shrineHall','loreHall','huntingLodge','smithy','barracks','harbor','temple','tavern','quarry'];
@@ -163,6 +176,7 @@ function mkSite(x,y,type,gather){
     needWood:lvl.needWood,needStone:lvl.needStone,buildDur:lvl.buildDur,
     matsWood:0,matsStone:0,progress:0,built:false,faction:null,gather,
     stoneUpgraded:false,matsStoneUpgrade:0};
+  if(type==='monument'||type==='wonder') Object.assign(s,{needBeauty:lvl.needBeauty,matsBeauty:0});
   if(type==='well') Object.assign(s,{amount:0,max:0,regen:0});
   if(type==='farm') Object.assign(s,{stage:'empty',stageT:0,growTicks:lvl.growTicks,yieldAmt:lvl.yieldAmt});
   if(type==='granary') Object.assign(s,{workers:[],log:[],contrib:0});
@@ -185,12 +199,24 @@ function applySiteLevel(s,ag){
   else if(s.type==='masonry'){ s.stoneRate=def.stoneRate; ag.inv.beauty+=3*s.level; raiseResonance(0.015*s.level); }
   else if(s.type==='townHall'){ s.auraR=def.auraR; ag.inv.beauty+=3*s.level; raiseResonance(0.015*s.level); }
   else if(s.type==='mine'){ s.capacity=def.cap; ag.inv.beauty+=2*s.level; if(!s.undergroundAnchor) s.undergroundAnchor=Underground.addEntrance(s); }
+  else if(s.type==='monument'){ s.auraR=def.auraR; ag.inv.beauty+=2*s.level; raiseResonance(0.03*s.level); }
+  else if(s.type==='wonder'){
+    // the singular capstone — raising it permanently lifts its settlement:
+    // a prosperity floor high enough to keep writing coherence into the field
+    // forever (see the dayTick%60 block), a global resonance surge, and a
+    // housing bump (see housingCapacity). Reaching it also unlocks BEACON tier.
+    const g=World.gathers[s.gather]; if(g) g.wonderProsperity=0.65;
+    raiseResonance(0.25);
+    Mesh.broadcast(s.x,s.y,'discovery',1,'#ffe9b0');
+    Events.banner='A WONDER RISES — THE MESH REMEMBERS'; Events.active='wonder'; Events.activeT=320;
+  }
   ag.remember('raised a '+s.type+' to level '+s.level);
   Mesh.broadcast(s.x,s.y,'discovery',0.7,Factions[ag.faction].color); raiseResonance(0.02);
   if(s.level<s.maxLevel){
     const next=SITE_DEFS[s.type].levels[s.level];
     s.needWood=next.needWood; s.needStone=next.needStone; s.buildDur=next.buildDur;
     s.matsWood=0; s.matsStone=0; s.progress=0;
+    if(next.needBeauty!=null){ s.needBeauty=next.needBeauty; s.matsBeauty=0; }
   }
 }
 
@@ -211,7 +237,11 @@ const SETTLEMENT_TIERS=[
   {name:'BASTION',      req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1}},
   {name:'DOMINION',     req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1}},
   {name:'CONFEDERACY',  req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1}},
-  {name:'METROPOLIS',   req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1}}
+  {name:'METROPOLIS',   req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1}},
+  // the true endgame — a settlement that has raised both a monument and the
+  // singular Wonder. Requires the full networked economy behind it (see the
+  // wonder's unlock gate in checkStructureUnlocks).
+  {name:'BEACON',       req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1, monument:1, wonder:1}}
 ];
 
 const World={
@@ -583,6 +613,17 @@ const World={
       // quarry unlocks once a settlement is mature enough (2 wells) to staff it
       const hasQuarrySite=this.sites.some(s=>s.type==='quarry'&&s.gather===gi);
       if(!hasQuarrySite && wells>=2) this.placeSite(g.x,g.y,70,200,'quarry',gi,50);
+
+      // monument (beauty structure) — a Stone Town that has grown modestly
+      // prosperous earns the option to raise one
+      const hasMonumentSite=this.sites.some(s=>s.type==='monument'&&s.gather===gi);
+      if(!hasMonumentSite && g.tier>=5 && (g.prosperity||0)>0.4) this.placeSite(g.x,g.y,90,200,'monument',gi,60);
+      // the Wonder — the singular capstone, gated behind a Metropolis, high
+      // prosperity, AND a strong trade route: the endgame demands a networked
+      // economy, not an isolated grind.
+      const hasWonderSite=this.sites.some(s=>s.type==='wonder'&&s.gather===gi);
+      const strongRoute=this.routes.some(r=>(r.a===gi||r.b===gi)&&r.strength>5);
+      if(!hasWonderSite && g.tier>=10 && (g.prosperity||0)>0.8 && strongRoute) this.placeSite(g.x,g.y,110,220,'wonder',gi,70);
     }
   },
 
@@ -708,16 +749,17 @@ const World={
         // trade routes; it decays if the settlement stops producing, and a
         // thriving town literally warms the Mesh field (chooseTask's coherence
         // branch then lifts social/trade/creative there — a free feedback loop).
-        let staffed=0, stockTotal=0;
+        let staffed=0, stockTotal=0, monuments=0;
         for(const s of this.sites){
           if(s.gather!==gi || !s.built) continue;
           if(s.type==='granary' || FUNCTIONAL_TYPES.includes(s.type)) staffed+=(s.workers||[]).length;
+          if(s.type==='monument' || s.type==='wonder') monuments++; // beauty made permanent
         }
         for(const k in g.stock) stockTotal+=g.stock[k];
         const routeIncome=g.routeIncome||0; // filled by the caravan system (S3)
         const wonderBonus=g.wonderProsperity||0; // floor raised by a completed wonder (S5)
         g.prosperity=Math.max(wonderBonus,Math.min(1,
-          (g.prosperity||0)*0.995 + 0.002*staffed + 0.0004*stockTotal + routeIncome));
+          (g.prosperity||0)*0.995 + 0.002*staffed + 0.0004*stockTotal + 0.002*monuments + routeIncome));
         if(g.prosperity>0.6) Mesh.writeField(g.x,g.y,'coherence',(g.prosperity-0.6)*0.05,300);
       }
 
@@ -784,6 +826,7 @@ const World={
       if(!s.built) continue;
       if(s.type==='hut') cap+=s.capacity||3;
       if(s.type==='granary') cap+=(s.capacity||1)*4;
+      if(s.type==='wonder') cap+=10; // a Wonder draws souls from across the world
     }
     // a prosperous settlement draws (and can feed) more souls than its huts alone
     for(const g of this.gathers) cap+=Math.floor((g.prosperity||0)*8);

@@ -189,6 +189,13 @@ function beginCaravan(ag, fromGi, toGi){
 function theftTarget(a){
   return nearestAgent(a, o=> o!==a && !o.dead && !o.wanted && (invTotal(o.inv)>1 || o.caravan) && dist2(a.x,a.y,o.x,o.y)<600*600);
 }
+// a site has every material it needs to be raised — wood/stone always, plus
+// beauty for the beauty structures (monument/wonder, S5)
+function siteMatsReady(s){
+  if(s.matsWood<s.needWood || s.matsStone<s.needStone) return false;
+  if((s.type==='monument'||s.type==='wonder') && (s.matsBeauty||0)<(s.needBeauty||0)) return false;
+  return true;
+}
 
 const Behaviors=[
   // ── SURVIVAL & WORK ────────────────────────────────────────────────────────
@@ -556,10 +563,12 @@ const Behaviors=[
         onArrive(ag){
           if(ag.inv.wood>0 && st.matsWood<st.needWood){ const n=Math.min(ag.inv.wood,st.needWood-st.matsWood); ag.inv.wood-=n; st.matsWood+=n; ag.remember('delivered wood to a build site'); }
           if(ag.inv.stone>0 && st.matsStone<st.needStone){ const n=Math.min(ag.inv.stone,st.needStone-st.matsStone); ag.inv.stone-=n; st.matsStone+=n; ag.remember('delivered stone to a build site'); }
-          // a quarry's bulk stockpile tops off whatever the agent couldn't personally carry
-          if(st.matsStone<st.needStone){
-            const gg=World.gathers[st.gather];
-            if(gg && gg.stock.stone>0){ const n=Math.min(gg.stock.stone,st.needStone-st.matsStone); gg.stock.stone-=n; st.matsStone+=n; }
+          // the settlement stores top off whatever the agent couldn't personally
+          // carry — vital for the large monument/wonder builds
+          const gg=World.gathers[st.gather];
+          if(gg && gg.stock){
+            if(st.matsStone<st.needStone && gg.stock.stone>0){ const n=Math.min(gg.stock.stone,st.needStone-st.matsStone); gg.stock.stone-=n; st.matsStone+=n; }
+            if(st.matsWood<st.needWood && (gg.stock.wood||0)>0){ const n=Math.min(gg.stock.wood,st.needWood-st.matsWood); gg.stock.wood-=n; st.matsWood+=n; }
           }
         } }; } },
   { id:'deliverOre', label:'hauling ore to the smithy', glyph:'⛏', cat:'creative',
@@ -571,12 +580,12 @@ const Behaviors=[
           if(gg && (ag.inv.ore||0)>0){ gg.stock.ore=(gg.stock.ore||0)+ag.inv.ore; ag.inv.ore=0; ag.remember('delivered ore to the smithy'); }
         } }; } },
   { id:'construct', label:'raising a structure', glyph:'⌗', cat:'creative',
-    weight:a=> { const st=World.nearestSite(a.x,a.y, s=>s.level<s.maxLevel && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
+    weight:a=> { const st=World.nearestSite(a.x,a.y, s=>s.level<s.maxLevel && siteMatsReady(s));
       if(!st) return 0;
       // nudge (not force) toward whichever incomplete type a settlement most needs next
       const nudge=(st.type==='well'||st.type==='granary') ? 1.25 : (st.type==='farm' ? 1.1 : 1);
       return (24+(a.faction===2?16:0))*nudge; },
-    make:a=> { const st=World.nearestSite(a.x,a.y, s=>s.level<s.maxLevel && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
+    make:a=> { const st=World.nearestSite(a.x,a.y, s=>s.level<s.maxLevel && siteMatsReady(s));
       if(!st) return null;
       return { label:'raising a '+st.type,glyph:'⌗',cat:'creative', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:200,
         onTick(ag){
@@ -599,6 +608,14 @@ const Behaviors=[
   { id:'mark', label:'leaving a mark', glyph:'✎', cat:'creative',
     weight:a=> 5,
     make:a=> { const p=wanderPoint(a,120); return { label:'leaving a mark',glyph:'✎',cat:'creative', pose:'kneel', target:p,arrive:12,dur:80,onArrive(ag){ ag.leaveMark('mark'); } }; } },
+  // carry accumulated beauty to a monument or the Wonder under construction —
+  // the only sink for the beauty resource, which every garden/mark/upgrade has
+  // been quietly minting all along
+  { id:'offerBeauty', label:'offering beauty', glyph:'❈', cat:'creative',
+    weight:a=> { if((a.inv.beauty||0)<=0) return 0; const st=World.nearestSite(a.x,a.y,s=>(s.type==='monument'||s.type==='wonder')&&s.level<s.maxLevel&&(s.matsBeauty||0)<(s.needBeauty||0)); return st?22+(a.faction===3?8:0):0; },
+    make:a=> { const st=World.nearestSite(a.x,a.y,s=>(s.type==='monument'||s.type==='wonder')&&s.level<s.maxLevel&&(s.matsBeauty||0)<(s.needBeauty||0)); if(!st) return null;
+      return { label:'offering beauty', glyph:'❈', cat:'creative', pose:'kneel', target:{x:st.x,y:st.y}, arrive:14, dur:70,
+        onArrive(ag){ const n=Math.min(ag.inv.beauty,(st.needBeauty||0)-(st.matsBeauty||0)); if(n>0){ ag.inv.beauty-=n; st.matsBeauty=(st.matsBeauty||0)+n; ag.remember('offered beauty to a '+st.type); siteLog(st, ag.name+' offered beauty'); } } }; } },
   { id:'upgradeToStone', label:'upgrading to stone', glyph:'▲', cat:'creative',
     weight:a=> { if(a.inv.stone<=0) return 0; return stoneUpgradeTargetFor(a) ? 20+(a.faction===2?12:0) : 0; },
     make:a=> { const tgt=stoneUpgradeTargetFor(a);
