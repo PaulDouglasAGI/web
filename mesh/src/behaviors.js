@@ -151,6 +151,19 @@ const Behaviors=[
   { id:'drink', label:'drinking', glyph:'≈', cat:'survival',
     weight:a=> a.inv.water>0 ? (100-a.energy)*0.4 : 0,
     make:a=> stayPut(a,'drinking','≈','survival',50,ag=>{ if(ag.task._t===1 && ag.inv.water>0){ ag.inv.water-=1; ag.energy=Math.min(100,ag.energy+30);} },'sit') },
+  // consumes a dose from the settlement store (brewed at a shrine hall / temple
+  // from herbs — see doJob). A failing agent walks to the stores for a remedy
+  // that restores energy and staves off an old-age death for a day (a.medicated,
+  // checked in Agent.update's mortality line). This is what closes the herb chain.
+  { id:'takeMedicine', label:'seeking a remedy', glyph:'✚', cat:'survival',
+    weight:a=> { if(a.hunger<75 && a.energy>18) return 0;
+      const g=World.nearestOf(World.gathers,a.x,a.y);
+      return (g && g.stock && (g.stock.medicine||0)>=1) ? 34 : 0; },
+    make:a=> { const g=World.nearestOf(World.gathers,a.x,a.y); if(!g||!g.stock||(g.stock.medicine||0)<1) return null;
+      return { label:'seeking a remedy', glyph:'✚', cat:'survival', pose:'sit', target:{x:g.x,y:g.y}, arrive:16, dur:60,
+        onArrive(ag){
+          if((g.stock.medicine||0)>=1){ g.stock.medicine-=1; ag.energy=Math.min(100,ag.energy+40); ag.hunger=Math.max(0,ag.hunger-20); ag.medicated=World.dayLen; ag.remember('was mended by a remedy'); }
+        } }; } },
   { id:'gatherFood', label:'foraging', glyph:'✿', cat:'survival',
     weight:a=> a.hunger>30 || a.inv.food<1 ? 24+a.hunger*0.6 : 8,
     make:a=> gotoNode(a,'foraging','✿','survival',World.nearestNode(a.x,a.y,'food'),'food') },
@@ -255,6 +268,17 @@ const Behaviors=[
             st.toolsGranted=(st.toolsGranted||0)+1;
             siteLog(st,'forged a tool for '+ag.name);
           }
+          // production chain: a staffed workshop refines stocked raw materials
+          // into manufactured 'goods' — the tradeable commodity the caravan
+          // economy (S3) runs on. A settlement with no wood/stone can't produce.
+          if(st.type==='workshop' && ag.task._t%50===0){
+            const gg=World.gathers[st.gather];
+            if(gg && (gg.stock.wood||0)>=2 && (gg.stock.stone||0)>=1){
+              gg.stock.wood-=2; gg.stock.stone-=1; gg.stock.goods=(gg.stock.goods||0)+1;
+              st.goodsMade=(st.goodsMade||0)+1;
+              siteLog(st, ag.name+' crafted trade goods');
+            }
+          }
           if(st.type==='market' && ag.task._t%40===0){
             const amt=(st.effRate||0.05)*0.5*workMult;
             raiseResonance(amt);
@@ -269,6 +293,10 @@ const Behaviors=[
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
             st.griefEased=(st.griefEased||0)+eased;
             siteLog(st, ag.name+' led a gathering at the shrine hall');
+            // production chain: prepare medicine from stocked herbs — herb
+            // finally has a use beyond sitting in a pocket (consumed by takeMedicine)
+            const gg=World.gathers[st.gather];
+            if(gg && (gg.stock.herb||0)>=2){ gg.stock.herb-=2; gg.stock.medicine=(gg.stock.medicine||0)+1; st.medicineMade=(st.medicineMade||0)+1; }
           }
           if(st.type==='loreHall' && ag.task._t%50===0){
             const pupil=nearestAgent(ag, o=>o!==ag && o.skills<3 && dist2(o.x,o.y,st.x,st.y)<140*140);
@@ -309,6 +337,10 @@ const Behaviors=[
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
             st.griefEased=(st.griefEased||0)+eased;
             siteLog(st, ag.name+' led a grand rite at the temple');
+            // production chain: the temple also prepares medicine from herbs, at
+            // the grander scale its rites imply
+            const gg=World.gathers[st.gather];
+            if(gg && (gg.stock.herb||0)>=2){ gg.stock.herb-=2; gg.stock.medicine=(gg.stock.medicine||0)+2; st.medicineMade=(st.medicineMade||0)+2; }
           }
           if(st.type==='temple' && ag.task._t%100===0){
             World.altar.worshipped=(World.altar.worshipped||0)+1;
@@ -320,6 +352,10 @@ const Behaviors=[
             Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
             siteLog(st, ag.name+' raised spirits at the tavern');
+            // production chain: brew stocked food into ale, which is what the
+            // tavernBonus (see world.js) now actually scales with
+            const gg=World.gathers[st.gather];
+            if(gg && (gg.stock.food||0)>=2){ gg.stock.food-=2; gg.stock.ale=(gg.stock.ale||0)+1; st.aleBrewed=(st.aleBrewed||0)+1; }
           }
           if(st.type==='quarry' && ag.task._t%35===0){
             const gg=World.gathers[st.gather];

@@ -1,10 +1,10 @@
 /* economy.js — resources, inventory, bartering, resonance currency */
 'use strict';
 
-const RESOURCES=['food','water','wood','stone','tools','herb','fish','beauty'];
+const RESOURCES=['food','water','wood','stone','tools','herb','fish','beauty','medicine'];
 
 function newInventory(){
-  return { food:0, water:0, wood:0, stone:0, tools:0, herb:0, fish:0, beauty:0 };
+  return { food:0, water:0, wood:0, stone:0, tools:0, herb:0, fish:0, beauty:0, medicine:0 };
 }
 
 function invTotal(inv){

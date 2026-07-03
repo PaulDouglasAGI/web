@@ -648,10 +648,10 @@ const World={
         if(nt>g.tier){ g.tier=nt; this.onTierUp(gi,nt); }
         // food-security (granaries) & rest-bonus (huts) auras for this settlement —
         // cheap to recompute since sites are already tagged with their gather index
-        let foodSec=0, restMult=1, govern=0, tavernBonus=0;
+        let foodSec=0, restMult=1, govern=0, tavernBonus=0, hasGranary=false;
         for(const s of this.sites){
           if(s.gather!==gi || !s.built) continue;
-          if(s.type==='granary'){ s.contrib=(s.capacity||1)*0.4+((s.workers||[]).length>0?0.15*s.workers.length:0); if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
+          if(s.type==='granary'){ hasGranary=true; s.contrib=(s.capacity||1)*0.4+((s.workers||[]).length>0?0.15*s.workers.length:0); if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='huntingLodge'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='harbor'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='hut' && s.restMult){ const rm=s.stoneUpgraded?s.restMult*1.1:s.restMult; restMult=Math.max(restMult,rm); }
@@ -667,6 +667,13 @@ const World={
         }
         // deposited food is real food security, not just the granary aura
         g.foodSec=foodSec + Math.min(1.5,(g.stock.food||0)*0.02);
+        // granary preservation cycle: bank surplus food as rations through
+        // autumn, then draw those rations down in winter to hold food security
+        // up when the fields have gone quiet — winter finally rewards foresight.
+        if(hasGranary){
+          if(this.season===2 && (g.stock.food||0)>6){ const conv=Math.min(g.stock.food-6,2); g.stock.food-=conv; g.stock.rations=(g.stock.rations||0)+conv; }
+          if(this.season===3 && (g.stock.rations||0)>0){ const draw=Math.min(g.stock.rations,1.5); g.stock.rations-=draw; g.foodSec+=draw*0.5; }
+        }
         g.restMult=restMult; g.govern=govern; g.tavernBonus=tavernBonus;
 
         // prosperity — the slow-moving settlement wealth scalar every economic

@@ -154,6 +154,60 @@ function freshWorld(ctx,seed){
   assert(p2<0.5, 'prosperity decays when nothing is produced (0.5 -> '+p2.toFixed(4)+')');
 })();
 
+// ── Test 9: production chain — workshop refines stocked raws into goods ─────
+(function testProductionChain(){
+  const ctx=buildContext();
+  freshWorld(ctx,30);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const st=mkSite(g.x,g.y,'workshop',0); st.built=true; st.level=1; st.effRate=0.2; st.workers=[1];
+    World.sites.push(st);
+    g.stock.wood=6; g.stock.stone=3;
+    const a=new Agent(st.x,st.y,0); a.id=1; a.job={siteRef:st,startTick:0}; Agents.push(a);
+    const task=BehaviorById['doJob'].make(a); a.task=task;
+    for(let i=0;i<160;i++){ task._t=i; if(task.onTick) task.onTick(a); }
+    ({goods:g.stock.goods, wood:g.stock.wood, stone:g.stock.stone});
+  `, ctx);
+  assert(r.goods>0, 'a staffed workshop refined stocked wood/stone into trade goods ('+r.goods+')');
+  assert(r.wood<6 && r.stone<3, 'goods production debited the raw inputs (wood '+r.wood+', stone '+r.stone+')');
+})();
+
+// ── Test 10: granary rations hold winter food security above the control ────
+(function testWinterRations(){
+  const ctx=buildContext();
+  freshWorld(ctx,31);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const gr=mkSite(g.x,g.y,'granary',0); gr.built=true; gr.level=1; gr.capacity=1;
+    World.sites.push(gr);
+    World.season=3; // winter
+    g.stock.rations=10; g.stock.food=0; World.dayTick=59; World.update();
+    const withRations=g.foodSec;
+    g.stock.rations=0;  World.dayTick=59; World.update();
+    const without=g.foodSec;
+    ({withRations, without});
+  `, ctx);
+  assert(r.withRations>r.without, 'winter rations hold food security above the rationless case ('+r.withRations.toFixed(2)+' vs '+r.without.toFixed(2)+')');
+})();
+
+// ── Test 11: medicine revives a failing agent and grants old-age protection ─
+(function testTakeMedicine(){
+  const ctx=buildContext();
+  freshWorld(ctx,32);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    g.stock.medicine=3;
+    const a=new Agent(g.x,g.y,0); a.energy=5; a.hunger=90; Agents.push(a);
+    const b=BehaviorById['takeMedicine'];
+    const w=b.weight(a);
+    const task=b.make(a); if(task) task.onArrive(a);
+    ({weight:w, energy:a.energy, medicine:g.stock.medicine, medicated:a.medicated});
+  `, ctx);
+  assert(r.weight>0, 'a failing agent near medicine stock seeks a remedy (weight '+r.weight+')');
+  assert(r.energy>5 && r.medicine===2, 'the remedy restored energy and consumed one dose ('+r.energy+' energy, '+r.medicine+' left)');
+  assert(r.medicated>0, 'the remedy granted temporary old-age protection ('+r.medicated+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){

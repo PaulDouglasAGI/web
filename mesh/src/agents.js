@@ -33,6 +33,7 @@ class Agent{
     this.inv=newInventory();
     this.inv.food=Math.random()<0.5?1:0;
     this.wealth=0;                         // personal coin — earned as wages / deposits, spent in taverns & commissions (S1/S4)
+    this.medicated=0;                      // ticks of remaining protection from an old-age death, granted by medicine (S2)
     this.skills=1+((Math.random()*3)|0);
     this.meshSensitivity=0.4+Math.random()*0.6;
     this.bond=null;
@@ -174,8 +175,11 @@ class Agent{
     // aging & mortality — softened: dying of old age stays rare, and starvation/exhaustion
     // is caught by the emergency rest override below before energy can spiral this low
     this.age+=1/World.dayLen;
+    // medicine (S2) staves off the old-age death roll while it lasts
+    if(this.medicated>0) this.medicated--;
     // a captured criminal's fate is the Altar's to decide, not exhaustion en route
-    if(!this.captured && ((this.age>60 && Math.random()<0.000018*(this.age-55)) || this.energy<-30)){ this.die(); return; }
+    const oldAge = this.age>60 && this.medicated<=0 && Math.random()<0.000018*(this.age-55);
+    if(!this.captured && (oldAge || this.energy<-30)){ this.die(); return; }
 
     // emergency override: force a re-roll toward rest/sleep before energy bottoms out,
     // rather than letting the weighted system possibly keep grinding on something else
