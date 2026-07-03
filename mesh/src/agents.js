@@ -287,8 +287,16 @@ class Agent{
       Mesh.grief=Math.min(1,Mesh.grief+0.25);
       Mesh.writeField(wx,wy,'grief',0.5,180);
     }
-    // bonded partner grieves hardest
-    for(const o of Agents){ if(o.bond===this.id){ o.bond=null; o.grieving=1; o.remember('lost '+this.name);} }
+    // bonded partner grieves hardest — and inherits
+    let heir=null;
+    for(const o of Agents){ if(o.bond===this.id){ o.bond=null; o.grieving=1; o.remember('lost '+this.name); if(!heir) heir=o; } }
+    // inheritance — a life's coin passes to the bonded partner, or into the
+    // settlement treasury if they died with no one to leave it to
+    if(this.wealth>0){
+      if(heir){ heir.wealth=(heir.wealth||0)+this.wealth; }
+      else { const g=World.nearestOf(World.gathers,wx,wy); if(g) g.treasury=(g.treasury||0)+this.wealth; }
+      this.wealth=0;
+    }
     // nearby feel it (skipped for underground deaths — "nearby" has no meaning across the two maps)
     if(!this.underground){
       for(const o of Agents){ if(o!==this && !o.underground && dist2(this.x,this.y,o.x,o.y)<420*420){ o.grieving=Math.min(1,o.grieving+0.4); } }

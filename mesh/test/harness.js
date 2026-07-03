@@ -208,6 +208,51 @@ function freshWorld(ctx,seed){
   assert(r.medicated>0, 'the remedy granted temporary old-age protection ('+r.medicated+')');
 })();
 
+// ── Test 12: wages flow from the settlement treasury to the worker ─────────
+(function testWages(){
+  const ctx=buildContext();
+  freshWorld(ctx,40);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const st=mkSite(g.x,g.y,'loreHall',0); st.built=true; st.level=1; st.effRate=0.1; st.workers=[1];
+    World.sites.push(st);
+    g.treasury=10;
+    const a=new Agent(st.x,st.y,0); a.id=1; a.wealth=0; a.job={siteRef:st,startTick:0}; Agents.push(a);
+    const task=BehaviorById['doJob'].make(a); a.task=task;
+    for(let i=0;i<240;i++){ task._t=i; if(task.onTick) task.onTick(a); }  // wage tick at _t%80 -> 0,80,160
+    ({wealth:a.wealth, treasury:g.treasury});
+  `, ctx);
+  assert(r.wealth===3 && r.treasury===7, 'wages moved coin from treasury to worker (wealth '+r.wealth+', treasury '+r.treasury+')');
+})();
+
+// ── Test 13: a life's wealth is inherited by the bonded partner ────────────
+(function testInheritance(){
+  const ctx=buildContext();
+  freshWorld(ctx,41);
+  const r=vm.runInContext(`
+    const a=new Agent(World.w/2,World.h/2,0); a.id=1; a.wealth=7;
+    const b=new Agent(World.w/2+10,World.h/2,0); b.id=2; b.wealth=0;
+    a.bond=2; b.bond=1; Agents.push(a); Agents.push(b);
+    a.die();
+    ({heirWealth:b.wealth, deadWealth:a.wealth});
+  `, ctx);
+  assert(r.heirWealth===7 && r.deadWealth===0, 'a bonded partner inherited the deceased wealth (heir '+r.heirWealth+')');
+})();
+
+// ── Test 14: stark wealth inequality raises local fragmentation ────────────
+(function testInequalityDissonance(){
+  const ctx=buildContext();
+  freshWorld(ctx,42);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    for(let i=0;i<5;i++){ const a=new Agent(g.x+(i-2)*4,g.y,0); a.wealth=(i===0?40:0); Agents.push(a); }
+    const before=Mesh.dissonanceAt(g.x,g.y);
+    for(let i=0;i<200;i++) World.update();
+    ({before, after:Mesh.dissonanceAt(g.x,g.y)});
+  `, ctx);
+  assert(r.after>r.before+0.02, 'stark wealth inequality raised local fragmentation ('+r.before.toFixed(3)+' -> '+r.after.toFixed(3)+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){

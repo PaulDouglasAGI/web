@@ -693,6 +693,27 @@ const World={
           (g.prosperity||0)*0.995 + 0.002*staffed + 0.0004*stockTotal + routeIncome));
         if(g.prosperity>0.6) Mesh.writeField(g.x,g.y,'coherence',(g.prosperity-0.6)*0.05,300);
       }
+
+      // wealth inequality → local fragmentation. Bin the living to their
+      // nearest gather; where the gap between the richest and the average is
+      // stark, write a little dissonance there. criminality already floats on
+      // local dissonance (see Agent.update) and the steal behavior scales with
+      // criminality — so inequality drives crime through the mechanics that
+      // already exist, with no new crime code.
+      const wSum=new Array(this.gathers.length).fill(0), wMax=new Array(this.gathers.length).fill(0), wCnt=new Array(this.gathers.length).fill(0);
+      for(const a of Agents){
+        if(a.dead||a.underground) continue;
+        let bi=-1,bd=Infinity;
+        for(let gi=0;gi<this.gathers.length;gi++){ const gg=this.gathers[gi]; const d=(gg.x-a.x)**2+(gg.y-a.y)**2; if(d<bd){ bd=d; bi=gi; } }
+        if(bi<0) continue;
+        const w=a.wealth||0; wSum[bi]+=w; wCnt[bi]++; if(w>wMax[bi]) wMax[bi]=w;
+      }
+      for(let gi=0;gi<this.gathers.length;gi++){
+        if(wCnt[gi]<4) continue;
+        const avg=wSum[gi]/wCnt[gi], spread=wMax[gi]-avg;
+        if(spread>6){ const g=this.gathers[gi]; Mesh.writeField(g.x,g.y,'dissonance',Math.min(0.3,(spread-6)*0.02),260); }
+      }
+
       // per-faction resource ledger — a live snapshot of what each faction's living members currently hold
       const stock=[{},{},{},{}];
       for(const a of Agents){

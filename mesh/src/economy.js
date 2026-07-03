@@ -46,8 +46,12 @@ const Economy={
       b.remember('traded '+aGives+' for '+bGives);
       return true;
     }
-    // even a one-sided gift counts as alignment
-    if(aGives){ a.inv[aGives]-=1; b.inv[aGives]+=1; a.remember('gave '+aGives); b.remember('received '+aGives); return true; }
+    // a one-sided transfer: if the receiver can pay coin for it, it's a sale;
+    // otherwise it's a gift (which still counts as alignment)
+    if(aGives){ a.inv[aGives]-=1; b.inv[aGives]+=1;
+      if((b.wealth||0)>0){ b.wealth-=1; a.wealth=(a.wealth||0)+1; a.remember('sold '+aGives); b.remember('bought '+aGives); }
+      else { a.remember('gave '+aGives); b.remember('received '+aGives); }
+      return true; }
     return false;
   }
 };

@@ -139,6 +139,9 @@ function doDeposit(ag,g){
     // a small stipend for contributing — kept modest so hoarding for trade
     // still pays better (faction 'deposit' doctrine multiplies this in S6)
     ag.wealth=(ag.wealth||0)+Math.min(2,moved*0.5);
+    // the settlement banks part of the surplus's value as coin — this is a
+    // primary source of the treasury that funds wages
+    g.treasury=(g.treasury||0)+Math.ceil(moved*0.4);
     ag.remember('added to the settlement stores');
   }
 }
@@ -263,6 +266,14 @@ const Behaviors=[
           // a well-governed settlement (leveled townHalls) runs its job sites more effectively, not just less crime
           const governMult=1+Math.min(0.25, (World.gathers[st.gather]?.govern||0)*0.04);
           const workMult=skillMult*governMult;
+          // wages — a job pays the worker coin from the settlement treasury,
+          // but only when the treasury can actually afford it (funded by
+          // deposits, market commerce, and trade). Wealth then flows back out
+          // through taverns, commissions, and alms (see those behaviors).
+          if(ag.task._t%80===0){
+            const gw=World.gathers[st.gather];
+            if(gw && (gw.treasury||0)>=1){ gw.treasury-=1; ag.wealth=(ag.wealth||0)+1; }
+          }
           if(st.type==='workshop' && Math.random()<(st.effRate||0.05)*workMult){
             ag.inv.tools=(ag.inv.tools||0)+1;
             st.toolsGranted=(st.toolsGranted||0)+1;
@@ -284,6 +295,9 @@ const Behaviors=[
             raiseResonance(amt);
             Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
+            // commerce fills the settlement treasury that pays everyone's wages
+            const gm=World.gathers[st.gather];
+            if(gm) gm.treasury=(gm.treasury||0)+1;
             siteLog(st, ag.name+' brought the market to life');
           }
           if(st.type==='shrineHall' && ag.task._t%40===0){
@@ -367,6 +381,30 @@ const Behaviors=[
             }
           }
         } }; } },
+
+  // ── WEALTH SINKS (coin flows back out of pockets and into the world) ───────
+  { id:'patronizeTavern', label:'at the tavern', glyph:'⌣', cat:'social',
+    weight:a=> { if((a.wealth||0)<2) return 0; const t=World.nearestSite(a.x,a.y,s=>s.type==='tavern'&&s.built); return t?14:0; },
+    make:a=> { const t=World.nearestSite(a.x,a.y,s=>s.type==='tavern'&&s.built); if(!t) return null;
+      return { label:'at the tavern', glyph:'⌣', cat:'social', pose:'sit', target:{x:t.x,y:t.y}, arrive:16, dur:120,
+        onArrive(ag){ if((ag.wealth||0)>=1){ ag.wealth-=1; ag.joy=Math.min(1,ag.joy+0.15); ag.social=Math.max(0,ag.social-30);
+          const gg=World.gathers[t.gather]; if(gg) gg.treasury=(gg.treasury||0)+1; siteLog(t, ag.name+' spent coin at the tavern'); } } }; } },
+  { id:'commissionWork', label:'commissioning work', glyph:'⚑', cat:'trade',
+    weight:a=> { if((a.wealth||0)<8) return 0; const st=World.nearestSite(a.x,a.y,s=>s.level<s.maxLevel && (s.matsWood<s.needWood||s.matsStone<s.needStone)); return st?12:0; },
+    make:a=> { const st=World.nearestSite(a.x,a.y,s=>s.level<s.maxLevel && (s.matsWood<s.needWood||s.matsStone<s.needStone)); if(!st) return null;
+      return { label:'commissioning work', glyph:'⚑', cat:'trade', pose:'work', target:{x:st.x,y:st.y}, arrive:16, dur:50,
+        onArrive(ag){
+          const gg=World.gathers[st.gather]; if(!gg||!gg.stock) return;
+          // the wealthy pay to draw settlement stock onto a build site, hastening it
+          let spent=0;
+          if(st.matsWood<st.needWood && (gg.stock.wood||0)>0){ const n=Math.min(gg.stock.wood, st.needWood-st.matsWood, 4); gg.stock.wood-=n; st.matsWood+=n; spent+=n; }
+          if(st.matsStone<st.needStone && (gg.stock.stone||0)>0){ const n=Math.min(gg.stock.stone, st.needStone-st.matsStone, 4); gg.stock.stone-=n; st.matsStone+=n; spent+=n; }
+          if(spent>0){ const cost=Math.min(ag.wealth, spent); ag.wealth-=cost; gg.treasury=(gg.treasury||0)+cost; ag.remember('paid to hasten a building'); siteLog(st, ag.name+' funded construction here'); }
+        } }; } },
+  { id:'almsgiving', label:'giving alms', glyph:'⊙', cat:'social',
+    weight:a=> { if((a.wealth||0)<3) return 0; return Mesh.grief>0.2 ? (a.faction===3?18:8) : (a.wealth>6?6:0); },
+    make:a=> gotoAgent(a,'giving alms','⊙','social', nearestAgent(a,o=>o!==a&&(o.wealth||0)<(a.wealth||0)-2), ag=>{
+        const o=ag.task.targetAgent; if(o){ const give=Math.min(2,ag.wealth); ag.wealth-=give; o.wealth=(o.wealth||0)+give; o.joy=Math.min(1,o.joy+0.1); ag.remember('shared their wealth'); } raiseResonance(0.006); }) },
 
   // ── SOCIAL ─────────────────────────────────────────────────────────────────
   { id:'seekFriend', label:'seeking a friend', glyph:'♥', cat:'social',
