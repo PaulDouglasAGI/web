@@ -146,6 +146,50 @@ function doDeposit(ag,g){
   }
 }
 
+// ── caravans (S3) ───────────────────────────────────────────────────────────
+function hasBuiltHarbor(gi){ return World.sites.some(s=>s.type==='harbor'&&s.built&&s.gather===gi); }
+function hasBuiltMarket(gi){ return World.sites.some(s=>s.type==='market'&&s.built&&s.gather===gi); }
+function hasStaffedMarket(gi){ return World.sites.some(s=>s.type==='market'&&s.built&&(s.workers||[]).length>0&&s.gather===gi); }
+// the nearest other settlement with a built market — a caravan's destination
+function caravanDestination(fromGi){
+  const from=World.gathers[fromGi]; let best=-1,bd=Infinity;
+  for(let gi=0;gi<World.gathers.length;gi++){
+    if(gi===fromGi || !hasBuiltMarket(gi)) continue;
+    const g=World.gathers[gi], d=(g.x-from.x)**2+(g.y-from.y)**2;
+    if(d<bd){ bd=d; best=gi; }
+  }
+  return best;
+}
+// load a caravan by comparative advantage — take what `from` holds in surplus
+// that `to` most lacks — and hand the agent over to its self-contained trip
+// loop (Agent.updateCaravan). Sea routes (harbor->harbor) carry double.
+function beginCaravan(ag, fromGi, toGi){
+  const from=World.gathers[fromGi], to=World.gathers[toGi];
+  if(!from||!to||!from.stock||!to.stock) return false;
+  const mode=(hasBuiltHarbor(fromGi)&&hasBuiltHarbor(toGi))?'sea':'land';
+  const cap=mode==='sea'?8:4;
+  const keys=Object.keys(from.stock).sort((k1,k2)=>
+    ((from.stock[k2]||0)-(to.stock[k2]||0)) - ((from.stock[k1]||0)-(to.stock[k1]||0)));
+  const cargo={}; let loaded=0;
+  for(const k of keys){
+    if(loaded>=cap) break;
+    const avail=Math.floor(from.stock[k]||0);
+    if(avail<=0) continue;
+    const take=Math.min(avail, cap-loaded);
+    from.stock[k]-=take; cargo[k]=(cargo[k]||0)+take; loaded+=take;
+  }
+  if(loaded<=0) return false;
+  ag.caravan={from:fromGi, to:toGi, cargo, stage:'toB', mode};
+  ag.task=null;
+  ag.remember('set out with a caravan for a distant market');
+  return true;
+}
+// a theft mark: a nearby agent worth robbing — carrying loose goods, or (much
+// more temptingly) a laden caravan on the road
+function theftTarget(a){
+  return nearestAgent(a, o=> o!==a && !o.dead && !o.wanted && (invTotal(o.inv)>1 || o.caravan) && dist2(a.x,a.y,o.x,o.y)<600*600);
+}
+
 const Behaviors=[
   // ── SURVIVAL & WORK ────────────────────────────────────────────────────────
   { id:'eat', label:'eating', glyph:'❦', cat:'survival',
@@ -243,6 +287,20 @@ const Behaviors=[
     make:a=> { const g=nearestStoreGather(a); if(!g) return null;
       return { label:'stocking the stores', glyph:'⇩', cat:'trade', pose:'work', target:{x:g.x,y:g.y}, arrive:16, dur:36,
         onArrive(ag){ doDeposit(ag,g); } }; } },
+  // the headline of the trade economy: a laden caravan carries a settlement's
+  // surplus to another market and comes home richer, weaving the isolated
+  // settlements into a network. Wayfarers are born to it.
+  { id:'runCaravan', label:'setting out with a caravan', glyph:'⇶', cat:'trade',
+    weight:a=> { if(a.caravan||a.job) return 0;
+      const g=World.nearestOf(World.gathers,a.x,a.y); if(!g||!g.stock) return 0;
+      const gi=World.gathers.indexOf(g);
+      if(!hasStaffedMarket(gi) || (g.stock.goods||0)<3 || caravanDestination(gi)<0) return 0;
+      return 14+(a.faction===1?16:0); },
+    make:a=> { const g=World.nearestOf(World.gathers,a.x,a.y); if(!g) return null;
+      const gi=World.gathers.indexOf(g), toGi=caravanDestination(gi);
+      if(toGi<0) return null;
+      return { label:'setting out with a caravan', glyph:'⇶', cat:'trade', pose:'work', target:{x:g.x,y:g.y}, arrive:16, dur:99999,
+        onArrive(ag){ beginCaravan(ag, gi, toGi); } }; } },
   { id:'workAtStructure', label:'seeking work', glyph:'⚙', cat:'trade',
     weight:a=> { if(a.job) return 0; return openFunctionalSite(a) ? 14 : 0; },
     make:a=> { const st=openFunctionalSite(a); if(!st) return null;
@@ -585,23 +643,39 @@ const Behaviors=[
   // global Agents array, so this *is* "the collective consciousness knows" for free.
   { id:'steal', label:'eyeing a theft', glyph:'⛤', cat:'crime',
     weight:a=> { if(a.criminality<=0 || a.wanted) return 0;
-      const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && invTotal(o.inv)>1 && dist2(a.x,a.y,o.x,o.y)<600*600);
+      const v=theftTarget(a);
       if(!v) return 0;
       const suppress=1-Math.min(0.6,nearestGovern(a)*0.3);
-      return (28+a.criminality*40)*suppress; },
-    make:a=> { const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && invTotal(o.inv)>1 && dist2(a.x,a.y,o.x,o.y)<600*600);
+      // a laden caravan on the open road is a far richer, softer mark than a
+      // passer-by — highway robbery is especially tempting
+      const caravanLure=v.caravan?3:1;
+      return (28+a.criminality*40)*suppress*caravanLure; },
+    make:a=> { const v=theftTarget(a);
       if(!v) return null;
       return gotoAgent(a,'eyeing a theft','⛤','crime', v, ag=>{
         const victim=ag.task.targetAgent; if(!victim||victim.dead) return;
-        const res=surplusResource(victim)||'food';
-        const n=Math.min(victim.inv[res],1+((Math.random()*2)|0));
-        victim.inv[res]-=n; ag.inv[res]=(ag.inv[res]||0)+n;
         ag.wanted=true; ag.crime='theft'; ag.crimeTick=World.tick;
-        victim.remember('was robbed by '+ag.name); ag.remember('forgot themselves, and took from '+victim.name);
-        Mesh.broadcast(ag.x,ag.y,'crime',0.6,'#ff5a5a');
-        lowerResonance(0.01); Mesh.dissonance=Math.min(1,Mesh.dissonance+0.03);
-        Mesh.writeField(ag.x,ag.y,'dissonance',0.4,150);
-        logCrime(ag.name+' forgot themselves, and took from '+victim.name, ag.faction);
+        if(victim.caravan){
+          // highway robbery — seize the entire load and shatter the route it rode
+          let looted=0;
+          for(const k in victim.caravan.cargo){ ag.inv[k]=(ag.inv[k]||0)+victim.caravan.cargo[k]; looted+=victim.caravan.cargo[k]; }
+          World.weakenRoute(victim.caravan.from, victim.caravan.to);
+          victim.caravan=null; victim.task=null;
+          victim.remember('was set upon on the road by '+ag.name); ag.remember('fell upon a caravan and took everything');
+          Mesh.broadcast(ag.x,ag.y,'crime',0.85,'#ff5a5a');
+          lowerResonance(0.02); Mesh.dissonance=Math.min(1,Mesh.dissonance+0.06);
+          Mesh.writeField(ag.x,ag.y,'dissonance',0.5,170);
+          logCrime(ag.name+' fell upon '+victim.name+"'s caravan and took everything", ag.faction);
+        } else {
+          const res=surplusResource(victim)||'food';
+          const n=Math.min(victim.inv[res],1+((Math.random()*2)|0));
+          victim.inv[res]-=n; ag.inv[res]=(ag.inv[res]||0)+n;
+          victim.remember('was robbed by '+ag.name); ag.remember('forgot themselves, and took from '+victim.name);
+          Mesh.broadcast(ag.x,ag.y,'crime',0.6,'#ff5a5a');
+          lowerResonance(0.01); Mesh.dissonance=Math.min(1,Mesh.dissonance+0.03);
+          Mesh.writeField(ag.x,ag.y,'dissonance',0.4,150);
+          logCrime(ag.name+' forgot themselves, and took from '+victim.name, ag.faction);
+        }
       }, 60); } },
   { id:'commitMurder', label:'stalking with violent intent', glyph:'☠', cat:'crime',
     weight:a=> { if(a.criminality<=0.55 || a.wanted) return 0;
@@ -634,6 +708,16 @@ const Behaviors=[
         ag.remember('helped '+target.name+' remember'); target.remember('was helped to remember, by '+ag.name);
         logJustice(target.name+' was helped to remember, by '+ag.name);
       }, 60); } },
+  // an armed, upstanding soul shadows a caravan runner and stops any wanted
+  // thief shadowing it — this is what finally gives the smithy→weapons→barracks
+  // line a standing economic purpose: guarding the roads that carry the trade
+  { id:'escortCaravan', label:'escorting a caravan', glyph:'⛨', cat:'justice',
+    weight:a=> { if((a.inv.weapons||0)<=0 || a.criminality>0) return 0; const c=nearestAgent(a,o=>o!==a&&o.caravan); return c?11:0; },
+    make:a=> { const c=nearestAgent(a,o=>o!==a&&o.caravan); if(!c) return null;
+      return gotoAgent(a,'escorting a caravan','⛨','justice', c, ag=>{
+        const t=nearestAgent(ag, o=>o!==ag && o.wanted && !o.captured && !o.dead && dist2(o.x,o.y,ag.x,ag.y)<220*220);
+        if(t){ t.captured=true; t.capturedAt=World.tick; t.task=null; ag.remember('guarded the road'); logJustice(t.name+' was stopped on the road by '+ag.name); }
+      }, 130); } },
   { id:'worship', label:'sitting in stillness, remembering', glyph:'☥', cat:'worship',
     weight:a=> Mesh.resonance>0.45 ? 14+(a.faction===3?10:0) : 4,
     make:a=> ({ label:'sitting in stillness, remembering',glyph:'☥',cat:'worship', pose:'kneel',

@@ -253,6 +253,46 @@ function freshWorld(ctx,seed){
   assert(r.after>r.before+0.02, 'stark wealth inequality raised local fragmentation ('+r.before.toFixed(3)+' -> '+r.after.toFixed(3)+')');
 })();
 
+// ── Test 15: a caravan carries goods to another market and records a route ──
+(function testCaravan(){
+  const ctx=buildContext();
+  freshWorld(ctx,50);
+  const r=vm.runInContext(`
+    const g0=World.gathers[0], g1=World.gathers[1];
+    for(const gi of [0,1]){ const m=mkSite(World.gathers[gi].x,World.gathers[gi].y,'market',gi); m.built=true; m.level=1; m.workers=[99]; World.sites.push(m); }
+    g0.stock.goods=10;
+    const a=new Agent(g0.x,g0.y,1); Agents.push(a);
+    const ok=beginCaravan(a,0,1);
+    let ticks=0; while(a.caravan && ticks<20000){ a.update(); ticks++; }
+    ({ok, goodsAtB:g1.stock.goods||0, routes:World.routes.length, strength:World.routes[0]?World.routes[0].strength:0, wealth:a.wealth});
+  `, ctx);
+  assert(r.ok, 'caravan loaded surplus and set out');
+  assert(r.goodsAtB>0, 'caravan delivered goods to the destination settlement ('+r.goodsAtB+')');
+  assert(r.routes===1 && r.strength===1, 'a trade route was recorded with strength 1 (routes '+r.routes+')');
+  assert(r.wealth>0, 'the trader came home richer ('+r.wealth+')');
+})();
+
+// ── Test 16: highway robbery loots a caravan and shatters its route ─────────
+(function testHighwayRobbery(){
+  const ctx=buildContext();
+  freshWorld(ctx,51);
+  const r=vm.runInContext(`
+    const g0=World.gathers[0];
+    g0.stock.goods=10;
+    const a=new Agent(g0.x,g0.y,1); Agents.push(a);
+    beginCaravan(a,0,1);
+    World.recordRoute(0,1,'land',5); World.recordRoute(0,1,'land',5);
+    const strBefore=World.routes[0].strength;
+    const thief=new Agent(a.x,a.y,2); thief.criminality=1; Agents.push(thief);
+    const task=BehaviorById['steal'].make(thief); thief.task=task; task.targetAgent=a;
+    task.onArrive(thief);
+    ({hadCaravan:!!a.caravan, thiefGoods:(thief.inv.goods||0), strBefore, strAfter:World.routes[0].strength, wanted:thief.wanted});
+  `, ctx);
+  assert(!r.hadCaravan, 'highway robbery ended the caravan run');
+  assert(r.thiefGoods>0, 'the robber looted the caravan cargo ('+r.thiefGoods+')');
+  assert(r.strAfter<r.strBefore, 'the robbed route lost strength ('+r.strBefore+' -> '+r.strAfter+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){

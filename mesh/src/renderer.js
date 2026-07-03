@@ -353,6 +353,24 @@ const Renderer={
       if(UI.selected===an){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,r*2.2,0,7); ctx.stroke(); }
     }
 
+    // ── TRADE ROUTES ──────────────────────────────────────────────────────--
+    // dashed threads between settlements that trade; brighter/thicker the more
+    // the road is travelled. Sea lanes read cool, land roads warm.
+    if(World.routes && World.routes.length){
+      ctx.save();
+      ctx.setLineDash([6*z,6*z]);
+      for(const r of World.routes){
+        const ga=World.gathers[r.a], gb=World.gathers[r.b];
+        if(!ga||!gb) continue;
+        const a=Math.min(0.5, 0.08+r.strength*0.03);
+        ctx.strokeStyle = r.mode==='sea' ? 'rgba(130,180,210,'+a+')' : 'rgba(224,190,130,'+a+')';
+        ctx.lineWidth=Math.max(0.6, Math.min(3,0.6+r.strength*0.12)*z*0.5);
+        ctx.beginPath(); ctx.moveTo(this.sx(ga.x),this.sy(ga.y)); ctx.lineTo(this.sx(gb.x),this.sy(gb.y)); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     // ── SETTLEMENT MARKERS + TIER LABELS ─────────────────────────────────--
     for(const g of World.gathers){
       const sx=this.sx(g.x), sy=this.sy(g.y);
@@ -499,6 +517,14 @@ const Renderer={
         ctx.font=(9*Math.min(z,2))+'px "Exo 2",sans-serif';
         ctx.textAlign='center';
         ctx.fillText(a.task.glyph, sx, sy-rad*2.6);
+      }
+      // caravan runner marker — these agents run a self-contained trip with no
+      // task, so the action glyph above never fires for them
+      if(a.caravan && z>0.7){
+        ctx.fillStyle='rgba(235,205,140,0.92)';
+        ctx.font=(9*Math.min(z,2))+'px "Exo 2",sans-serif';
+        ctx.textAlign='center';
+        ctx.fillText('⇶', sx, sy-rad*2.6);
       }
     }
     ctx.textAlign='left';

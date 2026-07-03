@@ -159,6 +159,9 @@ class Agent{
     // normal weighted Behaviors system — the cave isn't wired into chooseTask's
     // surface-only node/site lookups, and the trip is short and bounded anyway
     if(this.underground){ this.updateUnderground(); return; }
+    // a caravan runner likewise follows a self-contained multi-leg surface trip
+    // (mirrors the mine's state-machine pattern) rather than the task system
+    if(this.caravan){ this.updateCaravan(); return; }
     // needs — a granary's food-security aura slows hunger growth for everyone near it
     const bonus=this.settlementBonus();
     this.hunger=Math.min(100,this.hunger+Math.max(0.004,0.012-bonus.foodSec*0.0015));
@@ -265,6 +268,51 @@ class Agent{
       const d=Math.hypot(ent.x-this.x,ent.y-this.y);
       if(d<14) Underground.ascend(this);
       else { const sp=this.speed*0.8; this.x+=(ent.x-this.x)/d*sp; this.y+=(ent.y-this.y)/d*sp; }
+    }
+  }
+
+  // self-contained two-leg surface trade run: walk cargo to the destination
+  // settlement, deliver it and collect payment, then walk home to record the
+  // route. Runs instead of chooseTask while this.caravan is set (see update()).
+  // The straight-line path is safe: routes are only started between gathers
+  // that passed World.reachable (no open water between them), and sea routes
+  // are permitted to cross water by design.
+  updateCaravan(){
+    const c=this.caravan;
+    const from=World.gathers[c.from], to=World.gathers[c.to];
+    if(!from||!to||!from.stock||!to.stock){ this.caravan=null; this.task=null; return; }
+    this.hunger=Math.min(100,this.hunger+0.006);
+    this.age+=1/World.dayLen;
+    if(this.medicated>0) this.medicated--;
+    if(this.energy<-30){ this.die(); return; }
+    const dest=c.stage==='toB'?to:from;
+    const dx=dest.x-this.x, dy=dest.y-this.y, d=Math.hypot(dx,dy)||1;
+    this.walkPhase+=0.28;
+    if(d<18){
+      if(c.stage==='toB'){
+        // deliver the load into the destination store and take payment home:
+        // coin split between the trader and both settlements' treasuries
+        let value=0;
+        for(const k in c.cargo){ to.stock[k]=(to.stock[k]||0)+c.cargo[k]; value+=c.cargo[k]; }
+        const pay=Math.ceil(value*1.2);
+        this.wealth=(this.wealth||0)+Math.ceil(pay*0.4);
+        to.treasury=(to.treasury||0)+Math.ceil(pay*0.3);
+        from.treasury=(from.treasury||0)+Math.ceil(pay*0.3);
+        c.value=value; c.cargo={}; c.stage='home';
+        this.remember('traded a caravan load at a distant market');
+      } else {
+        // home again — the route is recorded and both ends prosper
+        World.recordRoute(c.from, c.to, c.mode, c.value||1);
+        Mesh.broadcast(this.x,this.y,'discovery',0.6,Factions[this.faction].color);
+        this.remember('returned from a trade run');
+        this.caravan=null; this.task=null;
+        return;
+      }
+    } else {
+      const sp=this.speed*(c.mode==='sea'?1.6:1)*0.9;
+      this.x+=dx/d*sp; this.y+=dy/d*sp; this.energy-=0.02;
+      this.x=Math.max(6,Math.min(World.w-6,this.x));
+      this.y=Math.max(6,Math.min(World.h-6,this.y));
     }
   }
 

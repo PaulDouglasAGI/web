@@ -241,6 +241,7 @@ const World={
     // the Altar — a fixed landmark at the heart of the map, not built by agents
     this.altar={ x:this.w/2, y:this.h/2, sacrifices:0, worshipped:0, log:[] };
     this._pendingPulses=[]; // deferred field writes, e.g. the dissolution coherence-surge below
+    this.routes=[]; // inter-settlement trade routes {a,b,mode,strength,lastTripTick} (S3)
     this.generate();
   },
 
@@ -643,6 +644,21 @@ const World={
 
     if(this.dayTick%30===0) this.checkStructureUnlocks();
     if(this.dayTick%60===0){
+      // trade routes: slowly decay (unused roads are forgotten), cull the dead,
+      // and pay passive income to the settlements a strong route links — this
+      // feeds each gather's routeIncome, read by the prosperity formula below.
+      for(const g of this.gathers) g.routeIncome=0;
+      for(let ri=this.routes.length-1;ri>=0;ri--){
+        const r=this.routes[ri];
+        r.strength*=0.997;
+        if(r.strength<0.5){ this.routes.splice(ri,1); continue; }
+        if(r.strength>5){
+          const inc=Math.min(0.01,(r.strength-5)*0.0006);
+          const ga=this.gathers[r.a], gb=this.gathers[r.b];
+          if(ga) ga.routeIncome=(ga.routeIncome||0)+inc;
+          if(gb) gb.routeIncome=(gb.routeIncome||0)+inc;
+        }
+      }
       for(let gi=0;gi<this.gathers.length;gi++){
         const g=this.gathers[gi], nt=this.tierOf(gi);
         if(nt>g.tier){ g.tier=nt; this.onTierUp(gi,nt); }
@@ -711,7 +727,10 @@ const World={
       for(let gi=0;gi<this.gathers.length;gi++){
         if(wCnt[gi]<4) continue;
         const avg=wSum[gi]/wCnt[gi], spread=wMax[gi]-avg;
-        if(spread>6){ const g=this.gathers[gi]; Mesh.writeField(g.x,g.y,'dissonance',Math.min(0.3,(spread-6)*0.02),260); }
+        // gentle: only genuinely stark gaps bite, so ordinary prosperity doesn't
+        // tip a settlement into an endemic-crime spiral (almsgiving + governance
+        // are the counter-pressures)
+        if(spread>10){ const g=this.gathers[gi]; Mesh.writeField(g.x,g.y,'dissonance',Math.min(0.18,(spread-10)*0.01),220); }
       }
 
       // per-faction resource ledger — a live snapshot of what each faction's living members currently hold
@@ -725,6 +744,24 @@ const World={
     }
 
     this.updateAnimals();
+  },
+
+  // a completed caravan round-trip records (or strengthens) a trade route
+  // between two settlements and rewards both ends with a prosperity bump
+  recordRoute(a,b,mode,value){
+    if(a===b) return;
+    let r=this.routes.find(x=>(x.a===a&&x.b===b)||(x.a===b&&x.b===a));
+    if(!r){ r={a,b,mode,strength:0,lastTripTick:this.tick}; this.routes.push(r); }
+    r.strength=Math.min(30,r.strength+1); r.lastTripTick=this.tick; r.mode=mode;
+    const boost=Math.min(0.06,0.02+(value||0)*0.004);
+    const ga=this.gathers[a], gb=this.gathers[b];
+    if(ga) ga.prosperity=Math.min(1,(ga.prosperity||0)+boost);
+    if(gb) gb.prosperity=Math.min(1,(gb.prosperity||0)+boost);
+  },
+  // a robbery on the road badly damages the route it hit
+  weakenRoute(a,b){
+    const r=this.routes.find(x=>(x.a===a&&x.b===b)||(x.a===b&&x.b===a));
+    if(r) r.strength=Math.max(0,r.strength*0.4);
   },
 
   // dynamic population ceiling driven by what's actually been built — replaces

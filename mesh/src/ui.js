@@ -221,7 +221,7 @@ const UI={
     this.el.pFaction.style.color=fc.color;
     const skillTier=a.skills>=3?'expert':(a.skills===2?'skilled':'apprentice');
     this.el.pAge.textContent='age '+Math.floor(a.age)+(a.bond?' · bonded':'')+' · '+skillTier+' (skills '+a.skills+')';
-    let actionTxt=a.task?(a.task.glyph+'  '+a.task.label):'…';
+    let actionTxt=a.caravan?'⇶ running a trade caravan':(a.task?(a.task.glyph+'  '+a.task.label):'…');
     if(a.captured) actionTxt='⚖ being helped to remember, at the Altar';
     else if(a.wanted) actionTxt+='  ·  ◌ FRAGMENTING ('+a.crime+')';
     actionTxt+='  ·  criminality '+(a.criminality||0).toFixed(2);
@@ -461,6 +461,19 @@ const UI={
     if(World.gathers.length===0){
       const e=document.createElement('div'); e.className='econ-row-line'; e.textContent='no settlements yet';
       this.el.econSettlements.appendChild(e);
+    }
+    // trade routes woven between the settlements
+    if(World.routes && World.routes.length){
+      const row=document.createElement('div'); row.className='econ-row';
+      const title=document.createElement('div'); title.className='econ-row-title'; title.textContent='TRADE ROUTES · '+World.routes.length;
+      row.appendChild(title);
+      for(const r of World.routes.slice().sort((a,b)=>b.strength-a.strength).slice(0,5)){
+        const ga=World.gathers[r.a], gb=World.gathers[r.b]; if(!ga||!gb) continue;
+        const line=document.createElement('div'); line.className='econ-row-line';
+        line.textContent=(r.mode==='sea'?'⚓ ':'⇶ ')+SETTLEMENT_TIERS[ga.tier].name+' — '+SETTLEMENT_TIERS[gb.tier].name+' · strength '+r.strength.toFixed(1);
+        row.appendChild(line);
+      }
+      this.el.econSettlements.appendChild(row);
     }
 
     this.el.econFactions.innerHTML='';

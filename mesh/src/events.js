@@ -14,14 +14,16 @@ const Events={
     const roll=Math.random();
     let kind;
     if(World.season===3 && roll<0.4) kind='winter';
-    else if(roll<0.16) kind='discovery';
-    else if(roll<0.30) kind='birth';
-    else if(roll<0.42) kind='surge';
-    else if(roll<0.56) kind='dissonance';
-    else if(roll<0.68) kind='drought';
-    else if(roll<0.80) kind='migration';
-    else if(roll<0.90) kind='ruin';
-    else kind='depletion';
+    else if(roll<0.14) kind='discovery';
+    else if(roll<0.26) kind='birth';
+    else if(roll<0.37) kind='surge';
+    else if(roll<0.49) kind='dissonance';
+    else if(roll<0.59) kind='drought';
+    else if(roll<0.69) kind='migration';
+    else if(roll<0.77) kind='ruin';
+    else if(roll<0.85) kind='depletion';
+    else if(roll<0.93) kind='festival';
+    else kind='caravanBoom';
     this.apply(kind);
   },
 
@@ -74,6 +76,27 @@ const Events={
         this.banner='A RESOURCE RUNS DRY';
         { const nd=pick(World.nodes); if(nd) nd.amount=0; }
         Mesh.dissonance=Math.min(1,Mesh.dissonance+0.1);
+        break;
+      case 'festival': {
+        // a prosperous settlement pours its treasury into a celebration —
+        // wealth spent on joy, which lifts the whole field around it
+        let best=null; for(const g of World.gathers){ if(!best || (g.prosperity||0)>(best.prosperity||0)) best=g; }
+        if(best && (best.prosperity||0)>0.35){
+          this.banner='A FESTIVAL FILLS THE STREETS';
+          best.treasury=Math.max(0,(best.treasury||0)-10);
+          Mesh.broadcast(best.x,best.y,'joy',1,'#ffe0a8');
+          raiseResonance(0.15);
+          for(const a of Agents){ if(!a.underground && dist2(a.x,a.y,best.x,best.y)<400*400) a.joy=Math.min(1,a.joy+0.25); }
+        } else {
+          this.banner='THE MESH FLICKERS — DISSONANCE';
+          Mesh.dissonance=Math.min(1,Mesh.dissonance+0.2); // no one prospers enough to celebrate
+        }
+        break; }
+      case 'caravanBoom':
+        this.banner='THE ROADS HUM WITH TRADE';
+        for(const r of World.routes) r.strength=Math.min(30,r.strength+1);
+        Mesh.broadcast(World.w/2,World.h/2,'discovery',0.8,'#e6b455');
+        raiseResonance(0.05);
         break;
     }
     this.active=kind; this.activeT=260;
