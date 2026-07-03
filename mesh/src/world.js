@@ -650,7 +650,8 @@ const World={
       for(const g of this.gathers) g.routeIncome=0;
       for(let ri=this.routes.length-1;ri>=0;ri--){
         const r=this.routes[ri];
-        r.strength*=0.997;
+        // Wayfarer-run routes (routeDecay doctrine) fade more slowly
+        r.strength*=(1 - 0.003*factionEcon(r.faction!=null?r.faction:0,'routeDecay'));
         if(r.strength<0.5){ this.routes.splice(ri,1); continue; }
         if(r.strength>5){
           const inc=Math.min(0.01,(r.strength-5)*0.0006);
@@ -665,8 +666,10 @@ const World={
         // food-security (granaries) & rest-bonus (huts) auras for this settlement —
         // cheap to recompute since sites are already tagged with their gather index
         let foodSec=0, restMult=1, govern=0, tavernBonus=0, hasGranary=false;
+        const facCount=[0,0,0,0];
         for(const s of this.sites){
           if(s.gather!==gi || !s.built) continue;
+          if(s.faction!=null) facCount[s.faction]++;
           if(s.type==='granary'){ hasGranary=true; s.contrib=(s.capacity||1)*0.4+((s.workers||[]).length>0?0.15*s.workers.length:0); if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='huntingLodge'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='harbor'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
@@ -691,6 +694,14 @@ const World={
           if(this.season===3 && (g.stock.rations||0)>0){ const draw=Math.min(g.stock.rations,1.5); g.stock.rations-=draw; g.foodSec+=draw*0.5; }
         }
         g.restMult=restMult; g.govern=govern; g.tavernBonus=tavernBonus;
+
+        // settlement specialization: the dominant faction among a settlement's
+        // built structures gives it a character. It's pure branding on top of
+        // the linear tier ladder (the tier mechanic is untouched) — the real
+        // economic tilt comes from factionEcon on the agents who work there.
+        let domF=-1,domN=0; for(let f=0;f<4;f++){ if(facCount[f]>domN){ domN=facCount[f]; domF=f; } }
+        g.specFaction = domN>0?domF:null;
+        g.spec = domN>0 ? ['AGRARIAN','MERCANTILE','FORGEHOLD','SANCTUARY'][domF] : null;
 
         // prosperity — the slow-moving settlement wealth scalar every economic
         // system feeds. Income from staffed jobs, accumulated stock, and (later)
@@ -748,10 +759,11 @@ const World={
 
   // a completed caravan round-trip records (or strengthens) a trade route
   // between two settlements and rewards both ends with a prosperity bump
-  recordRoute(a,b,mode,value){
+  recordRoute(a,b,mode,value,faction){
     if(a===b) return;
     let r=this.routes.find(x=>(x.a===a&&x.b===b)||(x.a===b&&x.b===a));
-    if(!r){ r={a,b,mode,strength:0,lastTripTick:this.tick}; this.routes.push(r); }
+    if(!r){ r={a,b,mode,strength:0,lastTripTick:this.tick,faction:faction!=null?faction:0}; this.routes.push(r); }
+    else if(faction!=null) r.faction=faction;
     r.strength=Math.min(30,r.strength+1); r.lastTripTick=this.tick; r.mode=mode;
     const boost=Math.min(0.06,0.02+(value||0)*0.004);
     const ga=this.gathers[a], gb=this.gathers[b];

@@ -293,6 +293,39 @@ function freshWorld(ctx,seed){
   assert(r.strAfter<r.strBefore, 'the robbed route lost strength ('+r.strBefore+' -> '+r.strAfter+')');
 })();
 
+// ── Test 17: the dominant faction's structures set a settlement's character ─
+(function testSpecialization(){
+  const ctx=buildContext();
+  freshWorld(ctx,60);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    for(let i=0;i<3;i++){ const s=mkSite(g.x,g.y,'workshop',0); s.built=true; s.level=1; s.faction=2; World.sites.push(s); }
+    const c=mkSite(g.x,g.y,'farm',0); c.built=true; c.level=1; c.faction=0; World.sites.push(c);
+    World.dayTick=59; World.update();
+    ({spec:g.spec, specFaction:g.specFaction});
+  `, ctx);
+  assert(r.spec==='FORGEHOLD' && r.specFaction===2, 'a settlement built mostly by Forgers becomes a FORGEHOLD ('+r.spec+')');
+})();
+
+// ── Test 18: faction doctrine tilts production output ──────────────────────
+(function testDoctrineOutput(){
+  function goodsFrom(faction){
+    const ctx=buildContext();
+    freshWorld(ctx,61);
+    return vm.runInContext(`
+      const g=World.gathers[0];
+      const st=mkSite(g.x,g.y,'workshop',0); st.built=true; st.level=1; st.workers=[1]; World.sites.push(st);
+      g.stock.wood=100; g.stock.stone=100;
+      const a=new Agent(st.x,st.y,${faction}); a.id=1; a.job={siteRef:st,startTick:0}; Agents.push(a);
+      const task=BehaviorById['doJob'].make(a); a.task=task;
+      for(let i=0;i<500;i++){ task._t=i; if(task.onTick) task.onTick(a); }
+      g.stock.goods;
+    `, ctx);
+  }
+  const forger=goodsFrom(2), cultivator=goodsFrom(0);
+  assert(forger>cultivator, 'a Forger refines more goods per shift than a Cultivator ('+forger+' vs '+cultivator+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){

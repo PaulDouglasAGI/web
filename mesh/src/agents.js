@@ -302,7 +302,7 @@ class Agent{
         this.remember('traded a caravan load at a distant market');
       } else {
         // home again — the route is recorded and both ends prosper
-        World.recordRoute(c.from, c.to, c.mode, c.value||1);
+        World.recordRoute(c.from, c.to, c.mode, c.value||1, this.faction);
         Mesh.broadcast(this.x,this.y,'discovery',0.6,Factions[this.faction].color);
         this.remember('returned from a trade run');
         this.caravan=null; this.task=null;

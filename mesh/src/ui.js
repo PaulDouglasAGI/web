@@ -362,7 +362,7 @@ const UI={
       }
     }
 
-    this.el.pName.textContent=SETTLEMENT_TIERS[g.tier].name;
+    this.el.pName.textContent=SETTLEMENT_TIERS[g.tier].name+(g.spec?' · '+g.spec:'');
     this.el.pFaction.textContent='settlement · '+pop+' souls';
     this.el.pFaction.style.color='#9fc9b8';
     const builtSummary=Object.keys(counts).map(t=>counts[t]+' '+t).join(', ')||'nothing built yet';
@@ -451,7 +451,7 @@ const UI={
       const pop=Agents.filter(a=>!a.dead && !a.underground && World.nearestOf(World.gathers,a.x,a.y)===g).length;
       const row=document.createElement('div'); row.className='econ-row';
       const title=document.createElement('div'); title.className='econ-row-title';
-      title.textContent=SETTLEMENT_TIERS[g.tier].name+' · '+pop+' souls';
+      title.textContent=SETTLEMENT_TIERS[g.tier].name+(g.spec?' · '+g.spec:'')+' · '+pop+' souls';
       row.appendChild(title);
       const line=document.createElement('div'); line.className='econ-row-line';
       line.textContent='prosperity '+((g.prosperity||0)*100).toFixed(0)+'% · treasury '+(g.treasury||0).toFixed(0)+' · food sec '+(g.foodSec||0).toFixed(2)+' · govern '+(g.govern||0)+' · stores: '+this.stockLine(g);

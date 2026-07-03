@@ -384,7 +384,7 @@ const Renderer={
       if(z>0.7 && g.tier>0){
         ctx.fillStyle= top ? 'rgba(255,233,176,0.95)' : 'rgba(210,225,218,0.7)';
         ctx.font=(top?11*z:8*z)+'px "Exo 2",sans-serif'; ctx.textAlign='center';
-        ctx.fillText(SETTLEMENT_TIERS[g.tier].name, sx, sy-34*z);
+        ctx.fillText(SETTLEMENT_TIERS[g.tier].name+(g.spec?' · '+g.spec:''), sx, sy-34*z);
         ctx.textAlign='left';
       }
     }

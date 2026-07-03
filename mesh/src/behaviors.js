@@ -140,8 +140,8 @@ function doDeposit(ag,g){
     // still pays better (faction 'deposit' doctrine multiplies this in S6)
     ag.wealth=(ag.wealth||0)+Math.min(2,moved*0.5);
     // the settlement banks part of the surplus's value as coin — this is a
-    // primary source of the treasury that funds wages
-    g.treasury=(g.treasury||0)+Math.ceil(moved*0.4);
+    // primary source of the treasury that funds wages (Cultivators give more)
+    g.treasury=(g.treasury||0)+Math.ceil(moved*0.4*factionEcon(ag.faction,'deposit'));
     ag.remember('added to the settlement stores');
   }
 }
@@ -167,7 +167,7 @@ function beginCaravan(ag, fromGi, toGi){
   const from=World.gathers[fromGi], to=World.gathers[toGi];
   if(!from||!to||!from.stock||!to.stock) return false;
   const mode=(hasBuiltHarbor(fromGi)&&hasBuiltHarbor(toGi))?'sea':'land';
-  const cap=mode==='sea'?8:4;
+  const cap=Math.round((mode==='sea'?8:4)*factionEcon(ag.faction,'cargo')); // Wayfarers haul more
   const keys=Object.keys(from.stock).sort((k1,k2)=>
     ((from.stock[k2]||0)-(to.stock[k2]||0)) - ((from.stock[k1]||0)-(to.stock[k1]||0)));
   const cargo={}; let loaded=0;
@@ -267,7 +267,7 @@ const Behaviors=[
     weight:a=> { const f=World.nearestSite(a.x,a.y,s=>s.type==='farm'&&s.built&&s.stage==='ready'); return f ? 28+(a.faction===0?12:0) : 0; },
     make:a=> { const f=World.nearestSite(a.x,a.y,s=>s.type==='farm'&&s.built&&s.stage==='ready'); if(!f) return null;
       return { label:'harvesting',glyph:'⊞',cat:'survival', pose:'kneel', target:{x:f.x,y:f.y}, arrive:12, dur:80,
-        onArrive(ag){ ag.inv.food+=(f.yieldAmt||4); f.stage='empty'; f.stageT=0; ag.hunger=Math.max(0,ag.hunger-10); ag.remember('harvested a farm'); } }; } },
+        onArrive(ag){ ag.inv.food+=Math.round((f.yieldAmt||4)*factionEcon(ag.faction,'harvest')); f.stage='empty'; f.stageT=0; ag.hunger=Math.max(0,ag.hunger-10); ag.remember('harvested a farm'); } }; } },
 
   // ── TRADE & ECONOMY ────────────────────────────────────────────────────────
   { id:'barter', label:'bartering', glyph:'⇄', cat:'trade',
@@ -343,8 +343,9 @@ const Behaviors=[
           if(st.type==='workshop' && ag.task._t%50===0){
             const gg=World.gathers[st.gather];
             if(gg && (gg.stock.wood||0)>=2 && (gg.stock.stone||0)>=1){
-              gg.stock.wood-=2; gg.stock.stone-=1; gg.stock.goods=(gg.stock.goods||0)+1;
-              st.goodsMade=(st.goodsMade||0)+1;
+              const out=factionEcon(ag.faction,'process'); // Forgers refine more per shift
+              gg.stock.wood-=2; gg.stock.stone-=1; gg.stock.goods=(gg.stock.goods||0)+out;
+              st.goodsMade=(st.goodsMade||0)+out;
               siteLog(st, ag.name+' crafted trade goods');
             }
           }
@@ -368,7 +369,7 @@ const Behaviors=[
             // production chain: prepare medicine from stocked herbs — herb
             // finally has a use beyond sitting in a pocket (consumed by takeMedicine)
             const gg=World.gathers[st.gather];
-            if(gg && (gg.stock.herb||0)>=2){ gg.stock.herb-=2; gg.stock.medicine=(gg.stock.medicine||0)+1; st.medicineMade=(st.medicineMade||0)+1; }
+            if(gg && (gg.stock.herb||0)>=2){ gg.stock.herb-=2; gg.stock.medicine=(gg.stock.medicine||0)+factionEcon(ag.faction,'medicine'); st.medicineMade=(st.medicineMade||0)+1; }
           }
           if(st.type==='loreHall' && ag.task._t%50===0){
             const pupil=nearestAgent(ag, o=>o!==ag && o.skills<3 && dist2(o.x,o.y,st.x,st.y)<140*140);
@@ -378,7 +379,7 @@ const Behaviors=[
               siteLog(st, ag.name+' taught '+pupil.name);
             }
           }
-          if(st.type==='smithy' && ag.task._t%45===0 && Math.random()<(st.effRate||0.05)*workMult){
+          if(st.type==='smithy' && ag.task._t%45===0 && Math.random()<(st.effRate||0.05)*workMult*factionEcon(ag.faction,'process')){
             const gg=World.gathers[st.gather];
             if((ag.inv.ore||0)>0){
               ag.inv.ore-=1; ag.inv.weapons=(ag.inv.weapons||0)+1;
@@ -412,7 +413,7 @@ const Behaviors=[
             // production chain: the temple also prepares medicine from herbs, at
             // the grander scale its rites imply
             const gg=World.gathers[st.gather];
-            if(gg && (gg.stock.herb||0)>=2){ gg.stock.herb-=2; gg.stock.medicine=(gg.stock.medicine||0)+2; st.medicineMade=(st.medicineMade||0)+2; }
+            if(gg && (gg.stock.herb||0)>=2){ gg.stock.herb-=2; gg.stock.medicine=(gg.stock.medicine||0)+2*factionEcon(ag.faction,'medicine'); st.medicineMade=(st.medicineMade||0)+2; }
           }
           if(st.type==='temple' && ag.task._t%100===0){
             World.altar.worshipped=(World.altar.worshipped||0)+1;
@@ -427,7 +428,7 @@ const Behaviors=[
             // production chain: brew stocked food into ale, which is what the
             // tavernBonus (see world.js) now actually scales with
             const gg=World.gathers[st.gather];
-            if(gg && (gg.stock.food||0)>=2){ gg.stock.food-=2; gg.stock.ale=(gg.stock.ale||0)+1; st.aleBrewed=(st.aleBrewed||0)+1; }
+            if(gg && (gg.stock.food||0)>=2){ gg.stock.food-=2; gg.stock.ale=(gg.stock.ale||0)+factionEcon(ag.faction,'process'); st.aleBrewed=(st.aleBrewed||0)+1; }
           }
           if(st.type==='quarry' && ag.task._t%35===0){
             const gg=World.gathers[st.gather];
