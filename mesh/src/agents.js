@@ -32,6 +32,7 @@ class Agent{
     this.overwhelmed=0;
     this.inv=newInventory();
     this.inv.food=Math.random()<0.5?1:0;
+    this.wealth=0;                         // personal coin — earned as wages / deposits, spent in taverns & commissions (S1/S4)
     this.skills=1+((Math.random()*3)|0);
     this.meshSensitivity=0.4+Math.random()*0.6;
     this.bond=null;

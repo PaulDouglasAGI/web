@@ -116,6 +116,44 @@ function freshWorld(ctx,seed){
   assert(pendingAfter===0, 'the pending pulse was consumed after it fired');
 })();
 
+// ── Test 7: economy — deposit surplus into the settlement store, keep reserve ─
+(function testDepositSurplus(){
+  const ctx=buildContext();
+  freshWorld(ctx,20);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const a=new Agent(g.x,g.y,0);
+    a.inv.food=8; a.inv.wood=3; a.wealth=0;
+    doDeposit(a,g);
+    ({foodStock:g.stock.food, woodStock:g.stock.wood, agFood:a.inv.food, agWood:a.inv.wood, wealth:a.wealth});
+  `, ctx);
+  assert(r.foodStock===6 && r.agFood===2, 'deposited surplus food to the store, kept a reserve of 2 ('+r.foodStock+' stored / '+r.agFood+' kept)');
+  assert(r.woodStock===2 && r.agWood===1, 'deposited surplus wood, kept a reserve of 1 ('+r.woodStock+' stored / '+r.agWood+' kept)');
+  assert(r.wealth>0, 'contributing to the store earned a small stipend ('+r.wealth.toFixed(2)+')');
+})();
+
+// ── Test 8: prosperity rises with staffed jobs + stock, decays when idle ────
+(function testProsperity(){
+  const ctx=buildContext();
+  freshWorld(ctx,21);
+  vm.runInContext(`
+    const g=World.gathers[0];
+    const s=mkSite(g.x,g.y,'market',0); s.built=true; s.level=1; s.workers=[1,2];
+    World.sites.push(s); g.stock.food=20;
+  `, ctx);
+  const p0=vm.runInContext('World.gathers[0].prosperity', ctx);
+  for(let i=0;i<180;i++) vm.runInContext('World.update();', ctx); // 3 aggregation passes
+  const p1=vm.runInContext('World.gathers[0].prosperity', ctx);
+  assert(p1>p0, 'prosperity rose with staffed jobs + stock ('+p0.toFixed(4)+' -> '+p1.toFixed(4)+')');
+
+  const ctx2=buildContext();
+  freshWorld(ctx2,22);
+  vm.runInContext('World.gathers[0].prosperity=0.5;', ctx2);
+  for(let i=0;i<120;i++) vm.runInContext('World.update();', ctx2);
+  const p2=vm.runInContext('World.gathers[0].prosperity', ctx2);
+  assert(p2<0.5, 'prosperity decays when nothing is produced (0.5 -> '+p2.toFixed(4)+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){

@@ -367,14 +367,15 @@ const UI={
     this.el.pFaction.style.color='#9fc9b8';
     const builtSummary=Object.keys(counts).map(t=>counts[t]+' '+t).join(', ')||'nothing built yet';
     this.el.pAge.textContent=builtSummary;
-    this.el.pAction.textContent='jobs '+jobsFilled+'/'+jobsTotal+' filled · food sec '+(g.foodSec||0).toFixed(2)
-      +' · govern '+(g.govern||0)+' · rest x'+(g.restMult||1).toFixed(2)+' · tavern '+(g.tavernBonus||0).toFixed(2)+' · stone '+(g.stoneStock||0).toFixed(0)
+    this.el.pAction.textContent='jobs '+jobsFilled+'/'+jobsTotal+' filled · prosperity '+((g.prosperity||0)*100).toFixed(0)+'% · treasury '+(g.treasury||0).toFixed(0)
+      +' · food sec '+(g.foodSec||0).toFixed(2)+' · govern '+(g.govern||0)+' · tavern '+(g.tavernBonus||0).toFixed(2)
+      +' · stores: '+this.stockLine(g)
       +' · field here: clarity '+Mesh.coherenceAt(g.x,g.y).toFixed(2)+' grief '+Mesh.griefAt(g.x,g.y).toFixed(2)+' frag '+Mesh.dissonanceAt(g.x,g.y).toFixed(2);
-    this.setStatLabels('housing','jobs','tier','food sec');
+    this.setStatLabels('housing','jobs','tier','prosperity');
     setBar(this.el.barEnergy, housing? Math.min(1,pop/housing) : 0);
     setBar(this.el.barHunger, jobsTotal? jobsFilled/jobsTotal : 0);
     setBar(this.el.barSocial, g.tier/(SETTLEMENT_TIERS.length-1));
-    setBar(this.el.barJoy, Math.min(1,(g.foodSec||0)/2));
+    setBar(this.el.barJoy, g.prosperity||0);
   },
 
   renderAltarPanel(alt){
@@ -435,6 +436,14 @@ const UI={
     }
   },
 
+  // compact one-line summary of a settlement's store (only resources it holds)
+  stockLine(g){
+    if(!g.stock) return '—';
+    const parts=[];
+    for(const k in g.stock){ if(g.stock[k]>=1) parts.push(k+' '+Math.round(g.stock[k])); }
+    return parts.length?parts.join(' · '):'empty';
+  },
+
   renderEconPanel(){
     this.el.econSettlements.innerHTML='';
     for(let gi=0;gi<World.gathers.length;gi++){
@@ -445,7 +454,7 @@ const UI={
       title.textContent=SETTLEMENT_TIERS[g.tier].name+' · '+pop+' souls';
       row.appendChild(title);
       const line=document.createElement('div'); line.className='econ-row-line';
-      line.textContent='food sec '+(g.foodSec||0).toFixed(2)+' · rest x'+(g.restMult||1).toFixed(2)+' · govern '+(g.govern||0)+' · tavern '+(g.tavernBonus||0).toFixed(2)+' · stone '+(g.stoneStock||0).toFixed(0);
+      line.textContent='prosperity '+((g.prosperity||0)*100).toFixed(0)+'% · treasury '+(g.treasury||0).toFixed(0)+' · food sec '+(g.foodSec||0).toFixed(2)+' · govern '+(g.govern||0)+' · stores: '+this.stockLine(g);
       row.appendChild(line);
       this.el.econSettlements.appendChild(row);
     }

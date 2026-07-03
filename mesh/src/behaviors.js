@@ -107,6 +107,42 @@ function openFunctionalSite(a){
   return World.nearestSite(a.x,a.y, s=> JOB_SITE_TYPES.includes(s.type) && s.built && (s.workers||[]).length<jobSlots(s));
 }
 
+// ── settlement store deposits ───────────────────────────────────────────────
+// How much of each resource an agent keeps for itself before contributing the
+// rest to the settlement store. Everything above the reserve is genuine surplus
+// that would otherwise sit uselessly in a pocket; deposited, it feeds the
+// production chains (workshop/tavern/granary/shrine) and the caravan trade.
+// (beauty/tools/weapons are excluded — beauty feeds monuments, the others are
+// personal kit.)
+const DEPOSIT_RESERVE={food:2, wood:1, stone:1, ore:0, herb:1, fish:1};
+function depositSurplusAmount(a){
+  let total=0;
+  for(const k in DEPOSIT_RESERVE){ const s=(a.inv[k]||0)-DEPOSIT_RESERVE[k]; if(s>0) total+=s; }
+  return total;
+}
+// a built store (granary or market) an agent's settlement can deposit into
+function nearestStoreGather(a){
+  const g=World.nearestOf(World.gathers,a.x,a.y);
+  if(!g||!g.stock) return null;
+  const gi=World.gathers.indexOf(g);
+  const hasStore=World.sites.some(s=>(s.type==='granary'||s.type==='market')&&s.built&&s.gather===gi);
+  return hasStore?g:null;
+}
+function doDeposit(ag,g){
+  if(!g||!g.stock) return;
+  let moved=0;
+  for(const k in DEPOSIT_RESERVE){
+    const s=(ag.inv[k]||0)-DEPOSIT_RESERVE[k];
+    if(s>0){ ag.inv[k]-=s; g.stock[k]=(g.stock[k]||0)+s; moved+=s; }
+  }
+  if(moved>0){
+    // a small stipend for contributing — kept modest so hoarding for trade
+    // still pays better (faction 'deposit' doctrine multiplies this in S6)
+    ag.wealth=(ag.wealth||0)+Math.min(2,moved*0.5);
+    ag.remember('added to the settlement stores');
+  }
+}
+
 const Behaviors=[
   // ── SURVIVAL & WORK ────────────────────────────────────────────────────────
   { id:'eat', label:'eating', glyph:'❦', cat:'survival',
@@ -186,6 +222,11 @@ const Behaviors=[
   { id:'seekResource', label:'seeking a resource', glyph:'?', cat:'trade',
     weight:a=> { const need=neededResource(a); return need?14:0; },
     make:a=> { const need=neededResource(a); const nd=need?World.nearestNode(a.x,a.y,need==='wood'||need==='stone'||need==='food'||need==='water'?need:'food'):null; return nd?gotoNode(a,'seeking '+need,'?','trade',nd,need):null; } },
+  { id:'depositSurplus', label:'stocking the stores', glyph:'⇩', cat:'trade',
+    weight:a=> { const g=nearestStoreGather(a); return (g && depositSurplusAmount(a)>=2) ? 13 : 0; },
+    make:a=> { const g=nearestStoreGather(a); if(!g) return null;
+      return { label:'stocking the stores', glyph:'⇩', cat:'trade', pose:'work', target:{x:g.x,y:g.y}, arrive:16, dur:36,
+        onArrive(ag){ doDeposit(ag,g); } }; } },
   { id:'workAtStructure', label:'seeking work', glyph:'⚙', cat:'trade',
     weight:a=> { if(a.job) return 0; return openFunctionalSite(a) ? 14 : 0; },
     make:a=> { const st=openFunctionalSite(a); if(!st) return null;
@@ -243,8 +284,8 @@ const Behaviors=[
               ag.inv.ore-=1; ag.inv.weapons=(ag.inv.weapons||0)+1;
               st.weaponsForged=(st.weaponsForged||0)+1;
               siteLog(st, ag.name+' forged a weapon');
-            } else if(gg && (gg.oreStock||0)>0){
-              gg.oreStock-=1; ag.inv.weapons=(ag.inv.weapons||0)+1;
+            } else if(gg && (gg.stock.ore||0)>0){
+              gg.stock.ore-=1; ag.inv.weapons=(ag.inv.weapons||0)+1;
               st.weaponsForged=(st.weaponsForged||0)+1;
               siteLog(st, ag.name+' forged a weapon from stockpiled ore');
             }
@@ -284,7 +325,7 @@ const Behaviors=[
             const gg=World.gathers[st.gather];
             if(gg){
               const amt=(st.effRate||0.2)*2*workMult;
-              gg.stoneStock=(gg.stoneStock||0)+amt;
+              gg.stock.stone=(gg.stock.stone||0)+amt;
               st.stoneMined=(st.stoneMined||0)+amt;
               siteLog(st, ag.name+' quarried bulk stone');
             }
@@ -385,7 +426,7 @@ const Behaviors=[
           // a quarry's bulk stockpile tops off whatever the agent couldn't personally carry
           if(st.matsStone<st.needStone){
             const gg=World.gathers[st.gather];
-            if(gg && gg.stoneStock>0){ const n=Math.min(gg.stoneStock,st.needStone-st.matsStone); gg.stoneStock-=n; st.matsStone+=n; }
+            if(gg && gg.stock.stone>0){ const n=Math.min(gg.stock.stone,st.needStone-st.matsStone); gg.stock.stone-=n; st.matsStone+=n; }
           }
         } }; } },
   { id:'deliverOre', label:'hauling ore to the smithy', glyph:'⛏', cat:'creative',
@@ -394,7 +435,7 @@ const Behaviors=[
       return { label:'hauling ore to the smithy',glyph:'⛏',cat:'creative', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:50,
         onArrive(ag){
           const gg=World.gathers[st.gather];
-          if(gg && (ag.inv.ore||0)>0){ gg.oreStock=(gg.oreStock||0)+ag.inv.ore; ag.inv.ore=0; ag.remember('delivered ore to the smithy'); }
+          if(gg && (ag.inv.ore||0)>0){ gg.stock.ore=(gg.stock.ore||0)+ag.inv.ore; ag.inv.ore=0; ag.remember('delivered ore to the smithy'); }
         } }; } },
   { id:'construct', label:'raising a structure', glyph:'⌗', cat:'creative',
     weight:a=> { const st=World.nearestSite(a.x,a.y, s=>s.level<s.maxLevel && s.matsWood>=s.needWood && s.matsStone>=s.needStone);
@@ -438,7 +479,7 @@ const Behaviors=[
           // a quarry's bulk stockpile tops off whatever the agent couldn't personally carry
           if(tgt.matsStoneUpgrade<need){
             const gg=World.gathers[tgt.gather];
-            if(gg && gg.stoneStock>0){ const n2=Math.min(gg.stoneStock,need-tgt.matsStoneUpgrade); gg.stoneStock-=n2; tgt.matsStoneUpgrade+=n2; }
+            if(gg && gg.stock.stone>0){ const n2=Math.min(gg.stock.stone,need-tgt.matsStoneUpgrade); gg.stock.stone-=n2; tgt.matsStoneUpgrade+=n2; }
           }
           if(tgt.matsStoneUpgrade>=need){
             tgt.stoneUpgraded=true; ag.inv.beauty+=3; raiseResonance(0.01);

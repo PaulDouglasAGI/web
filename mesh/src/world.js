@@ -351,7 +351,13 @@ const World={
         const c=(rng()*cols)|0, r=(rng()*rows)|0, i=r*cols+c;
         if(this.tiles[i]===TILE.PLAIN){
           this.tiles[i]=TILE.GATHER;
-          this.gathers.push({x:(c+0.5)*this.ts,y:(r+0.5)*this.ts,tier:0});
+          this.gathers.push({x:(c+0.5)*this.ts,y:(r+0.5)*this.ts,tier:0,
+            // settlement-level economy: a real store (generalizes the old
+            // stoneStock/oreStock scalars), an abstract coin treasury that
+            // funds wages, and a slow prosperity scalar every economic
+            // system reads and writes. See World.update's 60-tick block.
+            stock:{food:0,wood:0,stone:0,ore:0,herb:0,goods:0,ale:0,rations:0,medicine:0},
+            treasury:0, prosperity:0});
           // a fire at each gathering spot
           this.fires.push({x:(c+0.5)*this.ts,y:(r+0.5)*this.ts,lit:true});
           break;
@@ -650,11 +656,35 @@ const World={
           if(s.type==='harbor'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='hut' && s.restMult){ const rm=s.stoneUpgraded?s.restMult*1.1:s.restMult; restMult=Math.max(restMult,rm); }
           // masonry holds no workers, so its stoneRate trickles into the settlement stockpile passively here instead
-          if(s.type==='masonry' && s.stoneRate){ g.stoneStock=(g.stoneStock||0)+s.stoneRate; }
+          if(s.type==='masonry' && s.stoneRate){ g.stock.stone=(g.stock.stone||0)+s.stoneRate; }
           if(s.type==='townHall') govern+=s.level;
-          if(s.type==='tavern') tavernBonus=Math.max(tavernBonus,(s.workers||[]).length>0?(s.effRate||0.1):0.03);
+          if(s.type==='tavern'){
+            // a tavern only lifts spirits while it has ale to pour; an unsupplied
+            // one goes flat. (ale is brewed from stocked food — see doJob tavern.)
+            const alePour=Math.min(1,(g.stock.ale||0)*0.1);
+            tavernBonus=Math.max(tavernBonus,(s.workers||[]).length>0?(s.effRate||0.1)*(0.3+0.7*alePour):0.03);
+          }
         }
-        g.foodSec=foodSec; g.restMult=restMult; g.govern=govern; g.tavernBonus=tavernBonus;
+        // deposited food is real food security, not just the granary aura
+        g.foodSec=foodSec + Math.min(1.5,(g.stock.food||0)*0.02);
+        g.restMult=restMult; g.govern=govern; g.tavernBonus=tavernBonus;
+
+        // prosperity — the slow-moving settlement wealth scalar every economic
+        // system feeds. Income from staffed jobs, accumulated stock, and (later)
+        // trade routes; it decays if the settlement stops producing, and a
+        // thriving town literally warms the Mesh field (chooseTask's coherence
+        // branch then lifts social/trade/creative there — a free feedback loop).
+        let staffed=0, stockTotal=0;
+        for(const s of this.sites){
+          if(s.gather!==gi || !s.built) continue;
+          if(s.type==='granary' || FUNCTIONAL_TYPES.includes(s.type)) staffed+=(s.workers||[]).length;
+        }
+        for(const k in g.stock) stockTotal+=g.stock[k];
+        const routeIncome=g.routeIncome||0; // filled by the caravan system (S3)
+        const wonderBonus=g.wonderProsperity||0; // floor raised by a completed wonder (S5)
+        g.prosperity=Math.max(wonderBonus,Math.min(1,
+          (g.prosperity||0)*0.995 + 0.002*staffed + 0.0004*stockTotal + routeIncome));
+        if(g.prosperity>0.6) Mesh.writeField(g.x,g.y,'coherence',(g.prosperity-0.6)*0.05,300);
       }
       // per-faction resource ledger — a live snapshot of what each faction's living members currently hold
       const stock=[{},{},{},{}];
@@ -678,6 +708,8 @@ const World={
       if(s.type==='hut') cap+=s.capacity||3;
       if(s.type==='granary') cap+=(s.capacity||1)*4;
     }
+    // a prosperous settlement draws (and can feed) more souls than its huts alone
+    for(const g of this.gathers) cap+=Math.floor((g.prosperity||0)*8);
     return cap;
   },
 
