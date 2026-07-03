@@ -15,6 +15,23 @@
 
 <canvas id="world"></canvas>
 
+<!-- Cinematic event banner — fades in for the world's great moments -->
+<div id="banner"></div>
+
+<!-- The Chronicle — a living feed of the world's unfolding story -->
+<div id="chronicle"></div>
+
+<!-- Intro veil — first impression + the gesture that unlocks audio -->
+<div id="intro">
+  <div id="intro-inner">
+    <div id="intro-title">THE MESH</div>
+    <div id="intro-sub">Umbra Directorate</div>
+    <div id="intro-body">A field of feeling, localized into souls. Watch them remember what they are.</div>
+    <button id="intro-enter">◉ ENTER THE FIELD</button>
+    <div id="intro-note">enters with sound · you can mute anytime</div>
+  </div>
+</div>
+
 <!-- Ambient UI -->
 <div id="ui">
   <div id="clock">
@@ -52,6 +69,16 @@
 <!-- economy dashboard toggle — settlement & faction breakdown, off by default -->
 <div id="econ-ctl">
   <button id="econ-toggle" title="see the economy">📊 economy</button>
+</div>
+
+<!-- divine touch toggle — lets the observer bless a place, easing fragmentation -->
+<div id="touch-ctl">
+  <button id="touch-toggle" title="reach into the field">✷ touch</button>
+</div>
+
+<!-- ambient sound toggle -->
+<div id="audio-ctl">
+  <button id="audio-toggle" title="the world's voice">♪ sound</button>
 </div>
 
 <!-- Economy dashboard (settlement + faction tables) -->
@@ -94,6 +121,8 @@
 <script src="src/mesh.js"></script>
 <script src="src/agents.js"></script>
 <script src="src/events.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/fx.js"></script>
 <script src="src/renderer.js"></script>
 <script src="src/ui.js"></script>
 <script src="src/main.js"></script>

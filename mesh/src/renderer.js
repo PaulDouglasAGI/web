@@ -146,6 +146,14 @@ const Renderer={
     // base sky/void
     ctx.fillStyle='#05060a'; ctx.fillRect(0,0,W,H);
 
+    // screen shake — a brief world-space jolt on violent/sacred moments.
+    // Only the living world is displaced; the full-screen lighting washes
+    // below are drawn after ctx.restore() so they never leave an edge gap.
+    const shakeMag=(typeof FX!=='undefined')?FX.shake:0;
+    const shX=shakeMag?(Math.random()-0.5)*shakeMag*2:0;
+    const shY=shakeMag?(Math.random()-0.5)*shakeMag*2:0;
+    ctx.save(); ctx.translate(shX,shY);
+
     // visible tile range
     const ts=World.ts;
     const x0=Math.max(0,((this.worldX(0))/ts|0)-1);
@@ -495,6 +503,11 @@ const Renderer={
     }
     ctx.textAlign='left';
 
+    // ── PRESENCE FX (particle blooms, shockwave rings, floating glyphs) ────--
+    if(typeof FX!=='undefined') this.drawFX();
+
+    ctx.restore(); // end screen-shake displacement
+
     // ── TIME-OF-DAY LIGHTING ──────────────────────────────────────────────--
     // overlay color & alpha from phase
     let ov, oa;
@@ -528,6 +541,65 @@ const Renderer={
     const vg=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.4,W/2,H/2,Math.max(W,H)*0.75);
     vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.4)');
     ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+
+    // one-frame full-screen wash for the biggest moments (judgment, etc.)
+    if(typeof FX!=='undefined' && FX.flash){
+      ctx.fillStyle='rgba('+FX.flash.col+','+FX.flash.a+')';
+      ctx.fillRect(0,0,W,H);
+      FX.flash=null;
+    }
+  },
+
+  // the presence layer, drawn in world space inside the shaken block
+  drawFX(){
+    const ctx=this.ctx, z=Camera.zoom, W=this.W, H=this.H;
+    // shockwave rings (with optional soft glow fill)
+    for(const r of FX.rings){
+      const sx=this.sx(r.x), sy=this.sy(r.y), rad=r.r*z;
+      if(sx<-rad-30||sx>W+rad+30||sy<-rad-30||sy>H+rad+30) continue;
+      const a=Math.max(0,r.life)*0.85;
+      if(r.glow){
+        const g=ctx.createRadialGradient(sx,sy,rad*0.25,sx,sy,rad);
+        g.addColorStop(0,'rgba('+r.col+',0)');
+        g.addColorStop(0.78,'rgba('+r.col+','+(a*0.22)+')');
+        g.addColorStop(1,'rgba('+r.col+',0)');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,rad,0,7); ctx.fill();
+      }
+      ctx.strokeStyle='rgba('+r.col+','+a+')'; ctx.lineWidth=Math.max(0.5,r.width*z);
+      ctx.beginPath(); ctx.arc(sx,sy,rad,0,7); ctx.stroke();
+    }
+    // particles
+    for(const p of FX.particles){
+      const sx=this.sx(p.x), sy=this.sy(p.y);
+      if(sx<-24||sx>W+24||sy<-24||sy>H+24) continue;
+      const a=Math.max(0,(p.fade==='out')?p.life:1), rr=Math.max(0.6,p.r*z);
+      if(p.kind==='soft'){
+        const g=ctx.createRadialGradient(sx,sy,0,sx,sy,rr*2.6);
+        g.addColorStop(0,'rgba('+p.col+','+(a*0.9)+')'); g.addColorStop(1,'rgba('+p.col+',0)');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,rr*2.6,0,7); ctx.fill();
+      } else if(p.kind==='petal'){
+        ctx.save(); ctx.translate(sx,sy); ctx.rotate(p.rot);
+        ctx.fillStyle='rgba('+p.col+','+(a*0.7)+')';
+        ctx.beginPath(); ctx.ellipse(0,0,rr*1.4,rr*0.6,0,0,7); ctx.fill(); ctx.restore();
+      } else if(p.kind==='spark'){
+        ctx.fillStyle='rgba('+p.col+','+a+')';
+        ctx.fillRect(sx-rr*0.5,sy-rr*0.5,rr,rr);
+      } else {
+        ctx.fillStyle='rgba('+p.col+','+a+')';
+        ctx.beginPath(); ctx.arc(sx,sy,rr,0,7); ctx.fill();
+      }
+    }
+    // floating glyphs (rare, for named milestones)
+    if(FX.glyphs.length){
+      ctx.textAlign='center';
+      for(const gl of FX.glyphs){
+        const sx=this.sx(gl.x), sy=this.sy(gl.y);
+        ctx.fillStyle='rgba('+gl.col+','+Math.max(0,gl.life)+')';
+        ctx.font='700 '+(gl.size*Math.min(z,1.6))+'px "Exo 2",sans-serif';
+        ctx.fillText(gl.text,sx,sy);
+      }
+      ctx.textAlign='left';
+    }
   },
 
   hexA(hex,a){

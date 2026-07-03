@@ -85,7 +85,53 @@ const UI={
       this.el.econPanel.classList.remove('show');
     });
 
+    // ambient sound toggle
+    this.el.audioToggle=document.getElementById('audio-toggle');
+    this.el.audioToggle.addEventListener('click',()=>{
+      const on=MeshAudio.toggle();
+      this.el.audioToggle.classList.toggle('active',on);
+      this.el.audioToggle.textContent = on ? '♪ sound' : '♪ muted';
+    });
+
+    // divine touch — reach into the field and steady it
+    this.touchMode=false; this._blessCd=0;
+    this.el.touchToggle=document.getElementById('touch-toggle');
+    this.el.touchToggle.addEventListener('click',()=>{
+      this.touchMode=!this.touchMode;
+      this.el.touchToggle.classList.toggle('active',this.touchMode);
+      Renderer.cnv.classList.toggle('touching',this.touchMode);
+    });
+
+    // banner + chronicle
+    this.el.banner=document.getElementById('banner');
+    this.el.chronicle=document.getElementById('chronicle');
+    this._lastBanner='';
+
+    // intro veil — the entering gesture also satisfies the audio autoplay policy
+    this.el.intro=document.getElementById('intro');
+    this.el.introEnter=document.getElementById('intro-enter');
+    if(this.el.introEnter){
+      this.el.introEnter.addEventListener('click',()=>{
+        this.el.intro.classList.add('gone');
+        const on=MeshAudio.toggle();
+        this.el.audioToggle.classList.toggle('active',on);
+        this.el.audioToggle.textContent = on ? '♪ sound' : '♪ muted';
+        this.fadeHint();
+      });
+    }
+
     this.bindCamera();
+  },
+
+  // a blessing: raise local field clarity and ease fragmentation. Rides the
+  // existing signal→fx/audio path so it feels and sounds like the world's own
+  // events. A short cooldown keeps it a gift rather than a firehose.
+  blessAt(wx,wy){
+    if(this._blessCd>0) return;
+    this._blessCd=16;
+    Mesh.writeField(wx,wy,'coherence',0.5,150);
+    Mesh.writeField(wx,wy,'dissonance',-0.35,150);
+    Mesh.broadcast(wx,wy,'vision',0.75,'#bfe8ff');
   },
 
   bindCamera(){
@@ -117,6 +163,9 @@ const UI={
 
   handleTap(px,py){
     const wx=Renderer.worldX(px), wy=Renderer.worldY(py);
+    // divine-touch mode intercepts the tap (surface only — the field is a
+    // surface-coordinate concept and has no meaning on the cave map)
+    if(this.touchMode && Renderer.viewMode==='surface'){ this.blessAt(wx,wy); return; }
     const tol=26/Camera.zoom;
     let best=null,bd=Infinity,kind=null;
     const underg=Renderer.viewMode==='underground';
@@ -438,8 +487,35 @@ const UI={
   },
   fadeHint(){ if(!this.hintFaded){ this.hintFaded=true; this.el.hint.classList.add('fade'); } },
 
+  renderChronicle(){
+    const el=this.el.chronicle; if(!el) return;
+    el.innerHTML='';
+    for(const e of Chronicle.entries){
+      const d=document.createElement('div');
+      d.className='chron-line '+(e.kind||'neutral');
+      d.style.opacity=Math.max(0.12,Math.min(1,e.life*1.35));
+      d.textContent=e.text;
+      el.appendChild(d);
+    }
+  },
+
   update(){
     this._t++;
+    if(this._blessCd>0) this._blessCd--;
+
+    // cinematic banner — finally give the world's great moments a voice on screen
+    const bn=(typeof Events!=='undefined')?Events.banner:'';
+    if(bn && bn!==this._lastBanner){
+      this._lastBanner=bn;
+      this.el.banner.textContent=bn;
+      this.el.banner.classList.add('show');
+    } else if(!bn && this._lastBanner){
+      this._lastBanner='';
+      this.el.banner.classList.remove('show');
+    }
+
+    if(this._t%12===0 && typeof Chronicle!=='undefined') this.renderChronicle();
+
     if(this._t%15===0){
       this.el.season.textContent=World.seasonName();
       this.el.tod.textContent=World.phaseName();

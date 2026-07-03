@@ -7,6 +7,7 @@ function boot(){
   World.init();
   Underground.init();
   Mesh.reset();
+  FX.reset();
   Renderer.init();
   UI.init();
   Events.schedule();
@@ -36,6 +37,10 @@ function loop(){
     tickAcc-=1;
   }
 
+  // presence layer runs at render rate so particles/audio stay smooth even
+  // when the sim is paused or between fixed steps at high speed
+  FX.update();
+  MeshAudio.update();
   Renderer.draw();
   UI.update();
 }
