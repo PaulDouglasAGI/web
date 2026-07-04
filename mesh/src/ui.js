@@ -253,7 +253,7 @@ const UI={
 
   renderSitePanel(s){
     this.setExtras(false);
-    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY',workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE',masonry:'MASONRY',townHall:'TOWN HALL',smithy:'SMITHY',barracks:'BARRACKS',harbor:'HARBOR',temple:'TEMPLE',tavern:'TAVERN',quarry:'QUARRY',mine:'MINE',monument:'MONUMENT',wonder:'THE WONDER'};
+    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY',workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE',masonry:'MASONRY',townHall:'TOWN HALL',smithy:'SMITHY',barracks:'BARRACKS',harbor:'HARBOR',temple:'TEMPLE',tavern:'TAVERN',quarry:'QUARRY',mine:'MINE',monument:'MONUMENT',wonder:'THE WONDER',citadel:'THE CITADEL',sanctum:'THE SANCTUARY',greatTemple:'THE GREAT TEMPLE',caravanserai:'THE CARAVANSERAI'};
     this.el.pName.textContent=SITE_LABEL[s.type]||s.type.toUpperCase();
     if(s.faction!=null){ this.el.pFaction.textContent=Factions[s.faction].name; this.el.pFaction.style.color=Factions[s.faction].color; }
     else { this.el.pFaction.textContent='unclaimed'; this.el.pFaction.style.color='#9aa6a2'; }
@@ -364,7 +364,7 @@ const UI={
     }
 
     this.el.pName.textContent=SETTLEMENT_TIERS[g.tier].name+(g.spec?' · '+g.spec:'');
-    this.el.pFaction.textContent='settlement · '+pop+' souls · '+(g.fate||'FLEDGLING');
+    this.el.pFaction.textContent='settlement · '+pop+' souls · '+(g.fate||'FLEDGLING')+(g.destiny?' · '+g.destiny:'');
     this.el.pFaction.style.color='#9fc9b8';
     const builtSummary=Object.keys(counts).map(t=>counts[t]+' '+t).join(', ')||'nothing built yet';
     this.el.pAge.textContent=builtSummary;

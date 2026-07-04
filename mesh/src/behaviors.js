@@ -200,9 +200,11 @@ function theftTarget(a){
 // beauty for the beauty structures (monument/wonder, S5)
 function siteMatsReady(s){
   if(s.matsWood<s.needWood || s.matsStone<s.needStone) return false;
-  if((s.type==='monument'||s.type==='wonder') && (s.matsBeauty||0)<(s.needBeauty||0)) return false;
+  if(s.needBeauty!=null && (s.matsBeauty||0)<s.needBeauty) return false;
   return true;
 }
+// a settlement's crystallized destiny (Phase D), looked up by nearest gather
+function nearestDestiny(a){ const g=World.nearestOf(World.gathers,a.x,a.y); return g?g.destiny:null; }
 
 const Behaviors=[
   // ── SURVIVAL & WORK ────────────────────────────────────────────────────────
@@ -619,8 +621,8 @@ const Behaviors=[
   // the only sink for the beauty resource, which every garden/mark/upgrade has
   // been quietly minting all along
   { id:'offerBeauty', label:'offering beauty', glyph:'❈', cat:'creative',
-    weight:a=> { if((a.inv.beauty||0)<=0) return 0; const st=World.nearestSite(a.x,a.y,s=>(s.type==='monument'||s.type==='wonder')&&s.level<s.maxLevel&&(s.matsBeauty||0)<(s.needBeauty||0)); return st?22+(a.faction===3?8:0):0; },
-    make:a=> { const st=World.nearestSite(a.x,a.y,s=>(s.type==='monument'||s.type==='wonder')&&s.level<s.maxLevel&&(s.matsBeauty||0)<(s.needBeauty||0)); if(!st) return null;
+    weight:a=> { if((a.inv.beauty||0)<=0) return 0; const st=World.nearestSite(a.x,a.y,s=>s.needBeauty!=null&&s.level<s.maxLevel&&(s.matsBeauty||0)<s.needBeauty); return st?22+(a.faction===3?8:0):0; },
+    make:a=> { const st=World.nearestSite(a.x,a.y,s=>s.needBeauty!=null&&s.level<s.maxLevel&&(s.matsBeauty||0)<s.needBeauty); if(!st) return null;
       return { label:'offering beauty', glyph:'❈', cat:'creative', pose:'kneel', target:{x:st.x,y:st.y}, arrive:14, dur:70,
         onArrive(ag){ const n=Math.min(ag.inv.beauty,(st.needBeauty||0)-(st.matsBeauty||0)); if(n>0){ ag.inv.beauty-=n; st.matsBeauty=(st.matsBeauty||0)+n; ag.remember('offered beauty to a '+st.type); siteLog(st, ag.name+' offered beauty'); } } }; } },
   { id:'upgradeToStone', label:'upgrading to stone', glyph:'▲', cat:'creative',
@@ -671,7 +673,7 @@ const Behaviors=[
       const v=theftTarget(a);
       if(!v) return 0;
       // emergent law: town halls AND a culture that believes in order both police crime
-      const suppress=1-Math.min(0.78, nearestGovern(a)*0.3 + settlementCulture(a,'order')*0.35);
+      const suppress=1-Math.min(0.92, nearestGovern(a)*0.3 + settlementCulture(a,'order')*0.35 + (nearestDestiny(a)==='THE CITADEL'?0.25:0));
       // a laden caravan on the open road is a far richer, softer mark than a
       // passer-by — highway robbery is especially tempting
       const caravanLure=v.caravan?3:1;
@@ -709,7 +711,7 @@ const Behaviors=[
     weight:a=> { if(a.criminality<=0.55 || a.wanted) return 0;
       const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && dist2(a.x,a.y,o.x,o.y)<480*480);
       if(!v) return 0;
-      const suppress=1-Math.min(0.78, nearestGovern(a)*0.3 + settlementCulture(a,'order')*0.35);
+      const suppress=1-Math.min(0.92, nearestGovern(a)*0.3 + settlementCulture(a,'order')*0.35 + (nearestDestiny(a)==='THE CITADEL'?0.25:0));
       return (14+(a.criminality-0.5)*36)*suppress; },
     make:a=> { const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && dist2(a.x,a.y,o.x,o.y)<480*480);
       if(!v) return null;

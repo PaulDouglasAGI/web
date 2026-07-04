@@ -294,9 +294,9 @@ const Renderer={
           ctx.beginPath();
           ctx.moveTo(sx-hw*0.85, sy-hh*0.15); ctx.lineTo(sx, sy-hh*1.6); ctx.lineTo(sx+hw*0.85, sy-hh*0.15);
           ctx.closePath(); ctx.fill();
-        } else if(s.type==='monument' || s.type==='wonder'){
-          // a glowing spire — the Wonder taller and brighter than a monument
-          const big=s.type==='wonder';
+        } else if(s.type==='monument' || s.type==='wonder' || s.type==='citadel' || s.type==='sanctum' || s.type==='greatTemple' || s.type==='caravanserai'){
+          // a glowing spire — the Wonder & destiny capstones taller/brighter
+          const big=(s.type==='wonder'||s.type==='greatTemple'||s.type==='citadel');
           const h=(big?26:16)*z*lvlScale, w=(big?9:6)*z*lvlScale;
           const gl=ctx.createRadialGradient(sx,sy,0,sx,sy,h*1.4);
           gl.addColorStop(0,'rgba(255,233,176,'+(big?0.5:0.3)+')'); gl.addColorStop(1,'rgba(255,233,176,0)');

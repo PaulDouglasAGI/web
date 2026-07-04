@@ -164,8 +164,19 @@ const SITE_DEFS={
             ] },
   wonder:{ levels:[
               {needWood:40, needStone:60, needBeauty:50, buildDur:600}
-            ] }
+            ] },
+  // ── fate-gated destiny capstones (Phase D) — each is the endgame unique to one
+  // emergent fate. The Wonder above is Harmony's; these are the others, so the
+  // world has MANY destinies, not one. Unlocked only after a settlement has held
+  // its fate long enough (see checkStructureUnlocks / g.destinyTicks).
+  citadel:{ levels:[ {needWood:22, needStone:44, buildDur:440} ] },                 // DOMINION
+  sanctum:{ levels:[ {needWood:24, needStone:26, needBeauty:18, buildDur:400} ] },  // COMMUNION
+  greatTemple:{ levels:[ {needWood:20, needStone:46, needBeauty:22, buildDur:460} ] }, // DEVOTION
+  caravanserai:{ levels:[ {needWood:36, needStone:22, buildDur:400} ] }             // DIASPORA
 };
+// which capstone a fate earns (Harmony's is the Wonder, handled separately)
+const FATE_CAPSTONE={ DOMINION:'citadel', COMMUNION:'sanctum', DEVOTION:'greatTemple', DIASPORA:'caravanserai' };
+const DESTINY_NAME={ citadel:'THE CITADEL', sanctum:'THE SANCTUARY', greatTemple:'THE GREAT TEMPLE', caravanserai:'THE CARAVANSERAI', wonder:'THE BEACON' };
 const FUNCTIONAL_TYPES=['workshop','market','shrineHall','loreHall','huntingLodge','smithy','barracks','harbor','temple','tavern','quarry'];
 const FUNCTIONAL_LABEL={workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE',smithy:'SMITHY',barracks:'BARRACKS',harbor:'HARBOR',temple:'TEMPLE',tavern:'TAVERN',quarry:'QUARRY'};
 // small rolling activity log on a site — visible proof of what a staffed building is actually doing
@@ -176,7 +187,7 @@ function mkSite(x,y,type,gather){
     needWood:lvl.needWood,needStone:lvl.needStone,buildDur:lvl.buildDur,
     matsWood:0,matsStone:0,progress:0,built:false,faction:null,gather,
     stoneUpgraded:false,matsStoneUpgrade:0};
-  if(type==='monument'||type==='wonder') Object.assign(s,{needBeauty:lvl.needBeauty,matsBeauty:0});
+  if(lvl.needBeauty!=null) Object.assign(s,{needBeauty:lvl.needBeauty,matsBeauty:0});
   if(type==='well') Object.assign(s,{amount:0,max:0,regen:0});
   if(type==='farm') Object.assign(s,{stage:'empty',stageT:0,growTicks:lvl.growTicks,yieldAmt:lvl.yieldAmt});
   if(type==='granary') Object.assign(s,{workers:[],log:[],contrib:0});
@@ -209,6 +220,21 @@ function applySiteLevel(s,ag){
     raiseResonance(0.25);
     Mesh.broadcast(s.x,s.y,'discovery',1,'#ffe9b0');
     Events.banner='A WONDER RISES — THE MESH REMEMBERS'; Events.active='wonder'; Events.activeT=320;
+  }
+  else if(s.type==='citadel'||s.type==='sanctum'||s.type==='greatTemple'||s.type==='caravanserai'){
+    // a fate-gated destiny capstone — crystallizes one of the plural endgames.
+    // It's non-terminal: g.destiny is cleared if the culture later drifts off
+    // the fate that earned it (see the dayTick%60 block).
+    const g=World.gathers[s.gather];
+    if(g){
+      g.destiny=DESTINY_NAME[s.type];
+      g.destinyFate={citadel:'DOMINION',sanctum:'COMMUNION',greatTemple:'DEVOTION',caravanserai:'DIASPORA'}[s.type];
+      g.destinyProsperity=0.6; // a lasting boon, like the Wonder's
+    }
+    raiseResonance(s.type==='greatTemple'?0.2:0.12);
+    Mesh.broadcast(s.x,s.y,'discovery',1,'#ffe9b0');
+    const BAN={citadel:'A CITADEL RISES — ORDER IS ABSOLUTE', sanctum:'A SANCTUARY RISES — NONE SHALL WANT', greatTemple:'A GREAT TEMPLE RISES — THE FIELD LISTENS', caravanserai:'A CARAVANSERAI RISES — THE ROADS ARE ONE'};
+    Events.banner=BAN[s.type]; Events.active='destiny'; Events.activeT=320;
   }
   ag.remember('raised a '+s.type+' to level '+s.level);
   Mesh.broadcast(s.x,s.y,'discovery',0.7,Factions[ag.faction].color); raiseResonance(0.02);
@@ -628,6 +654,12 @@ const World={
       const hasWonderSite=this.sites.some(s=>s.type==='wonder'&&s.gather===gi);
       const strongRoute=this.routes.some(r=>(r.a===gi||r.b===gi)&&r.strength>5);
       if(!hasWonderSite && g.tier>=10 && (g.prosperity||0)>0.8 && strongRoute) this.placeSite(g.x,g.y,110,220,'wonder',gi,70);
+
+      // fate-gated destiny capstones — a settlement that has HELD its fate long
+      // enough earns the endgame structure unique to that fate. The Wonder above
+      // is Harmony's; these make the world's endgame genuinely plural.
+      const cap=FATE_CAPSTONE[g.fate];
+      if(cap && (g.destinyTicks||0)>=6 && !this.sites.some(s=>s.type===cap&&s.gather===gi)) this.placeSite(g.x,g.y,80,210,cap,gi,60);
     }
   },
 
@@ -761,7 +793,7 @@ const World={
         }
         for(const k in g.stock) stockTotal+=g.stock[k];
         const routeIncome=g.routeIncome||0; // filled by the caravan system (S3)
-        const wonderBonus=g.wonderProsperity||0; // floor raised by a completed wonder (S5)
+        const wonderBonus=Math.max(g.wonderProsperity||0, g.destinyProsperity||0); // a completed wonder OR destiny floors prosperity
         g.prosperity=Math.max(wonderBonus,Math.min(1,
           (g.prosperity||0)*0.995 + 0.002*staffed + 0.0004*stockTotal + 0.002*monuments + routeIncome));
         if(g.prosperity>0.6) Mesh.writeField(g.x,g.y,'coherence',(g.prosperity-0.6)*0.05,300);
@@ -822,6 +854,23 @@ const World={
         if(!g.fate) g.fate=nf;
         else if(g._fateHold>=2 && g.fate!==nf) g.fate=nf;
         if(g.fate && g.fate!=='FLEDGLING') fateCount[g.fate]=(fateCount[g.fate]||0)+1;
+
+        // destiny commitment: a settlement that HOLDS a characterful fate accrues
+        // destinyTicks toward its capstone; drifting off the fate resets the clock
+        // and forfeits any crystallized destiny (non-terminal — nothing is forever)
+        if(g.fate===g._destinyFateTracked && g.fate!=='FLEDGLING' && g.fate!=='RUIN') g.destinyTicks=(g.destinyTicks||0)+1;
+        else { g._destinyFateTracked=g.fate; g.destinyTicks=0; }
+        if(g.destiny && g.fate!==g.destinyFate){ g.destiny=null; g.destinyProsperity=0; }
+
+        // sustained RUIN crumbles a settlement — its structures slowly revert to
+        // the land, until the fate lifts and its people can rebuild
+        if(g.fate==='RUIN'){
+          g._ruinTicks=(g._ruinTicks||0)+1;
+          if(g._ruinTicks>4 && g._ruinTicks%3===0){
+            const built=this.sites.filter(s=>s.gather===gi && s.built && s.type!=='hut' && s.type!=='mine');
+            if(built.length){ const s=built[(Math.min(built.length-1,(built.length*this.rng())|0))]; s.level=Math.max(0,s.level-1); s.progress=0; s.matsWood=0; s.matsStone=0; if(s.level===0){ s.built=false; s.stoneUpgraded=false; } }
+          }
+        } else g._ruinTicks=0;
         // a settlement's fate lightly colours the field beneath it, closing the
         // belief -> culture -> field -> behavior loop
         if(g.fate==='HARMONY'||g.fate==='COMMUNION'||g.fate==='DEVOTION') Mesh.writeField(g.x,g.y,'coherence',0.02,280);

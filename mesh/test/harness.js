@@ -565,6 +565,78 @@ function freshWorld(ctx,seed){
   assert(r.answered===1 && r.dissolving, 'the chosen dissolution was recorded as ceremonial');
 })();
 
+// ── Test 35: a held fate unlocks its unique capstone ──────────────────────
+(function testDestinyUnlock(){
+  const ctx=buildContext();
+  freshWorld(ctx,100);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    g.fate='DOMINION'; g._destinyFateTracked='DOMINION'; g.destinyTicks=10;
+    World.checkStructureUnlocks();
+    World.sites.some(s=>s.type==='citadel'&&s.gather===0);
+  `, ctx);
+  assert(r===true, 'a settlement that held DOMINION unlocks a Citadel');
+})();
+
+// ── Test 36: raising a capstone crystallizes its destiny + prosperity floor ─
+(function testDestinyBuild(){
+  const ctx=buildContext();
+  freshWorld(ctx,101);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const cit=mkSite(g.x,g.y,'citadel',0); cit.matsWood=cit.needWood; cit.matsStone=cit.needStone; World.sites.push(cit);
+    const a=new Agent(g.x,g.y,2); Agents.push(a);
+    const ct=BehaviorById['construct'].make(a);
+    for(let i=0;i<600 && cit.level<1;i++){ ct.onTick(a); }
+    ({built:cit.built, destiny:g.destiny, destinyFate:g.destinyFate, floor:g.destinyProsperity});
+  `, ctx);
+  assert(r.built && r.destiny==='THE CITADEL', 'raising a Citadel crystallizes THE CITADEL destiny ('+r.destiny+')');
+  assert(r.destinyFate==='DOMINION' && r.floor>0, 'the destiny records its fate and floors prosperity');
+})();
+
+// ── Test 37: a destiny is LOST when the culture drifts off its fate ────────
+(function testDestinyLost(){
+  const ctx=buildContext();
+  freshWorld(ctx,102);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    g.destiny='THE CITADEL'; g.destinyFate='DOMINION'; g.destinyProsperity=0.6;
+    for(let i=0;i<8;i++){ const a=new Agent(g.x,g.y,3); a.ideals={order:0.2,communion:0.9,faith:0.3,material:0.3,freedom:0.3}; Agents.push(a); }
+    for(let p=0;p<4;p++){ World.dayTick=59; World.update(); }
+    ({fate:g.fate, destiny:g.destiny});
+  `, ctx);
+  assert(r.fate==='COMMUNION' && !r.destiny, 'a destiny is lost when the culture drifts off its fate — never permanent');
+})();
+
+// ── Test 38: a Citadel makes order near-absolute ───────────────────────────
+(function testCitadelLaw(){
+  const ctx=buildContext();
+  freshWorld(ctx,103);
+  const r=vm.runInContext(`
+    const g0=World.gathers[0], g1=World.gathers[1];
+    g0.culture={order:0.5,communion:0.3,faith:0.3,material:0.3,freedom:0.3}; g0.destiny='THE CITADEL';
+    g1.culture={order:0.5,communion:0.3,faith:0.3,material:0.3,freedom:0.3};
+    function w(g){ const t=new Agent(g.x,g.y,0); t.criminality=1; const v=new Agent(g.x,g.y,0); v.inv.food=5; v.inv.wood=5; Agents.push(t); Agents.push(v); return BehaviorById['steal'].weight(t); }
+    ({citadel:w(g0), plain:w(g1)});
+  `, ctx);
+  assert(r.citadel<r.plain, 'a Citadel suppresses theft harder than an equal settlement without one ('+r.citadel.toFixed(1)+' vs '+r.plain.toFixed(1)+')');
+})();
+
+// ── Test 39: sustained RUIN crumbles a settlement's structures ─────────────
+(function testRuinDecay(){
+  const ctx=buildContext();
+  freshWorld(ctx,104);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const m=mkSite(g.x,g.y,'market',0); m.built=true; m.level=2; World.sites.push(m);
+    for(let i=0;i<6;i++) Agents.push(new Agent(g.x,g.y,0));
+    const before=m.level;
+    for(let p=0;p<20;p++){ Mesh.writeField(g.x,g.y,'dissonance',0.9,300); World.dayTick=59; World.update(); }
+    ({before, after:m.level, fate:g.fate});
+  `, ctx);
+  assert(r.fate==='RUIN' && r.after<r.before, 'a settlement in sustained RUIN crumbles its structures (lvl '+r.before+' -> '+r.after+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){
