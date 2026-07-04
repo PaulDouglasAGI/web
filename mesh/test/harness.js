@@ -444,6 +444,65 @@ function freshWorld(ctx,seed){
   assert(r.faith===1 && r.order===0, 'ideals clamp to [0,1] (faith '+r.faith+', order '+r.order+')');
 })();
 
+// ── Test 27: a settlement of communion-believers becomes COMMUNION ─────────
+(function testCultureCommunion(){
+  const ctx=buildContext();
+  freshWorld(ctx,90);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    for(let i=0;i<8;i++){ const a=new Agent(g.x,g.y,3); a.ideals={order:0.3,communion:0.9,faith:0.4,material:0.3,freedom:0.3}; Agents.push(a); }
+    for(let p=0;p<3;p++){ World.dayTick=59; World.update(); }
+    g.fate;
+  `, ctx);
+  assert(r==='COMMUNION', 'a settlement of communion-believers becomes COMMUNION ('+r+')');
+})();
+
+// ── Test 28: fate is never latched — shifting the souls flips it (reversible)─
+(function testFateReversible(){
+  const ctx=buildContext();
+  freshWorld(ctx,91);
+  const r=vm.runInContext(`
+    const g=World.gathers[0]; const souls=[];
+    for(let i=0;i<8;i++){ const a=new Agent(g.x,g.y,3); a.ideals={order:0.3,communion:0.3,faith:0.9,material:0.3,freedom:0.3}; Agents.push(a); souls.push(a); }
+    for(let p=0;p<3;p++){ World.dayTick=59; World.update(); }
+    const first=g.fate;
+    for(const a of souls) a.ideals={order:0.9,communion:0.3,faith:0.2,material:0.3,freedom:0.3};
+    for(let p=0;p<4;p++){ World.dayTick=59; World.update(); }
+    ({first, second:g.fate});
+  `, ctx);
+  assert(r.first==='DEVOTION', 'high-faith souls made the settlement DEVOTION ('+r.first+')');
+  assert(r.second==='DOMINION' && r.second!==r.first, 'shifting the souls flipped the fate — never latched ('+r.first+' -> '+r.second+')');
+})();
+
+// ── Test 29: collapse makes RUIN regardless of what the souls believe ──────
+(function testRuinFate(){
+  const ctx=buildContext();
+  freshWorld(ctx,92);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    for(let i=0;i<6;i++) Agents.push(new Agent(g.x,g.y,0));
+    Mesh.writeField(g.x,g.y,'dissonance',0.8,300);
+    World.dayTick=59; World.update();
+    Mesh.writeField(g.x,g.y,'dissonance',0.8,300);
+    World.dayTick=59; World.update();
+    ({fate:g.fate, food:g.foodSec, prosp:g.prosperity, dis:Mesh.dissonanceAt(g.x,g.y)});
+  `, ctx);
+  assert(r.fate==='RUIN', 'famine + fragmentation + poverty makes RUIN regardless of ideals ('+r.fate+' | food '+r.food.toFixed(2)+' dis '+r.dis.toFixed(2)+')');
+})();
+
+// ── Test 30: the world Age reflects the majority (characterful) fate ───────
+(function testWorldAge(){
+  const ctx=buildContext();
+  freshWorld(ctx,93);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    for(let i=0;i<8;i++){ const a=new Agent(g.x,g.y,3); a.ideals={order:0.3,communion:0.9,faith:0.3,material:0.3,freedom:0.3}; Agents.push(a); }
+    for(let p=0;p<3;p++){ World.dayTick=59; World.update(); }
+    World.age;
+  `, ctx);
+  assert(r==='AN AGE OF COMMUNION', 'the world Age reflects the majority fate ('+r+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){

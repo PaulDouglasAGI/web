@@ -154,6 +154,10 @@ const FX={
    maintains (CrimeLog, settlement tiers, births/deaths) and distills them
    into a rolling, fading feed so the world reads as an unfolding story rather
    than motion without consequence. Never mutates the sim. */
+// how each settlement fate reads in the Chronicle, and its tint kind
+const FATE_PHRASE={ HARMONY:'harmony', DOMINION:'the rule of order', COMMUNION:'communion', DIASPORA:'the wandering road', DEVOTION:'devotion', RUIN:'ruin' };
+const FATE_KIND={ HARMONY:'triumph', DOMINION:'crime', COMMUNION:'growth', DIASPORA:'birth', DEVOTION:'justice', RUIN:'grief' };
+
 const Chronicle={
   entries:[],          // {text, kind, life} — kind tints the line
   _crimeLen:0,
@@ -175,9 +179,21 @@ const Chronicle={
       this._crimeLen=(typeof CrimeLog!=='undefined')?CrimeLog.length:0;
       this._born=World.totalBorn||0; this._died=World.totalDied||0;
       this._tiers=World.gathers.map(g=>g.tier||0);
+      this._fates=World.gathers.map(g=>g.fate||null);
+      this._age=World.age||null;
       this._started=true;
       return;
     }
+    // fate turns — a settlement's culture tipping it toward a new destiny
+    for(let gi=0;gi<World.gathers.length;gi++){
+      const f=World.gathers[gi].fate;
+      if(f && f!==this._fates[gi]){
+        this._fates[gi]=f;
+        if(f!=='FLEDGLING') this.push('a settlement turned to '+FATE_PHRASE[f], FATE_KIND[f]||'neutral');
+      }
+    }
+    // the turning of a world Age
+    if(World.age && World.age!==this._age){ this._age=World.age; this.push('— '+World.age+' —', 'triumph'); }
     // new crime/justice lines — already beautifully authored by the sim
     if(typeof CrimeLog!=='undefined' && CrimeLog.length!==this._crimeLen){
       for(let i=Math.max(this._crimeLen,CrimeLog.length-3);i<CrimeLog.length;i++){

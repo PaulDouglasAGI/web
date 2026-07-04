@@ -244,6 +244,10 @@ const SETTLEMENT_TIERS=[
   {name:'BEACON',       req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1, monument:1, wonder:1}}
 ];
 
+// the world's Age = the character the majority of its settlements share right
+// now (derived from settlement fates every aggregation pass — it rises and falls)
+const AGE_OF={ HARMONY:'AN AGE OF HARMONY', DOMINION:'AN AGE OF IRON', COMMUNION:'AN AGE OF COMMUNION', DIASPORA:'AN AGE OF WANDERING', DEVOTION:'AN AGE OF FAITH', RUIN:'AN AGE OF SILENCE', FLEDGLING:'THE FIRST DAYS' };
+
 const World={
   cols:170, rows:118, ts:20,           // tile size in world px
   w:0, h:0,
@@ -769,22 +773,55 @@ const World={
       // local dissonance (see Agent.update) and the steal behavior scales with
       // criminality — so inequality drives crime through the mechanics that
       // already exist, with no new crime code.
-      const wSum=new Array(this.gathers.length).fill(0), wMax=new Array(this.gathers.length).fill(0), wCnt=new Array(this.gathers.length).fill(0);
+      // One pass bins every living soul to its nearest gather and accumulates,
+      // per settlement: wealth (for inequality) AND the sum/sum-of-squares of
+      // the five ideals (for culture + tension). Same O(agents) cost as before.
+      const nG=this.gathers.length;
+      const wSum=new Array(nG).fill(0), wMax=new Array(nG).fill(0), wCnt=new Array(nG).fill(0);
+      const cSum=[], cSq=[];
+      for(let i=0;i<nG;i++){ cSum.push({order:0,communion:0,faith:0,material:0,freedom:0}); cSq.push({order:0,communion:0,faith:0,material:0,freedom:0}); }
       for(const a of Agents){
         if(a.dead||a.underground) continue;
         let bi=-1,bd=Infinity;
-        for(let gi=0;gi<this.gathers.length;gi++){ const gg=this.gathers[gi]; const d=(gg.x-a.x)**2+(gg.y-a.y)**2; if(d<bd){ bd=d; bi=gi; } }
+        for(let gi=0;gi<nG;gi++){ const gg=this.gathers[gi]; const d=(gg.x-a.x)**2+(gg.y-a.y)**2; if(d<bd){ bd=d; bi=gi; } }
         if(bi<0) continue;
         const w=a.wealth||0; wSum[bi]+=w; wCnt[bi]++; if(w>wMax[bi]) wMax[bi]=w;
+        if(a.ideals){ for(const k of IDEAL_KEYS){ const v=a.ideals[k]; cSum[bi][k]+=v; cSq[bi][k]+=v*v; } }
       }
-      for(let gi=0;gi<this.gathers.length;gi++){
-        if(wCnt[gi]<4) continue;
-        const avg=wSum[gi]/wCnt[gi], spread=wMax[gi]-avg;
-        // gentle: only genuinely stark gaps bite, so ordinary prosperity doesn't
-        // tip a settlement into an endemic-crime spiral (almsgiving + governance
-        // are the counter-pressures)
-        if(spread>10){ const g=this.gathers[gi]; Mesh.writeField(g.x,g.y,'dissonance',Math.min(0.18,(spread-10)*0.01),220); }
+      const fateCount={};
+      for(let gi=0;gi<nG;gi++){
+        const g=this.gathers[gi], n=wCnt[gi];
+        g._pop=n;
+        // inequality → local fragmentation (gentle; only stark gaps bite, so
+        // ordinary prosperity doesn't spiral — almsgiving + governance counter it)
+        if(n>=4){
+          const avg=wSum[gi]/n; g._spread=wMax[gi]-avg;
+          if(g._spread>10) Mesh.writeField(g.x,g.y,'dissonance',Math.min(0.18,(g._spread-10)*0.01),220);
+        } else g._spread=0;
+        // culture = mean ideals of the settlement's souls; tension = how much
+        // they DISAGREE (mean variance across the five axes) — high tension is
+        // what rewards divergence and later drives schism, so the world never
+        // collapses to one bland centroid.
+        if(n>=1){
+          const C={}; let tension=0;
+          for(const k of IDEAL_KEYS){ const m=cSum[gi][k]/n; C[k]=m; tension+=Math.max(0,cSq[gi][k]/n - m*m); }
+          g.culture=C; g.tension=Math.min(1,(tension/IDEAL_KEYS.length)*4);
+        }
+        // fate is DERIVED every pass (never latched) with a short hysteresis so
+        // it drifts and reverses with the souls but doesn't flicker cosmetically
+        const nf=this.deriveFate(gi);
+        if(nf===g._fateCand) g._fateHold=(g._fateHold||0)+1; else { g._fateCand=nf; g._fateHold=0; }
+        if(!g.fate) g.fate=nf;
+        else if(g._fateHold>=2 && g.fate!==nf) g.fate=nf;
+        if(g.fate && g.fate!=='FLEDGLING') fateCount[g.fate]=(fateCount[g.fate]||0)+1;
+        // a settlement's fate lightly colours the field beneath it, closing the
+        // belief -> culture -> field -> behavior loop
+        if(g.fate==='HARMONY'||g.fate==='COMMUNION'||g.fate==='DEVOTION') Mesh.writeField(g.x,g.y,'coherence',0.02,280);
+        else if(g.fate==='DOMINION'||g.fate==='RUIN') Mesh.writeField(g.x,g.y,'dissonance',0.02,280);
       }
+      // the world Age = the character the majority of settlements share now
+      let domFate=null,dc=0; for(const f in fateCount){ if(fateCount[f]>dc){ dc=fateCount[f]; domFate=f; } }
+      this.age = (domFate && AGE_OF[domFate]) || 'THE FIRST DAYS';
 
       // per-faction resource ledger — a live snapshot of what each faction's living members currently hold
       const stock=[{},{},{},{}];
@@ -816,6 +853,30 @@ const World={
   weakenRoute(a,b){
     const r=this.routes.find(x=>(x.a===a&&x.b===b)||(x.a===b&&x.b===a));
     if(r) r.strength=Math.max(0,r.strength*0.4);
+  },
+
+  // pure: read a settlement's culture + live metrics and name its CURRENT fate.
+  // No latching, no scripting — the fate is simply what these numbers say now,
+  // so it drifts and reverses as the souls do. RUIN (collapse) is the absence of
+  // any cohered ideal under material failure, not a value the souls hold.
+  deriveFate(gi){
+    const g=this.gathers[gi], C=g.culture;
+    if(!C || (g._pop||0)<4) return 'FLEDGLING';
+    const coh=Mesh.coherenceAt(g.x,g.y), dis=Mesh.dissonanceAt(g.x,g.y);
+    const prosp=g.prosperity||0, food=g.foodSec||0, gov=g.govern||0, spread=g._spread||0;
+    if(food<0.35 && dis>0.42 && prosp<0.4) return 'RUIN';
+    let dom=null,dv=-1,second=-1;
+    for(const k of IDEAL_KEYS){ const v=C[k]; if(v>dv){ second=dv; dv=v; dom=k; } else if(v>second) second=v; }
+    const lead=dv-second; // how clearly one ideal leads the settlement
+    if(lead>0.1){
+      if(dom==='order') return 'DOMINION';
+      if(dom==='communion') return 'COMMUNION';
+      if(dom==='faith') return 'DEVOTION';
+      if(dom==='freedom') return 'DIASPORA';
+      if(dom==='material') return (coh>0.55 && prosp>0.5) ? 'HARMONY' : 'FLEDGLING';
+    }
+    if(coh>0.58 && prosp>0.5) return 'HARMONY';
+    return 'FLEDGLING';
   },
 
   // dynamic population ceiling driven by what's actually been built — replaces

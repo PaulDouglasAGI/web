@@ -364,13 +364,14 @@ const UI={
     }
 
     this.el.pName.textContent=SETTLEMENT_TIERS[g.tier].name+(g.spec?' · '+g.spec:'');
-    this.el.pFaction.textContent='settlement · '+pop+' souls';
+    this.el.pFaction.textContent='settlement · '+pop+' souls · '+(g.fate||'FLEDGLING');
     this.el.pFaction.style.color='#9fc9b8';
     const builtSummary=Object.keys(counts).map(t=>counts[t]+' '+t).join(', ')||'nothing built yet';
     this.el.pAge.textContent=builtSummary;
     this.el.pAction.textContent='jobs '+jobsFilled+'/'+jobsTotal+' filled · prosperity '+((g.prosperity||0)*100).toFixed(0)+'% · treasury '+(g.treasury||0).toFixed(0)
       +' · food sec '+(g.foodSec||0).toFixed(2)+' · govern '+(g.govern||0)+' · tavern '+(g.tavernBonus||0).toFixed(2)
       +' · stores: '+this.stockLine(g)
+      +' · culture: '+this.cultureLine(g)+' (tension '+((g.tension||0)*100).toFixed(0)+'%)'
       +' · field here: clarity '+Mesh.coherenceAt(g.x,g.y).toFixed(2)+' grief '+Mesh.griefAt(g.x,g.y).toFixed(2)+' frag '+Mesh.dissonanceAt(g.x,g.y).toFixed(2);
     this.setStatLabels('housing','jobs','tier','prosperity');
     setBar(this.el.barEnergy, housing? Math.min(1,pop/housing) : 0);
@@ -418,7 +419,7 @@ const UI={
     const avgTier=World.gathers.length? (tierSum/World.gathers.length).toFixed(1) : '0';
 
     this.el.pName.textContent='THE MESH';
-    this.el.pFaction.textContent=alive.length+' souls living';
+    this.el.pFaction.textContent=(World.age||'THE FIRST DAYS')+' · '+alive.length+' souls living';
     this.el.pFaction.style.color='#9fc9b8';
     this.el.pAge.textContent='born '+(World.totalBorn||0)+' · died '+(World.totalDied||0)+' · '+World.gathers.length+' settlements (avg tier '+avgTier+')';
     const factionPop=Factions.map(fc=>fc.name+' '+alive.filter(a=>a.faction===fc.id).length).join(' · ');
@@ -435,6 +436,13 @@ const UI={
       line.textContent=CrimeLog[i];
       this.el.pMem.appendChild(line);
     }
+  },
+
+  // the two beliefs a settlement leans on most, as a compact culture readout
+  cultureLine(g){
+    if(!g.culture) return '—';
+    const ks=Object.keys(g.culture).sort((a,b)=>g.culture[b]-g.culture[a]);
+    return ks.slice(0,2).map(k=>k+' '+g.culture[k].toFixed(2)).join(' · ');
   },
 
   // compact one-line summary of a settlement's store (only resources it holds)
