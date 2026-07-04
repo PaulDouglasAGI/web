@@ -216,7 +216,7 @@ const UI={
     this.setMemSection(true);
     this.setStatLabels('energy','hunger','social','joy');
     const fc=Factions[a.faction];
-    this.el.pName.textContent=a.name;
+    this.el.pName.textContent=a.name+(a.surname?' '+a.surname:'');
     this.el.pFaction.textContent=fc.name;
     this.el.pFaction.style.color=fc.color;
     const skillTier=a.skills>=3?'expert':(a.skills===2?'skilled':'apprentice');
@@ -430,6 +430,14 @@ const UI={
     setBar(this.el.barSocial, Mesh.grief);
     setBar(this.el.barJoy, alive.length? wanted/alive.length : 0);
     this.el.pMem.innerHTML='';
+    // the world's remembered figures — prophets, founders — first
+    const figs=World.figures||[];
+    for(let i=figs.length-1;i>=0 && i>=figs.length-4;i--){
+      const line=document.createElement('div');
+      line.className='mem-line'; line.style.color='#e6d29a';
+      line.textContent='✶ '+figs[i].name+' '+figs[i].deed;
+      this.el.pMem.appendChild(line);
+    }
     for(let i=CrimeLog.length-1;i>=0;i--){
       const line=document.createElement('div');
       line.className='mem-line';

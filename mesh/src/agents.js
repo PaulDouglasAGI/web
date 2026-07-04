@@ -13,6 +13,9 @@ let _agentId=1;
 const NAME_A=['Su','Ka','Mi','Ev','Ar','Ny','Ol','Ta','Wr','Fen','Lir','Mor','Sel','Ash','Ber','Cael','Dun','Ro','Vey','Ilo','Quen','Bryn','Nim','Oro'];
 const NAME_B=['ren','la','dor','wyn','eth','is','ka','mar','ven','os','ya','rin','del','an','ux','ele','aro','iss','und','ora','ix','ael'];
 function genName(){ return NAME_A[(Math.random()*NAME_A.length)|0]+NAME_B[(Math.random()*NAME_B.length)|0]; }
+// family names carried down the generations — a dynasty of belief (Phase F)
+const SURNAMES=['Vell','Thorne','Ashford','Mire','Oakhand','Dunmar','Selwyn','Greaves','Fenwick','Brightwater','Holt','Varr','Emberly','Quill','Ravenshade','Lowry','Marsh','Calder','Storne','Ivory','Blackmoor','Wren','Aldous','Pell'];
+let _lineageId=1;
 
 const SKIN_TONES=['#e8b894','#d49e6e','#c98f5e','#a06a40','#8d5a3c','#5c3a24','#f0c9a0'];
 const HAIR_COLORS=['#2b1d12','#4a2f1d','#6b4423','#1a1a1a','#7a5230','#c9a35a','#3a2418'];
@@ -59,6 +62,8 @@ class Agent{
   constructor(x,y,faction){
     this.id=_agentId++;
     this.name=genName();
+    this.surname=SURNAMES[(Math.random()*SURNAMES.length)|0]; // family name (children inherit it)
+    this.lineage=_lineageId++;                                 // dynasty id (children inherit it)
     this.faction=faction;
     this.age=4+Math.random()*40;          // in "days"
     this.x=x; this.y=y; this.vx=0; this.vy=0;
@@ -425,10 +430,21 @@ function spawnAgents(count){
 }
 
 function birthAgent(){
-  // child born near a Tender or gathering spot, inherits a nearby faction
+  // a child is born to the nearest grown soul, inheriting its family name, its
+  // faction temperament, and a blend of its beliefs — so dynasties of belief
+  // form and a settlement's culture carries across generations (Phase F)
   const spot=World.gathers[(Math.random()*World.gathers.length)|0]||{x:World.w/2,y:World.h/2};
-  const a=new Agent(spot.x+(Math.random()-0.5)*120, spot.y+(Math.random()-0.5)*120, (Math.random()*4)|0);
+  let parent=null,bd=Infinity;
+  for(const o of Agents){ if(o.dead||o.underground||o.age<8) continue; const d=dist2(spot.x,spot.y,o.x,o.y); if(d<bd){ bd=d; parent=o; } }
+  const a=new Agent(spot.x+(Math.random()-0.5)*120, spot.y+(Math.random()-0.5)*120, parent?parent.faction:(Math.random()*4)|0);
   a.age=0; a.skills=1; a.energy=80;
+  if(parent){
+    a.surname=parent.surname; a.lineage=parent.lineage;
+    for(const k of IDEAL_KEYS) a.ideals[k]=Math.max(0,Math.min(1,(parent.ideals[k]!=null?parent.ideals[k]:0.5)+(Math.random()-0.5)*0.2));
+    a.parentId=parent.id;
+    parent.remember('welcomed a child, '+a.name);
+    a.remember('born to the line of '+parent.surname);
+  }
   Agents.push(a);
   World.totalBorn=(World.totalBorn||0)+1;
   Mesh.broadcast(a.x,a.y,'joy',0.7,Factions[a.faction].color);

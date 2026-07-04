@@ -688,6 +688,35 @@ function freshWorld(ctx,seed){
   assert(r.after>r.before, 'a divided settlement schisms and founds a new one ('+r.before+' -> '+r.after+')');
 })();
 
+// ── Test 43: a child inherits its parent's family name & a blend of beliefs ─
+(function testLineage(){
+  const ctx=buildContext();
+  freshWorld(ctx,120);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const parent=new Agent(g.x,g.y,2); parent.age=20; parent.surname='Testwood';
+    parent.ideals={order:0.9,communion:0.1,faith:0.1,material:0.9,freedom:0.1};
+    Agents.push(parent);
+    let child=null;
+    for(let i=0;i<10 && !child;i++){ birthAgent(); const c=Agents[Agents.length-1]; if(c.parentId===parent.id) child=c; }
+    ({child:!!child, surname:child&&child.surname, faction:child&&child.faction,
+      orderClose:child&&Math.abs(child.ideals.order-parent.ideals.order)<0.3});
+  `, ctx);
+  assert(r.child && r.surname==='Testwood', 'a child inherits the family name ('+r.surname+')');
+  assert(r.faction===2 && r.orderClose, 'a child inherits its parent temperament + a blend of its beliefs');
+})();
+
+// ── Test 44: the world records the souls it will remember ──────────────────
+(function testFigures(){
+  const ctx=buildContext();
+  freshWorld(ctx,121);
+  const r=vm.runInContext(`
+    World.recordFigure('A193 Testwood','rose as a prophet');
+    ({count:World.figures.length, name:World.figures[0].name});
+  `, ctx);
+  assert(r.count===1 && r.name==='A193 Testwood', 'the world records a named figure ('+r.name+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){

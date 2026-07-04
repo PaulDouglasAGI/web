@@ -789,7 +789,8 @@ const Behaviors=[
   { id:'prophesy', label:'prophesying', glyph:'☼', cat:'worship',
     weight:a=> (a.ideals && a.ideals.faith>0.78 && settlementCulture(a,'faith')>0.6) ? 10+(a.faction===3?5:0) : 0,
     make:a=> stayPut(a,'prophesying','☼','worship',150,ag=>{
-      if(ag.task._t===1) siteLog(World.altar, ag.name+' rose to speak as a prophet');
+      if(ag.task._t===1){ siteLog(World.altar, ag.name+' rose to speak as a prophet');
+        if(!ag._wasProphet){ ag._wasProphet=true; World.recordFigure(ag.name+' '+ag.surname, 'rose as a prophet'); } }
       if(ag.task._t%30===0){
         Mesh.broadcast(ag.x,ag.y,'vision',0.8,'#ffe9b0');
         raiseResonance(0.006);

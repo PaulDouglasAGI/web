@@ -302,6 +302,7 @@ const World={
     this.altar={ x:this.w/2, y:this.h/2, sacrifices:0, worshipped:0, log:[] };
     this._pendingPulses=[]; // deferred field writes, e.g. the dissolution coherence-surge below
     this.routes=[]; // inter-settlement trade routes {a,b,mode,strength,lastTripTick} (S3)
+    this.figures=[]; // named souls the world remembers — prophets, founders (Phase F)
     this.generate();
   },
 
@@ -947,6 +948,13 @@ const World={
     if(r) r.strength=Math.max(0,r.strength*0.4);
   },
 
+  // the world remembers the souls who shaped it — prophets, founders (Phase F)
+  recordFigure(name, deed){
+    this.figures=this.figures||[];
+    this.figures.push({name, deed, tick:this.tick, age:this.age});
+    if(this.figures.length>14) this.figures.shift();
+  },
+
   // pure: read a settlement's culture + live metrics and name its CURRENT fate.
   // No latching, no scripting — the fate is simply what these numbers say now,
   // so it drifts and reverses as the souls do. RUIN (collapse) is the absence of
@@ -993,6 +1001,8 @@ const World={
     this.placeSite(spot.x,spot.y,55,150,'hut',gi,80);
     this.placeSite(spot.x,spot.y,55,170,'farm',gi,70);
     for(const a of dissidents){ a.x=spot.x+(Math.random()-0.5)*90; a.y=spot.y+(Math.random()-0.5)*90; a._gi=gi; a.remember('broke away to found a new home'); a.driftIdeal('freedom',0.05); }
+    const founder=dissidents[0];
+    if(founder) this.recordFigure(founder.name+' '+founder.surname, 'led a people to break away and found a new home');
     Events.banner='A NEW PEOPLE BREAK AWAY'; Events.active='schism'; Events.activeT=300;
     return true;
   },

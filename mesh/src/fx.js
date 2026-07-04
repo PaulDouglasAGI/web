@@ -183,8 +183,14 @@ const Chronicle={
       this._age=World.age||null;
       this._gatherCount=World.gathers.length;
       this._rel={};
+      this._figCount=(World.figures||[]).length;
       this._started=true;
       return;
+    }
+    // a soul the world will remember — a prophet, a founder (Phase F)
+    if(World.figures && World.figures.length>this._figCount){
+      for(let i=this._figCount;i<World.figures.length;i++){ const f=World.figures[i]; this.push('✶ '+f.name+' '+f.deed, 'triumph'); }
+      this._figCount=World.figures.length;
     }
     // a new people breaking away to found a settlement (schism, Phase E)
     if(World.gathers.length>this._gatherCount){ this.push('a new people broke away and founded a home', 'birth'); this._gatherCount=World.gathers.length; }
