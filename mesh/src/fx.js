@@ -181,8 +181,23 @@ const Chronicle={
       this._tiers=World.gathers.map(g=>g.tier||0);
       this._fates=World.gathers.map(g=>g.fate||null);
       this._age=World.age||null;
+      this._gatherCount=World.gathers.length;
+      this._rel={};
       this._started=true;
       return;
+    }
+    // a new people breaking away to found a settlement (schism, Phase E)
+    if(World.gathers.length>this._gatherCount){ this.push('a new people broke away and founded a home', 'birth'); this._gatherCount=World.gathers.length; }
+    // peoples falling into feud or rising into union
+    if(World.relations){
+      for(const key in World.relations){
+        const st=World.relations[key].standing, prev=this._rel[key];
+        if(st!==prev){
+          this._rel[key]=st;
+          if(st==='FEUD' && prev) this.push('two peoples fell into feud', 'crime');
+          else if(st==='UNION' && prev) this.push('two peoples were joined in union', 'triumph');
+        }
+      }
     }
     // fate turns — a settlement's culture tipping it toward a new destiny
     for(let gi=0;gi<World.gathers.length;gi++){

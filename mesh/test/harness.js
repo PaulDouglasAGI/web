@@ -637,6 +637,57 @@ function freshWorld(ctx,seed){
   assert(r.fate==='RUIN' && r.after<r.before, 'a settlement in sustained RUIN crumbles its structures (lvl '+r.before+' -> '+r.after+')');
 })();
 
+// ── Test 40: kindred cultures grow warm; opposed cultures grow cold ────────
+(function testRelations(){
+  const ctx=buildContext();
+  freshWorld(ctx,110);
+  const r=vm.runInContext(`
+    const g0=World.gathers[0], g1=World.gathers[1], g2=World.gathers[2];
+    const alike={order:0.3,communion:0.8,faith:0.3,material:0.3,freedom:0.3};
+    const diff={order:0.9,communion:0.2,faith:0.2,material:0.7,freedom:0.2};
+    for(let i=0;i<5;i++){ const a=new Agent(g0.x,g0.y,3); a.ideals=Object.assign({},alike); Agents.push(a); }
+    for(let i=0;i<5;i++){ const a=new Agent(g1.x,g1.y,3); a.ideals=Object.assign({},alike); Agents.push(a); }
+    for(let i=0;i<5;i++){ const a=new Agent(g2.x,g2.y,3); a.ideals=Object.assign({},diff); Agents.push(a); }
+    World.dayTick=59; World.update();
+    ({rel01:World.relations['0-1']&&World.relations['0-1'].standing, rel02:World.relations['0-2']&&World.relations['0-2'].standing});
+  `, ctx);
+  assert(r.rel01==='ALLY'||r.rel01==='UNION'||r.rel01==='NEUTRAL', 'kindred cultures are warm ('+r.rel01+')');
+  assert(r.rel02==='FEUD'||r.rel02==='RIVAL', 'opposed cultures are cold ('+r.rel02+')');
+})();
+
+// ── Test 41: a soul whose beliefs clash with its home migrates to a fit one ─
+(function testMigrate(){
+  const ctx=buildContext();
+  freshWorld(ctx,111);
+  const r=vm.runInContext(`
+    const g0=World.gathers[0], g1=World.gathers[1];
+    g0.culture={order:0.9,communion:0.2,faith:0.2,material:0.6,freedom:0.2};
+    g1.culture={order:0.2,communion:0.9,faith:0.3,material:0.3,freedom:0.3};
+    const a=new Agent(g0.x,g0.y,3); a.ideals={order:0.2,communion:0.9,faith:0.3,material:0.3,freedom:0.3}; Agents.push(a);
+    const w=BehaviorById['migrate'].weight(a);
+    const task=BehaviorById['migrate'].make(a);
+    ({weight:w, toG1: !!(task && Math.abs(task.target.x-g1.x)<1 && Math.abs(task.target.y-g1.y)<1)});
+  `, ctx);
+  assert(r.weight>0, 'a soul whose beliefs clash with its home wants to migrate ('+r.weight.toFixed(1)+')');
+  assert(r.toG1, 'it heads for the settlement that best fits its heart');
+})();
+
+// ── Test 42: a divided settlement schisms and founds a new one (map reshapes)─
+(function testSchism(){
+  const ctx=buildContext();
+  freshWorld(ctx,112);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    for(let i=0;i<12;i++){ const a=new Agent(g.x,g.y,0); a.ideals={order:0.9,communion:0.1,faith:0.1,material:0.9,freedom:0.1}; Agents.push(a); }
+    for(let i=0;i<8;i++){ const a=new Agent(g.x,g.y,3); a.ideals={order:0.1,communion:0.9,faith:0.9,material:0.1,freedom:0.1}; Agents.push(a); }
+    World._lastSchism=-9999999;
+    const before=World.gathers.length;
+    for(let p=0;p<3;p++){ World.dayTick=59; World.update(); }
+    ({before, after:World.gathers.length});
+  `, ctx);
+  assert(r.after>r.before, 'a divided settlement schisms and founds a new one ('+r.before+' -> '+r.after+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){

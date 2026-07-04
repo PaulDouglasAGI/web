@@ -364,6 +364,20 @@ const Renderer={
       if(UI.selected===an){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,r*2.2,0,7); ctx.stroke(); }
     }
 
+    // ── RELATIONS (political map) — ally/union warm, feud red-dashed ───────--
+    if(World.relations){
+      ctx.save(); ctx.lineWidth=Math.max(0.5,1*z);
+      for(const key in World.relations){
+        const rel=World.relations[key]; if(rel.standing==='NEUTRAL'||rel.standing==='RIVAL') continue;
+        const p=key.split('-'); const ga=World.gathers[+p[0]], gb=World.gathers[+p[1]]; if(!ga||!gb) continue;
+        const col = rel.standing==='FEUD' ? '220,90,70' : rel.standing==='UNION' ? '150,235,185' : '150,210,170';
+        ctx.strokeStyle='rgba('+col+',0.22)';
+        ctx.setLineDash(rel.standing==='FEUD'?[3*z,5*z]:[]);
+        ctx.beginPath(); ctx.moveTo(this.sx(ga.x),this.sy(ga.y)); ctx.lineTo(this.sx(gb.x),this.sy(gb.y)); ctx.stroke();
+      }
+      ctx.setLineDash([]); ctx.restore();
+    }
+
     // ── TRADE ROUTES ──────────────────────────────────────────────────────--
     // dashed threads between settlements that trade; brighter/thicker the more
     // the road is travelled. Sea lanes read cool, land roads warm.

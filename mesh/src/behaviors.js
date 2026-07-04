@@ -205,6 +205,12 @@ function siteMatsReady(s){
 }
 // a settlement's crystallized destiny (Phase D), looked up by nearest gather
 function nearestDestiny(a){ const g=World.nearestOf(World.gathers,a.x,a.y); return g?g.destiny:null; }
+// the settlement whose culture best matches an agent's own beliefs (Phase E)
+function bestFitGather(a){
+  let best=null,bd=Infinity;
+  for(const g of World.gathers){ if(!g.culture) continue; const d=idealDistance(a.ideals,g.culture); if(d<bd){ bd=d; best=g; } }
+  return best?{g:best,dist:bd}:null;
+}
 
 const Behaviors=[
   // ── SURVIVAL & WORK ────────────────────────────────────────────────────────
@@ -551,6 +557,19 @@ const Behaviors=[
   { id:'explore', label:'exploring', glyph:'➤', cat:'explore',
     weight:a=> 8+(a.faction===1?18:0),
     make:a=> { const p=frontierPoint(a); return { label:'exploring',glyph:'➤',cat:'explore',target:p,arrive:14,dur:120,onArrive(ag){ ag.driftIdeal('freedom',0.03); if(Math.random()<0.25){ Mesh.broadcast(ag.x,ag.y,'discovery',0.7,'#e6b455'); ag.remember('discovered something'); raiseResonance(0.006);} } }; } },
+  // a soul whose beliefs clash with its settlement's culture (or whose home has
+  // fallen to RUIN) leaves to seek a place that shares its heart — free will
+  // physically redistributing the peoples across the map (Phase E)
+  { id:'migrate', label:'seeking a truer home', glyph:'⇉', cat:'explore',
+    weight:a=> { if(!a.ideals) return 0;
+      const here=World.nearestOf(World.gathers,a.x,a.y); if(!here||!here.culture) return 0;
+      const mis=idealDistance(a.ideals,here.culture), ruin=here.fate==='RUIN'?1:0;
+      if(mis<0.38 && !ruin) return 0;
+      const bf=bestFitGather(a); if(!bf || bf.g===here || bf.dist>mis-0.08) return 0;
+      return 7+mis*22+ruin*28; },
+    make:a=> { const bf=bestFitGather(a); if(!bf) return null;
+      return { label:'seeking a truer home', glyph:'⇉', cat:'explore', pose:'walk', target:{x:bf.g.x,y:bf.g.y}, arrive:20, dur:220,
+        onArrive(ag){ ag.remember('left for a place that shared its heart'); ag.driftIdeal('freedom',0.02); } }; } },
   { id:'scout', label:'scouting', glyph:'◎', cat:'explore',
     weight:a=> 6+(a.faction===1?8:0),
     make:a=> { const p=frontierPoint(a); return gotoPoint(a,'scouting','◎','explore',p.x,p.y,90); } },

@@ -23,6 +23,13 @@ const HAIR_COLORS=['#2b1d12','#4a2f1d','#6b4423','#1a1a1a','#7a5230','#c9a35a','
 // culture (world.js), which determines its emergent, reversible fate.
 const IDEAL_KEYS=['order','communion','faith','material','freedom'];
 const IDEAL_LABEL={order:'ORDER',communion:'COMMUNION',faith:'FAITH',material:'MATERIAL',freedom:'FREEDOM'};
+// distance between two belief vectors (a soul's ideals vs a settlement's culture,
+// or two cultures) — drives migration, schism, and inter-settlement relations
+function idealDistance(a,b){
+  if(!a||!b) return 0; let s=0;
+  for(const k of IDEAL_KEYS){ const d=(a[k]!=null?a[k]:0.5)-(b[k]!=null?b[k]:0.5); s+=d*d; }
+  return Math.sqrt(s);
+}
 // how a soul's ideals tilt its desire for each behavior category (composes
 // multiplicatively with factionWeight and the Mesh-field tinting in chooseTask)
 function idealWeight(a,b){

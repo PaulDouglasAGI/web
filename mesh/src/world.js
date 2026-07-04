@@ -818,6 +818,7 @@ const World={
         let bi=-1,bd=Infinity;
         for(let gi=0;gi<nG;gi++){ const gg=this.gathers[gi]; const d=(gg.x-a.x)**2+(gg.y-a.y)**2; if(d<bd){ bd=d; bi=gi; } }
         if(bi<0) continue;
+        a._gi=bi; // which settlement this soul belongs to (for schism, Phase E)
         const w=a.wealth||0; wSum[bi]+=w; wCnt[bi]++; if(w>wMax[bi]) wMax[bi]=w;
         if(w<wMin[bi]){ wMin[bi]=w; poorest[bi]=a; }
         if(a.ideals){ for(const k of IDEAL_KEYS){ const v=a.ideals[k]; cSum[bi][k]+=v; cSq[bi][k]+=v*v; } }
@@ -880,6 +881,40 @@ const World={
       let domFate=null,dc=0; for(const f in fateCount){ if(fateCount[f]>dc){ dc=fateCount[f]; domFate=f; } }
       this.age = (domFate && AGE_OF[domFate]) || 'THE FIRST DAYS';
 
+      // ── inter-settlement relations (Phase E): kinship of culture + trade warms
+      // peoples toward each other; difference cools them. Feuds erode the routes
+      // between enemies; alliances and unions strengthen them. ────────────────
+      this.relations={};
+      for(let i=0;i<nG;i++){
+        if((this.gathers[i]._pop||0)<3 || !this.gathers[i].culture) continue;
+        for(let j=i+1;j<nG;j++){
+          if((this.gathers[j]._pop||0)<3 || !this.gathers[j].culture) continue;
+          const gi=this.gathers[i], gj=this.gathers[j];
+          const kin=1-Math.min(1,idealDistance(gi.culture,gj.culture)/1.2);
+          const route=this.routes.find(r=>(r.a===i&&r.b===j)||(r.a===j&&r.b===i));
+          const trade=route?Math.min(1,route.strength/12):0;
+          const warmth=kin*0.65+trade*0.35;
+          let standing = warmth>0.72?'UNION' : warmth>0.55?'ALLY' : warmth>0.35?'NEUTRAL' : warmth>0.2?'RIVAL':'FEUD';
+          if(standing==='UNION' && !(trade>0.3 && (gi.prosperity||0)>0.4 && (gj.prosperity||0)>0.4)) standing='ALLY';
+          this.relations[i+'-'+j]={standing,warmth};
+          if(standing==='FEUD' && route) route.strength*=0.9;
+          else if((standing==='UNION'||standing==='ALLY') && route) route.strength=Math.min(30,route.strength+0.3);
+        }
+      }
+
+      // ── schism (Phase E): a deeply divided settlement whose dissidents share a
+      // different heart may break away and FOUND a new settlement — the map of
+      // peoples reshaping itself from free choice. Rate-limited and capped. ────
+      if(nG<9 && this.tick-(this._lastSchism||0) > this.dayLen*1.5){
+        for(let gi=0;gi<nG;gi++){
+          const g=this.gathers[gi];
+          if((g.tension||0)<0.34 || (g._pop||0)<16) continue;
+          const dissidents=[];
+          for(const a of Agents){ if(a._gi===gi && !a.dead && !a.underground && a.ideals && idealDistance(a.ideals,g.culture)>0.5) dissidents.push(a); }
+          if(dissidents.length>=6 && this.foundSchism(gi,dissidents)){ this._lastSchism=this.tick; break; }
+        }
+      }
+
       // per-faction resource ledger — a live snapshot of what each faction's living members currently hold
       const stock=[{},{},{},{}];
       for(const a of Agents){
@@ -934,6 +969,32 @@ const World={
     }
     if(coh>0.58 && prosp>0.5) return 'HARMONY';
     return 'FLEDGLING';
+  },
+
+  // a breakaway minority founds a brand-new settlement (Phase E). Adds a gather
+  // to the world at runtime, seeds it with starter plots, and relocates the
+  // dissidents there carrying their own beliefs — so it begins with a distinct
+  // culture and quickly finds its own divergent fate.
+  foundSchism(fromGi, dissidents){
+    let spot=null;
+    for(let tries=0;tries<50;tries++){
+      const c=(this.rng()*this.cols)|0, r=(this.rng()*this.rows)|0;
+      if(this.tiles[r*this.cols+c]!==TILE.PLAIN) continue;
+      const x=(c+0.5)*this.ts, y=(r+0.5)*this.ts;
+      let ok=true; for(const g of this.gathers){ if((g.x-x)**2+(g.y-y)**2<420*420){ ok=false; break; } }
+      if(ok){ spot={c,r,x,y}; break; }
+    }
+    if(!spot) return false;
+    this.tiles[spot.r*this.cols+spot.c]=TILE.GATHER;
+    const gi=this.gathers.length;
+    this.gathers.push({x:spot.x,y:spot.y,tier:0,
+      stock:{food:0,wood:0,stone:0,ore:0,herb:0,goods:0,ale:0,rations:0,medicine:0}, treasury:0, prosperity:0});
+    this.fires.push({x:spot.x,y:spot.y,lit:true});
+    this.placeSite(spot.x,spot.y,55,150,'hut',gi,80);
+    this.placeSite(spot.x,spot.y,55,170,'farm',gi,70);
+    for(const a of dissidents){ a.x=spot.x+(Math.random()-0.5)*90; a.y=spot.y+(Math.random()-0.5)*90; a._gi=gi; a.remember('broke away to found a new home'); a.driftIdeal('freedom',0.05); }
+    Events.banner='A NEW PEOPLE BREAK AWAY'; Events.active='schism'; Events.activeT=300;
+    return true;
   },
 
   // dynamic population ceiling driven by what's actually been built — replaces
