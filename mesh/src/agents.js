@@ -17,6 +17,37 @@ function genName(){ return NAME_A[(Math.random()*NAME_A.length)|0]+NAME_B[(Math.
 const SKIN_TONES=['#e8b894','#d49e6e','#c98f5e','#a06a40','#8d5a3c','#5c3a24','#f0c9a0'];
 const HAIR_COLORS=['#2b1d12','#4a2f1d','#6b4423','#1a1a1a','#7a5230','#c9a35a','#3a2418'];
 
+// ── inner ideals (the "Divergence of Souls" arc) ─────────────────────────────
+// Five beliefs, each in [0,1], that drift from lived experience and re-weight a
+// soul's own choices. Aggregated across a settlement's souls they become its
+// culture (world.js), which determines its emergent, reversible fate.
+const IDEAL_KEYS=['order','communion','faith','material','freedom'];
+const IDEAL_LABEL={order:'ORDER',communion:'COMMUNION',faith:'FAITH',material:'MATERIAL',freedom:'FREEDOM'};
+// how a soul's ideals tilt its desire for each behavior category (composes
+// multiplicatively with factionWeight and the Mesh-field tinting in chooseTask)
+function idealWeight(a,b){
+  const I=a.ideals; if(!I) return 1;
+  let w;
+  switch(b.cat){
+    case 'justice':  w=0.7+I.order*0.9; break;
+    case 'crime':    w=1.4-I.order*0.7-I.communion*0.5; break;
+    case 'social':   w=0.8+I.communion*0.6; break;
+    case 'worship':  w=0.7+I.faith*0.9; break;
+    case 'mesh':     w=0.85+I.faith*0.5; break;
+    case 'inner':    w=0.9+I.faith*0.25; break;
+    case 'trade':    w=0.85+I.material*0.4+I.freedom*0.2; break;
+    case 'creative': w=0.9+I.material*0.35; break;
+    case 'explore':  w=0.7+I.freedom*0.9; break;
+    default:         w=1;
+  }
+  // a few behavior-specific tilts beyond the broad category
+  if(b.id==='almsgiving') w=0.6+I.communion*1.0;
+  else if(b.id==='runCaravan') w=0.8+I.freedom*0.7;
+  else if(b.id==='construct'||b.id==='deliverMaterials') w*=(1.05-I.freedom*0.3);
+  else if(b.id==='offerBeauty') w=0.8+I.faith*0.5;
+  return Math.max(0.1,Math.min(2.2,w));
+}
+
 class Agent{
   constructor(x,y,faction){
     this.id=_agentId++;
@@ -34,6 +65,10 @@ class Agent{
     this.inv.food=Math.random()<0.5?1:0;
     this.wealth=0;                         // personal coin — earned as wages / deposits, spent in taverns & commissions (S1/S4)
     this.medicated=0;                      // ticks of remaining protection from an old-age death, granted by medicine (S2)
+    // inner ideals: seeded from faction temperament + jitter, then free to drift
+    const _ib=(Factions[faction]&&Factions[faction].idealBias)||{};
+    this.ideals={};
+    for(const k of IDEAL_KEYS) this.ideals[k]=Math.max(0,Math.min(1,(_ib[k]!=null?_ib[k]:0.5)+(Math.random()-0.5)*0.3));
     this.skills=1+((Math.random()*3)|0);
     this.meshSensitivity=0.4+Math.random()*0.6;
     this.bond=null;
@@ -59,6 +94,12 @@ class Agent{
   }
 
   remember(s){ this.memory.push(s); if(this.memory.length>6) this.memory.shift(); }
+
+  // nudge one ideal from a lived experience (clamped [0,1]). Small amounts, so
+  // a soul's identity is the slow integral of thousands of its own free choices.
+  driftIdeal(key,amount){ if(this.ideals&&this.ideals[key]!=null) this.ideals[key]=Math.max(0,Math.min(1,this.ideals[key]+amount)); }
+  // the ideal this soul leans toward most (for display + prophet/migration logic)
+  dominantIdeal(){ let best='order',bv=-1; for(const k of IDEAL_KEYS){ if(this.ideals[k]>bv){ bv=this.ideals[k]; best=k; } } return best; }
 
   emitExchange(other){ Exchanges.push({x:this.x,y:this.y,tx:other.x,ty:other.y,life:1}); }
   emitSound(){ Sounds.push({x:this.x,y:this.y,r:4,life:1}); }
@@ -91,6 +132,7 @@ class Agent{
       let w=b.weight(this);
       if(w<=0) continue;
       w*=factionWeight(f,b.cat);
+      w*=idealWeight(this,b);   // the soul's own beliefs steer its choices (free will)
       // time-of-day modifiers
       if(b.cat==='inner'&&night) w*=1.6;
       if(b.cat==='explore'&&night) w*=0.4;
@@ -299,6 +341,7 @@ class Agent{
         to.treasury=(to.treasury||0)+Math.ceil(pay*0.3);
         from.treasury=(from.treasury||0)+Math.ceil(pay*0.3);
         c.value=value; c.cargo={}; c.stage='home';
+        this.driftIdeal('material',0.04); this.driftIdeal('freedom',0.02);
         this.remember('traded a caravan load at a distant market');
       } else {
         // home again — the route is recorded and both ends prosper
@@ -347,7 +390,7 @@ class Agent{
     }
     // nearby feel it (skipped for underground deaths — "nearby" has no meaning across the two maps)
     if(!this.underground){
-      for(const o of Agents){ if(o!==this && !o.underground && dist2(this.x,this.y,o.x,o.y)<420*420){ o.grieving=Math.min(1,o.grieving+0.4); } }
+      for(const o of Agents){ if(o!==this && !o.underground && dist2(this.x,this.y,o.x,o.y)<420*420){ o.grieving=Math.min(1,o.grieving+0.4); o.driftIdeal('order',0.015); } }
     }
   }
 }

@@ -337,7 +337,7 @@ const Behaviors=[
           // through taverns, commissions, and alms (see those behaviors).
           if(ag.task._t%80===0){
             const gw=World.gathers[st.gather];
-            if(gw && (gw.treasury||0)>=1){ gw.treasury-=1; ag.wealth=(ag.wealth||0)+1; }
+            if(gw && (gw.treasury||0)>=1){ gw.treasury-=1; ag.wealth=(ag.wealth||0)+1; ag.driftIdeal('material',0.02); }
           }
           if(st.type==='workshop' && Math.random()<(st.effRate||0.05)*workMult){
             ag.inv.tools=(ag.inv.tools||0)+1;
@@ -470,7 +470,7 @@ const Behaviors=[
   { id:'almsgiving', label:'giving alms', glyph:'⊙', cat:'social',
     weight:a=> { if((a.wealth||0)<3) return 0; return Mesh.grief>0.2 ? (a.faction===3?18:8) : (a.wealth>6?6:0); },
     make:a=> gotoAgent(a,'giving alms','⊙','social', nearestAgent(a,o=>o!==a&&(o.wealth||0)<(a.wealth||0)-2), ag=>{
-        const o=ag.task.targetAgent; if(o){ const give=Math.min(2,ag.wealth); ag.wealth-=give; o.wealth=(o.wealth||0)+give; o.joy=Math.min(1,o.joy+0.1); ag.remember('shared their wealth'); } raiseResonance(0.006); }) },
+        const o=ag.task.targetAgent; if(o){ const give=Math.min(2,ag.wealth); ag.wealth-=give; o.wealth=(o.wealth||0)+give; o.joy=Math.min(1,o.joy+0.1); ag.remember('shared their wealth'); o.driftIdeal('communion',0.06); ag.driftIdeal('communion',0.03); } raiseResonance(0.006); }) },
 
   // ── SOCIAL ─────────────────────────────────────────────────────────────────
   { id:'seekFriend', label:'seeking a friend', glyph:'♥', cat:'social',
@@ -490,7 +490,7 @@ const Behaviors=[
     make:a=> gotoAgent(a,'learning','✺','social', nearestAgent(a,o=>o!==a&&o.skills>a.skills), ag=>{ ag.skills+=1; ag.remember('learned'); }, 90, 'sit') },
   { id:'help', label:'offering help', glyph:'✛', cat:'social',
     weight:a=> a.joy>0.5 ? 12+(a.faction===3?8:0):5,
-    make:a=> gotoAgent(a,'offering help','✛','social', nearestAgent(a,o=>o!==a&&(o.hunger>55||o.energy<30)), ag=>{ const o=ag.task.targetAgent; if(o){ if(ag.inv.food>0&&o.hunger>55){ag.inv.food-=1;o.inv.food+=1;} o.joy=Math.min(1,o.joy+0.12);} raiseResonance(0.006); }) },
+    make:a=> gotoAgent(a,'offering help','✛','social', nearestAgent(a,o=>o!==a&&(o.hunger>55||o.energy<30)), ag=>{ const o=ag.task.targetAgent; if(o){ if(ag.inv.food>0&&o.hunger>55){ag.inv.food-=1;o.inv.food+=1;} o.joy=Math.min(1,o.joy+0.12); o.driftIdeal('communion',0.03); ag.driftIdeal('communion',0.03);} raiseResonance(0.006); }) },
   { id:'celebrate', label:'celebrating', glyph:'✦', cat:'social',
     weight:a=> Mesh.resonance>0.66 ? 20:4,
     make:a=> { const g=World.nearestOf(World.gathers,a.x,a.y); return g?gotoPoint(a,'celebrating','✦','social',g.x,g.y,120,'sit'):null; } },
@@ -505,7 +505,7 @@ const Behaviors=[
     make:a=> gotoAgent(a,'reconciling','∞','social', nearestAgent(a,o=>o!==a), ag=>{ raiseResonance(0.005); Mesh.dissonance=Math.max(0,Mesh.dissonance-0.05); }) },
   { id:'comfort', label:'comforting', glyph:'♡', cat:'social',
     weight:a=> Mesh.grief>0.2 ? (a.faction===3?30:14):0,
-    make:a=> gotoAgent(a,'comforting','♡','social', nearestAgent(a,o=>o!==a&&o.grieving>0), ag=>{ const o=ag.task.targetAgent; if(o){o.grieving=Math.max(0,o.grieving-0.5); o.joy=Math.min(1,o.joy+0.1);} raiseResonance(0.005); }) },
+    make:a=> gotoAgent(a,'comforting','♡','social', nearestAgent(a,o=>o!==a&&o.grieving>0), ag=>{ const o=ag.task.targetAgent; if(o){o.grieving=Math.max(0,o.grieving-0.5); o.joy=Math.min(1,o.joy+0.1); o.driftIdeal('communion',0.03);} ag.driftIdeal('communion',0.03); raiseResonance(0.005); }) },
 
   // ── INNER LIFE ───────────────────────────────────────────────────────────--
   { id:'rest', label:'resting', glyph:'·', cat:'inner',
@@ -536,12 +536,12 @@ const Behaviors=[
     make:a=> stayPut(a,'expressing joy','✲','inner',90,ag=>{ if(ag.task._t===1){ Mesh.broadcast(ag.x,ag.y,'joy',0.5,Factions[ag.faction].color); } }) },
   { id:'realize', label:'a realization', glyph:'✴', cat:'inner',
     weight:a=> Math.random()<0.04 ? 14:0,
-    make:a=> stayPut(a,'a realization','✴','inner',60,ag=>{ if(ag.task._t===1 && Math.random()<0.4) ag.driftFaction(); }) },
+    make:a=> stayPut(a,'a realization','✴','inner',60,ag=>{ if(ag.task._t===1){ ag.driftIdeal('faith',0.05); if(Math.random()<0.4) ag.driftFaction(); } }) },
 
   // ── EXPLORATION ──────────────────────────────────────────────────────────--
   { id:'explore', label:'exploring', glyph:'➤', cat:'explore',
     weight:a=> 8+(a.faction===1?18:0),
-    make:a=> { const p=frontierPoint(a); return { label:'exploring',glyph:'➤',cat:'explore',target:p,arrive:14,dur:120,onArrive(ag){ if(Math.random()<0.25){ Mesh.broadcast(ag.x,ag.y,'discovery',0.7,'#e6b455'); ag.remember('discovered something'); raiseResonance(0.006);} } }; } },
+    make:a=> { const p=frontierPoint(a); return { label:'exploring',glyph:'➤',cat:'explore',target:p,arrive:14,dur:120,onArrive(ag){ ag.driftIdeal('freedom',0.03); if(Math.random()<0.25){ Mesh.broadcast(ag.x,ag.y,'discovery',0.7,'#e6b455'); ag.remember('discovered something'); raiseResonance(0.006);} } }; } },
   { id:'scout', label:'scouting', glyph:'◎', cat:'explore',
     weight:a=> 6+(a.faction===1?8:0),
     make:a=> { const p=frontierPoint(a); return gotoPoint(a,'scouting','◎','explore',p.x,p.y,90); } },
@@ -653,7 +653,7 @@ const Behaviors=[
     make:a=> { const s=Mesh.strongestSignal(a.x,a.y); return s?gotoPoint(a,'answering a call','➟','mesh',s.x,s.y,120):null; } },
   { id:'shareVision', label:'sharing a vision', glyph:'✧', cat:'mesh',
     weight:a=> Math.random()<0.03?12:0,
-    make:a=> stayPut(a,'sharing a vision','✧','mesh',90,ag=>{ if(ag.task._t===1) Mesh.broadcast(ag.x,ag.y,'vision',0.7,'#bfe8ff'); }) },
+    make:a=> stayPut(a,'sharing a vision','✧','mesh',90,ag=>{ if(ag.task._t===1){ Mesh.broadcast(ag.x,ag.y,'vision',0.7,'#bfe8ff'); ag.driftIdeal('faith',0.04); } }) },
 
   // ── CRIME & JUSTICE ──────────────────────────────────────────────────────--
   // a small fraction of agents (a.criminality>0) are predisposed to theft/violence.
@@ -673,6 +673,8 @@ const Behaviors=[
       return gotoAgent(a,'eyeing a theft','⛤','crime', v, ag=>{
         const victim=ag.task.targetAgent; if(!victim||victim.dead) return;
         ag.wanted=true; ag.crime='theft'; ag.crimeTick=World.tick;
+        // lived experience reshapes belief: the robbed crave order; the robber drifts toward self
+        victim.driftIdeal('order',0.05); ag.driftIdeal('communion',-0.03);
         if(victim.caravan){
           // highway robbery — seize the entire load and shatter the route it rode
           let looted=0;
@@ -745,6 +747,7 @@ const Behaviors=[
           raiseResonance(0.004);
           Mesh.writeField(ag.x,ag.y,'coherence',0.15,120);
           World.altar.worshipped++;
+          ag.driftIdeal('faith',0.03);
           siteLog(World.altar, ag.name+' sat in stillness, remembering');
           if(Math.random()<0.3) ag.remember('sat in stillness, remembering');
         }

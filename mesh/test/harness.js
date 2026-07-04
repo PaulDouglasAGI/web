@@ -375,6 +375,75 @@ function freshWorld(ctx,seed){
   assert(r.isLast && r.name==='BEACON', 'a settlement crowned by a monument and the Wonder reaches BEACON (tier '+r.tier+' '+r.name+')');
 })();
 
+// ── Test 22: being robbed drifts a soul toward ORDER ───────────────────────
+(function testIdealDriftOrder(){
+  const ctx=buildContext();
+  freshWorld(ctx,80);
+  const r=vm.runInContext(`
+    const a=new Agent(100,100,0); a.inv.food=5; a.inv.wood=5;
+    const thief=new Agent(100,100,0); thief.criminality=1;
+    Agents.push(a); Agents.push(thief);
+    const before=a.ideals.order;
+    const task=BehaviorById['steal'].make(thief); thief.task=task; task.targetAgent=a; task.onArrive(thief);
+    ({before, after:a.ideals.order});
+  `, ctx);
+  assert(r.after>r.before, 'being robbed drifts a soul toward ORDER ('+r.before.toFixed(3)+' -> '+r.after.toFixed(3)+')');
+})();
+
+// ── Test 23: worship drifts a soul toward FAITH ────────────────────────────
+(function testIdealDriftFaith(){
+  const ctx=buildContext();
+  freshWorld(ctx,81);
+  const r=vm.runInContext(`
+    const a=new Agent(World.altar.x,World.altar.y,0); Agents.push(a);
+    const before=a.ideals.faith;
+    const task=BehaviorById['worship'].make(a); a.task=task; task._t=50; task.onTick(a);
+    ({before, after:a.ideals.faith});
+  `, ctx);
+  assert(r.after>r.before, 'worship drifts a soul toward FAITH ('+r.before.toFixed(3)+' -> '+r.after.toFixed(3)+')');
+})();
+
+// ── Test 24: faction temperament seeds different starting beliefs ───────────
+(function testIdealBias(){
+  const ctx=buildContext();
+  freshWorld(ctx,82);
+  const r=vm.runInContext(`
+    let w=0,c=0; const N=200;
+    for(let i=0;i<N;i++){ w+=new Agent(0,0,1).ideals.freedom; c+=new Agent(0,0,0).ideals.freedom; }
+    ({wayfarer:w/N, cultivator:c/N});
+  `, ctx);
+  assert(r.wayfarer>r.cultivator, 'Wayfarers begin freer-spirited than Cultivators ('+r.wayfarer.toFixed(2)+' vs '+r.cultivator.toFixed(2)+')');
+})();
+
+// ── Test 25: beliefs steer choice (idealWeight) ────────────────────────────
+(function testIdealWeight(){
+  const ctx=buildContext();
+  freshWorld(ctx,83);
+  const r=vm.runInContext(`
+    const orderly={ideals:{order:1,communion:0,faith:0,material:0,freedom:0}};
+    const free={ideals:{order:0,communion:0,faith:0,material:0,freedom:1}};
+    const justice={cat:'justice',id:'subdue'}, crime={cat:'crime',id:'steal'}, explore={cat:'explore',id:'explore'};
+    ({oJ:idealWeight(orderly,justice), fJ:idealWeight(free,justice),
+      oC:idealWeight(orderly,crime), fC:idealWeight(free,crime),
+      oE:idealWeight(orderly,explore), fE:idealWeight(free,explore)});
+  `, ctx);
+  assert(r.oJ>r.fJ, 'an order-believer weights justice higher than a freedom-believer');
+  assert(r.oC<r.fC, 'an order-believer weights crime lower than a freedom-believer');
+  assert(r.fE>r.oE, 'a freedom-believer weights exploration higher');
+})();
+
+// ── Test 26: ideal drift clamps to [0,1] ───────────────────────────────────
+(function testIdealClamp(){
+  const ctx=buildContext();
+  freshWorld(ctx,84);
+  const r=vm.runInContext(`
+    const a=new Agent(0,0,0);
+    for(let i=0;i<200;i++){ a.driftIdeal('faith',0.1); a.driftIdeal('order',-0.1); }
+    ({faith:a.ideals.faith, order:a.ideals.order});
+  `, ctx);
+  assert(r.faith===1 && r.order===0, 'ideals clamp to [0,1] (faith '+r.faith+', order '+r.order+')');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){

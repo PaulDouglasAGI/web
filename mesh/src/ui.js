@@ -220,7 +220,8 @@ const UI={
     this.el.pFaction.textContent=fc.name;
     this.el.pFaction.style.color=fc.color;
     const skillTier=a.skills>=3?'expert':(a.skills===2?'skilled':'apprentice');
-    this.el.pAge.textContent='age '+Math.floor(a.age)+(a.bond?' · bonded':'')+' · '+skillTier+' (skills '+a.skills+')';
+    const leans=(a.ideals&&a.dominantIdeal)?' · believes in '+IDEAL_LABEL[a.dominantIdeal()]:'';
+    this.el.pAge.textContent='age '+Math.floor(a.age)+(a.bond?' · bonded':'')+' · '+skillTier+leans;
     let actionTxt=a.caravan?'⇶ running a trade caravan':(a.task?(a.task.glyph+'  '+a.task.label):'…');
     if(a.captured) actionTxt='⚖ being helped to remember, at the Altar';
     else if(a.wanted) actionTxt+='  ·  ◌ FRAGMENTING ('+a.crime+')';
