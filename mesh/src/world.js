@@ -778,6 +778,7 @@ const World={
       // the five ideals (for culture + tension). Same O(agents) cost as before.
       const nG=this.gathers.length;
       const wSum=new Array(nG).fill(0), wMax=new Array(nG).fill(0), wCnt=new Array(nG).fill(0);
+      const wMin=new Array(nG).fill(Infinity), poorest=new Array(nG).fill(null);
       const cSum=[], cSq=[];
       for(let i=0;i<nG;i++){ cSum.push({order:0,communion:0,faith:0,material:0,freedom:0}); cSq.push({order:0,communion:0,faith:0,material:0,freedom:0}); }
       for(const a of Agents){
@@ -786,6 +787,7 @@ const World={
         for(let gi=0;gi<nG;gi++){ const gg=this.gathers[gi]; const d=(gg.x-a.x)**2+(gg.y-a.y)**2; if(d<bd){ bd=d; bi=gi; } }
         if(bi<0) continue;
         const w=a.wealth||0; wSum[bi]+=w; wCnt[bi]++; if(w>wMax[bi]) wMax[bi]=w;
+        if(w<wMin[bi]){ wMin[bi]=w; poorest[bi]=a; }
         if(a.ideals){ for(const k of IDEAL_KEYS){ const v=a.ideals[k]; cSum[bi][k]+=v; cSq[bi][k]+=v*v; } }
       }
       const fateCount={};
@@ -806,6 +808,12 @@ const World={
           const C={}; let tension=0;
           for(const k of IDEAL_KEYS){ const m=cSum[gi][k]/n; C[k]=m; tension+=Math.max(0,cSq[gi][k]/n - m*m); }
           g.culture=C; g.tension=Math.min(1,(tension/IDEAL_KEYS.length)*4);
+          // emergent redistribution custom: a settlement that believes in
+          // communion shares its treasury with its poorest — institutionalizing
+          // almsgiving, which pulls the inequality that fuels crime back down
+          if(n>=4 && C.communion>0.6 && (g.treasury||0)>=2 && poorest[gi]){
+            poorest[gi].wealth=(poorest[gi].wealth||0)+2; g.treasury-=2; poorest[gi].driftIdeal('communion',0.02);
+          }
         }
         // fate is DERIVED every pass (never latched) with a short hysteresis so
         // it drifts and reverses with the souls but doesn't flicker cosmetically

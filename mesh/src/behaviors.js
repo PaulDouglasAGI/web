@@ -87,6 +87,13 @@ function nearestGovern(a){
   const g=World.nearestOf(World.gathers,a.x,a.y);
   return g ? (g.govern||0) : 0;
 }
+// how strongly an agent's settlement holds a given cultural ideal (0.5 default)
+// — this is emergent LAW: a people who believe in order police crime more, a
+// people who believe in communion redistribute, etc.
+function settlementCulture(a,key){
+  const g=World.nearestOf(World.gathers,a.x,a.y);
+  return (g&&g.culture)?(g.culture[key]!=null?g.culture[key]:0.5):0.5;
+}
 
 // point toward unexplored edge (exploration)
 function frontierPoint(a){
@@ -663,7 +670,8 @@ const Behaviors=[
     weight:a=> { if(a.criminality<=0 || a.wanted) return 0;
       const v=theftTarget(a);
       if(!v) return 0;
-      const suppress=1-Math.min(0.6,nearestGovern(a)*0.3);
+      // emergent law: town halls AND a culture that believes in order both police crime
+      const suppress=1-Math.min(0.78, nearestGovern(a)*0.3 + settlementCulture(a,'order')*0.35);
       // a laden caravan on the open road is a far richer, softer mark than a
       // passer-by — highway robbery is especially tempting
       const caravanLure=v.caravan?3:1;
@@ -701,7 +709,7 @@ const Behaviors=[
     weight:a=> { if(a.criminality<=0.55 || a.wanted) return 0;
       const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && dist2(a.x,a.y,o.x,o.y)<480*480);
       if(!v) return 0;
-      const suppress=1-Math.min(0.6,nearestGovern(a)*0.3);
+      const suppress=1-Math.min(0.78, nearestGovern(a)*0.3 + settlementCulture(a,'order')*0.35);
       return (14+(a.criminality-0.5)*36)*suppress; },
     make:a=> { const v=nearestAgent(a, o=>o!==a && !o.dead && !o.wanted && dist2(a.x,a.y,o.x,o.y)<480*480);
       if(!v) return null;
@@ -751,6 +759,46 @@ const Behaviors=[
           siteLog(World.altar, ag.name+' sat in stillness, remembering');
           if(Math.random()<0.3) ag.remember('sat in stillness, remembering');
         }
+      } }) },
+
+  // ── FAITH MOVEMENTS (Phase C) ──────────────────────────────────────────────
+  // a deeply faithful soul in a faithful settlement preaches — pulling the
+  // beliefs of everyone nearby toward faith. A self-amplifying belief movement
+  // that can carry a whole settlement into DEVOTION.
+  { id:'prophesy', label:'prophesying', glyph:'☼', cat:'worship',
+    weight:a=> (a.ideals && a.ideals.faith>0.7 && settlementCulture(a,'faith')>0.5) ? 16+(a.faction===3?6:0) : 0,
+    make:a=> stayPut(a,'prophesying','☼','worship',150,ag=>{
+      if(ag.task._t===1) siteLog(World.altar, ag.name+' rose to speak as a prophet');
+      if(ag.task._t%30===0){
+        Mesh.broadcast(ag.x,ag.y,'vision',0.8,'#ffe9b0');
+        raiseResonance(0.006);
+        for(const o of Agents){ if(o!==ag && !o.underground && !o.dead && dist2(o.x,o.y,ag.x,ag.y)<200*200) o.driftIdeal('faith',0.02); }
+        ag.driftIdeal('faith',0.01);
+      }
+    },'kneel') },
+  // the chosen ending: in a truly devout, coherent settlement a soul may — of
+  // its own free will — walk to the Altar and dissolve back into the field. It
+  // is CELEBRATED, not mourned (reuses the ceremonial _dissolving signature: no
+  // grief, a delayed coherence surge), and it is non-terminal — draining the
+  // faithful lowers the settlement's faith culture, so the remnant may turn
+  // elsewhere. Always the soul's own choice (gated on its own high faith).
+  { id:'answerTheCall', label:'answering the call', glyph:'☥', cat:'worship',
+    weight:a=> { if(!a.ideals || a.ideals.faith<0.85) return 0;
+      const g=World.nearestOf(World.gathers,a.x,a.y);
+      return (g && g.fate==='DEVOTION' && Mesh.coherenceAt(a.x,a.y)>0.6 && Math.random()<0.5) ? 20 : 0; },
+    make:a=> ({ label:'answering the call', glyph:'☥', cat:'worship', pose:'kneel',
+      target:{x:World.altar.x,y:World.altar.y}, arrive:20, dur:99999,
+      onArrive(ag){
+        World.altar.answered=(World.altar.answered||0)+1;
+        Events.banner=ag.name.toUpperCase()+' ANSWERED THE CALL';
+        Events.active='calling'; Events.activeT=280;
+        Mesh.broadcast(World.altar.x,World.altar.y,'judgment',1,'#ffe9b0');
+        raiseResonance(0.06);
+        ag._dissolving=true;
+        World._pendingPulses.push({x:World.altar.x,y:World.altar.y,dueTick:World.tick+30,channel:'coherence',amount:0.5,radius:160});
+        ag.remember('answered the call, and returned to the source');
+        logJustice(ag.name+' answered the call, and returned to the source');
+        ag.die();
       } }) }
 ];
 

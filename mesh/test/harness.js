@@ -503,6 +503,68 @@ function freshWorld(ctx,seed){
   assert(r==='AN AGE OF COMMUNION', 'the world Age reflects the majority fate ('+r+')');
 })();
 
+// ── Test 31: a culture that believes in ORDER polices crime harder (law) ───
+(function testOrderLaw(){
+  const ctx=buildContext();
+  freshWorld(ctx,94);
+  const r=vm.runInContext(`
+    const g0=World.gathers[0], g1=World.gathers[1];
+    g0.culture={order:0.9,communion:0.3,faith:0.3,material:0.3,freedom:0.3};
+    g1.culture={order:0.1,communion:0.3,faith:0.3,material:0.3,freedom:0.3};
+    function thiefWeightAt(g){ const t=new Agent(g.x,g.y,0); t.criminality=1; const v=new Agent(g.x,g.y,0); v.inv.food=5; v.inv.wood=5; Agents.push(t); Agents.push(v); return BehaviorById['steal'].weight(t); }
+    ({wOrder:thiefWeightAt(g0), wFree:thiefWeightAt(g1)});
+  `, ctx);
+  assert(r.wOrder<r.wFree, 'a culture that believes in order suppresses theft more ('+r.wOrder.toFixed(1)+' vs '+r.wFree.toFixed(1)+')');
+})();
+
+// ── Test 32: a communion culture redistributes its treasury to the poorest ──
+(function testRedistribution(){
+  const ctx=buildContext();
+  freshWorld(ctx,95);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const poor=new Agent(g.x,g.y,3); poor.wealth=0; poor.ideals={order:0.3,communion:0.9,faith:0.3,material:0.3,freedom:0.3}; Agents.push(poor);
+    for(let i=0;i<5;i++){ const a=new Agent(g.x,g.y,3); a.wealth=5; a.ideals={order:0.3,communion:0.9,faith:0.3,material:0.3,freedom:0.3}; Agents.push(a); }
+    g.treasury=20;
+    const before=poor.wealth; World.dayTick=59; World.update();
+    ({before, after:poor.wealth});
+  `, ctx);
+  assert(r.after>r.before, 'a communion culture shares its treasury with its poorest ('+r.before+' -> '+r.after+')');
+})();
+
+// ── Test 33: a prophet pulls nearby souls toward FAITH (a belief movement) ──
+(function testProphet(){
+  const ctx=buildContext();
+  freshWorld(ctx,96);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    g.culture={order:0.3,communion:0.3,faith:0.7,material:0.3,freedom:0.3};
+    const prophet=new Agent(g.x,g.y,3); prophet.ideals={order:0.3,communion:0.3,faith:0.9,material:0.3,freedom:0.3};
+    const listener=new Agent(g.x+50,g.y,0); listener.ideals={order:0.5,communion:0.5,faith:0.3,material:0.5,freedom:0.5};
+    Agents.push(prophet); Agents.push(listener);
+    const w=BehaviorById['prophesy'].weight(prophet);
+    const before=listener.ideals.faith;
+    const task=BehaviorById['prophesy'].make(prophet); prophet.task=task; task._t=30; task.onTick(prophet);
+    ({weight:w, before, after:listener.ideals.faith});
+  `, ctx);
+  assert(r.weight>0, 'a faithful soul in a faithful settlement prophesies');
+  assert(r.after>r.before, 'the prophet pulls a nearby soul toward FAITH ('+r.before.toFixed(2)+' -> '+r.after.toFixed(2)+')');
+})();
+
+// ── Test 34: answering the call — an elective, celebrated dissolution ──────
+(function testAnsweredCall(){
+  const ctx=buildContext();
+  freshWorld(ctx,97);
+  const r=vm.runInContext(`
+    const a=new Agent(World.altar.x,World.altar.y,3); a.ideals={order:0.3,communion:0.3,faith:0.9,material:0.3,freedom:0.3};
+    Agents.push(a);
+    BehaviorById['answerTheCall'].make(a).onArrive(a);
+    ({grief:Mesh.griefAt(World.altar.x,World.altar.y), dead:!!a.dead, answered:World.altar.answered, dissolving:!!a._dissolving});
+  `, ctx);
+  assert(r.grief<0.02 && r.dead, 'answering the call dissolves the soul with NO grief cascade');
+  assert(r.answered===1 && r.dissolving, 'the chosen dissolution was recorded as ceremonial');
+})();
+
 // ── Test 6: multi-seed long-run regression — no crashes across full systems ─
 (function testRegression(){
   for(const seed of [10,11,12]){
