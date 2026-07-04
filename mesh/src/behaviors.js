@@ -543,7 +543,7 @@ const Behaviors=[
     make:a=> stayPut(a,'expressing joy','✲','inner',90,ag=>{ if(ag.task._t===1){ Mesh.broadcast(ag.x,ag.y,'joy',0.5,Factions[ag.faction].color); } }) },
   { id:'realize', label:'a realization', glyph:'✴', cat:'inner',
     weight:a=> Math.random()<0.04 ? 14:0,
-    make:a=> stayPut(a,'a realization','✴','inner',60,ag=>{ if(ag.task._t===1){ ag.driftIdeal('faith',0.05); if(Math.random()<0.4) ag.driftFaction(); } }) },
+    make:a=> stayPut(a,'a realization','✴','inner',60,ag=>{ if(ag.task._t===1){ ag.driftIdeal('faith',0.03); if(Math.random()<0.4) ag.driftFaction(); } }) },
 
   // ── EXPLORATION ──────────────────────────────────────────────────────────--
   { id:'explore', label:'exploring', glyph:'➤', cat:'explore',
@@ -660,7 +660,7 @@ const Behaviors=[
     make:a=> { const s=Mesh.strongestSignal(a.x,a.y); return s?gotoPoint(a,'answering a call','➟','mesh',s.x,s.y,120):null; } },
   { id:'shareVision', label:'sharing a vision', glyph:'✧', cat:'mesh',
     weight:a=> Math.random()<0.03?12:0,
-    make:a=> stayPut(a,'sharing a vision','✧','mesh',90,ag=>{ if(ag.task._t===1){ Mesh.broadcast(ag.x,ag.y,'vision',0.7,'#bfe8ff'); ag.driftIdeal('faith',0.04); } }) },
+    make:a=> stayPut(a,'sharing a vision','✧','mesh',90,ag=>{ if(ag.task._t===1){ Mesh.broadcast(ag.x,ag.y,'vision',0.7,'#bfe8ff'); ag.driftIdeal('faith',0.02); } }) },
 
   // ── CRIME & JUSTICE ──────────────────────────────────────────────────────--
   // a small fraction of agents (a.criminality>0) are predisposed to theft/violence.
@@ -755,7 +755,7 @@ const Behaviors=[
           raiseResonance(0.004);
           Mesh.writeField(ag.x,ag.y,'coherence',0.15,120);
           World.altar.worshipped++;
-          ag.driftIdeal('faith',0.03);
+          ag.driftIdeal('faith',0.012);
           siteLog(World.altar, ag.name+' sat in stillness, remembering');
           if(Math.random()<0.3) ag.remember('sat in stillness, remembering');
         }
@@ -766,14 +766,15 @@ const Behaviors=[
   // beliefs of everyone nearby toward faith. A self-amplifying belief movement
   // that can carry a whole settlement into DEVOTION.
   { id:'prophesy', label:'prophesying', glyph:'☼', cat:'worship',
-    weight:a=> (a.ideals && a.ideals.faith>0.7 && settlementCulture(a,'faith')>0.5) ? 16+(a.faction===3?6:0) : 0,
+    weight:a=> (a.ideals && a.ideals.faith>0.78 && settlementCulture(a,'faith')>0.6) ? 10+(a.faction===3?5:0) : 0,
     make:a=> stayPut(a,'prophesying','☼','worship',150,ag=>{
       if(ag.task._t===1) siteLog(World.altar, ag.name+' rose to speak as a prophet');
       if(ag.task._t%30===0){
         Mesh.broadcast(ag.x,ag.y,'vision',0.8,'#ffe9b0');
         raiseResonance(0.006);
-        for(const o of Agents){ if(o!==ag && !o.underground && !o.dead && dist2(o.x,o.y,ag.x,ag.y)<200*200) o.driftIdeal('faith',0.02); }
-        ag.driftIdeal('faith',0.01);
+        // a prophet's reach is gentle — a belief movement, not a stampede
+        for(const o of Agents){ if(o!==ag && !o.underground && !o.dead && dist2(o.x,o.y,ag.x,ag.y)<200*200) o.driftIdeal('faith',0.008); }
+        ag.driftIdeal('faith',0.003);
       }
     },'kneel') },
   // the chosen ending: in a truly devout, coherent settlement a soul may — of
@@ -783,9 +784,11 @@ const Behaviors=[
   // faithful lowers the settlement's faith culture, so the remnant may turn
   // elsewhere. Always the soul's own choice (gated on its own high faith).
   { id:'answerTheCall', label:'answering the call', glyph:'☥', cat:'worship',
-    weight:a=> { if(!a.ideals || a.ideals.faith<0.85) return 0;
+    weight:a=> { if(!a.ideals || a.ideals.faith<0.9) return 0;
       const g=World.nearestOf(World.gathers,a.x,a.y);
-      return (g && g.fate==='DEVOTION' && Mesh.coherenceAt(a.x,a.y)>0.6 && Math.random()<0.5) ? 20 : 0; },
+      // rare, and never empties a settlement — the call takes only from a living
+      // congregation, so devotion is a recurring rite, not a mass extinction
+      return (g && g.fate==='DEVOTION' && (g._pop||0)>=8 && Mesh.coherenceAt(a.x,a.y)>0.6 && Math.random()<0.12) ? 20 : 0; },
     make:a=> ({ label:'answering the call', glyph:'☥', cat:'worship', pose:'kneel',
       target:{x:World.altar.x,y:World.altar.y}, arrive:20, dur:99999,
       onArrive(ag){

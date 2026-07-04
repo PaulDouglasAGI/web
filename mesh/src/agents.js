@@ -32,8 +32,8 @@ function idealWeight(a,b){
     case 'justice':  w=0.7+I.order*0.9; break;
     case 'crime':    w=1.4-I.order*0.7-I.communion*0.5; break;
     case 'social':   w=0.8+I.communion*0.6; break;
-    case 'worship':  w=0.7+I.faith*0.9; break;
-    case 'mesh':     w=0.85+I.faith*0.5; break;
+    case 'worship':  w=0.85+I.faith*0.45; break;
+    case 'mesh':     w=0.9+I.faith*0.25; break;
     case 'inner':    w=0.9+I.faith*0.25; break;
     case 'trade':    w=0.85+I.material*0.4+I.freedom*0.2; break;
     case 'creative': w=0.9+I.material*0.35; break;
