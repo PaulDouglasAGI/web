@@ -93,6 +93,25 @@ const UI={
       this.el.audioToggle.textContent = on ? '♪ sound' : '♪ muted';
     });
 
+    // Book of Ages — the world's whole remembered history
+    this.showAges=false;
+    this.el.agesToggle=document.getElementById('ages-toggle');
+    this.el.agesBook=document.getElementById('ages-book');
+    this.el.agesBookClose=document.getElementById('ages-book-close');
+    this.el.agesBookNow=document.getElementById('ages-book-now');
+    this.el.agesBookBody=document.getElementById('ages-book-body');
+    this.el.agesToggle.addEventListener('click',()=>{
+      this.showAges=!this.showAges;
+      this.el.agesToggle.classList.toggle('active',this.showAges);
+      this.el.agesBook.classList.toggle('show',this.showAges);
+      if(this.showAges) this.renderBookOfAges();
+    });
+    this.el.agesBookClose.addEventListener('click',()=>{
+      this.showAges=false;
+      this.el.agesToggle.classList.remove('active');
+      this.el.agesBook.classList.remove('show');
+    });
+
     // divine touch — reach into the field and steady it
     this.touchMode=false; this._blessCd=0;
     this.el.touchToggle=document.getElementById('touch-toggle');
@@ -461,6 +480,46 @@ const UI={
     return parts.length?parts.join(' · '):'empty';
   },
 
+  escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); },
+
+  // the Book of Ages — the world's whole remembered history, grouped into
+  // chapters by the Age each event fell in, rendered as an illuminated codex
+  renderBookOfAges(){
+    const hist=(typeof Chronicle!=='undefined')?Chronicle.history:[];
+    const alive=Agents.filter(a=>!a.dead).length;
+    const day=Math.floor(World.tick/((World.dayLen)||5400));
+    this.el.agesBookNow.innerHTML='It is day '+day+', in <span class="now-age">'+this.escapeHtml(World.age||'THE FIRST DAYS')+'</span>. '+
+      alive+' souls live across '+World.gathers.length+' settlements — '+(World.totalBorn||0)+' born, '+(World.totalDied||0)+' returned to the field.';
+    this.el.agesBookBody.innerHTML='';
+    // build age-chapters (consecutive runs of the same Age), skipping the
+    // "— AN AGE OF X —" marker lines (the Age is now the chapter heading itself)
+    const chapters=[]; let cur=null;
+    for(const h of hist){
+      if(!cur || cur.age!==h.age){ cur={age:h.age, from:h.day, to:h.day, events:[]}; chapters.push(cur); }
+      cur.to=h.day;
+      if(h.text.charAt(0)!=='—') cur.events.push(h);
+    }
+    if(!chapters.some(c=>c.events.length)){
+      const e=document.createElement('div'); e.id='ages-book-empty';
+      e.textContent='The world is young. Its history is not yet written.';
+      this.el.agesBookBody.appendChild(e); return;
+    }
+    for(let ci=chapters.length-1;ci>=0;ci--){
+      const ch=chapters[ci]; if(!ch.events.length) continue;
+      const wrap=document.createElement('div'); wrap.className='age-chapter';
+      const head=document.createElement('div'); head.className='age-chapter-head';
+      head.innerHTML=this.escapeHtml(ch.age)+'<span class="age-chapter-span">'+(ch.from===ch.to?('day '+ch.from):('days '+ch.from+' – '+ch.to))+'</span>';
+      wrap.appendChild(head);
+      for(let ei=ch.events.length-1;ei>=0;ei--){
+        const ev=ch.events[ei];
+        const line=document.createElement('div'); line.className='age-event '+(ev.kind||'neutral');
+        line.innerHTML='<span class="day">day '+ev.day+'</span>'+this.escapeHtml(ev.text);
+        wrap.appendChild(line);
+      }
+      this.el.agesBookBody.appendChild(wrap);
+    }
+  },
+
   renderEconPanel(){
     this.el.econSettlements.innerHTML='';
     for(let gi=0;gi<World.gathers.length;gi++){
@@ -575,5 +634,6 @@ const UI={
     }
 
     if(this.showEcon && this._t%15===0) this.renderEconPanel();
+    if(this.showAges && this._t%30===0) this.renderBookOfAges();
   }
 };

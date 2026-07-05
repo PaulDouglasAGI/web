@@ -880,7 +880,11 @@ const World={
       }
       // the world Age = the character the majority of settlements share now
       let domFate=null,dc=0; for(const f in fateCount){ if(fateCount[f]>dc){ dc=fateCount[f]; domFate=f; } }
-      this.age = (domFate && AGE_OF[domFate]) || 'THE FIRST DAYS';
+      const newAge=(domFate && AGE_OF[domFate]) || 'THE FIRST DAYS';
+      // an Age only turns once its character has HELD for a while — so an "Age"
+      // is a real span of the world's life, not a half-day flicker (hysteresis)
+      if(newAge===this._ageCand) this._ageHold=(this._ageHold||0)+1; else { this._ageCand=newAge; this._ageHold=0; }
+      if(!this.age || this.age==='THE FIRST DAYS' || this._ageHold>=5) this.age=newAge;
 
       // ── inter-settlement relations (Phase E): kinship of culture + trade warms
       // peoples toward each other; difference cools them. Feuds erode the routes

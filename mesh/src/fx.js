@@ -159,17 +159,24 @@ const FATE_PHRASE={ HARMONY:'harmony', DOMINION:'the rule of order', COMMUNION:'
 const FATE_KIND={ HARMONY:'triumph', DOMINION:'crime', COMMUNION:'growth', DIASPORA:'birth', DEVOTION:'justice', RUIN:'grief' };
 
 const Chronicle={
-  entries:[],          // {text, kind, life} — kind tints the line
+  entries:[],          // {text, kind, life} — the fading on-screen feed
+  history:[],          // {text, kind, tick, day, age} — the permanent record (Book of Ages)
   _crimeLen:0,
   _born:0, _died:0,
   _tiers:[],
   _started:false,
 
-  reset(){ this.entries.length=0; this._crimeLen=0; this._born=0; this._died=0; this._tiers=[]; this._started=false; },
+  reset(){ this.entries.length=0; this.history.length=0; this._crimeLen=0; this._born=0; this._died=0; this._tiers=[]; this._started=false; },
 
   push(text,kind){
-    this.entries.push({ text, kind:kind||'neutral', life:1 });
+    kind=kind||'neutral';
+    this.entries.push({ text, kind, life:1 });
     if(this.entries.length>7) this.entries.shift();
+    // and into the permanent history, stamped with the day + the Age it fell in
+    const tick=(typeof World!=='undefined')?World.tick:0;
+    const dayLen=(typeof World!=='undefined'&&World.dayLen)||5400;
+    this.history.push({ text, kind, tick, day:Math.floor(tick/dayLen), age:(typeof World!=='undefined'?World.age:null)||'THE FIRST DAYS' });
+    if(this.history.length>300) this.history.shift();
   },
 
   observe(){

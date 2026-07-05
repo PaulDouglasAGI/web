@@ -26,6 +26,14 @@ const Renderer={
     {m:[0.86,0.92,1.05]} // winter — cold pale
   ],
 
+  // ── the world quietly wearing its state (ambient viz) ──────────────────────
+  // a settlement's fate → the colour of the soft aura it breathes
+  FATE_AURA:{ HARMONY:'255,233,176', COMMUNION:'150,214,180', DOMINION:'198,120,110', DIASPORA:'230,196,130', DEVOTION:'201,184,232', RUIN:'120,104,92' },
+  // a soul's dominant belief → the colour of the faint spark it carries
+  BELIEF_COLOR:{ order:'143,176,208', communion:'159,214,180', faith:'201,184,232', material:'224,160,96', freedom:'232,200,140' },
+  // the world's Age → a barely-there global colour grade
+  AGE_TINT:{ 'AN AGE OF HARMONY':[255,233,176], 'AN AGE OF IRON':[150,150,172], 'AN AGE OF COMMUNION':[150,210,180], 'AN AGE OF WANDERING':[222,190,140], 'AN AGE OF FAITH':[192,172,222], 'AN AGE OF SILENCE':[128,118,108] },
+
   init(){
     this.cnv=document.getElementById('world');
     this.ctx=this.cnv.getContext('2d');
@@ -400,6 +408,17 @@ const Renderer={
     for(const g of World.gathers){
       const sx=this.sx(g.x), sy=this.sy(g.y);
       if(sx<-60||sx>W+60||sy<-40||sy>H+40) continue;
+      // a soft breathing aura tinted by the settlement's fate — a whisper of its
+      // character (RUIN's is dim and small, so a dying town reads as dying)
+      const aura=g.fate&&this.FATE_AURA[g.fate];
+      if(aura){
+        const breath=0.5+0.5*Math.sin(World.tick*0.02+g.x*0.01);
+        const rad=(g.fate==='RUIN'?24:42)*z;
+        const gr=ctx.createRadialGradient(sx,sy,0,sx,sy,rad);
+        gr.addColorStop(0,'rgba('+aura+','+((g.fate==='RUIN'?0.06:0.10)+breath*0.05)+')');
+        gr.addColorStop(1,'rgba('+aura+',0)');
+        ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(sx,sy,rad,0,7); ctx.fill();
+      }
       const top=g.tier===SETTLEMENT_TIERS.length-1;
       const mr=Math.max(3,5*z);
       ctx.strokeStyle= top ? 'rgba(255,233,176,0.55)' : 'rgba(210,225,218,0.4)';
@@ -534,6 +553,9 @@ const Renderer={
       }
       // grieving marker
       if(a.grieving>0.4 && z>1){ ctx.fillStyle='rgba(184,155,217,0.8)'; ctx.beginPath(); ctx.arc(sx,sy-rad*2.4,1.2*z,0,7); ctx.fill(); }
+      // faint belief spark — a whisper of what this soul holds dear, so a devout
+      // crowd reads different from a mercantile one (only close in, kept subtle)
+      if(z>1.05 && a.ideals){ const bc=this.BELIEF_COLOR[a.dominantIdeal()]; if(bc){ ctx.fillStyle='rgba('+bc+',0.5)'; ctx.beginPath(); ctx.arc(sx,sy-rad*1.85,0.9*z,0,7); ctx.fill(); } }
       // selection ring
       if(UI.selected===a){ ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=Math.max(1,1.4*z); ctx.beginPath(); ctx.arc(sx,sy,rad*2.3,0,7); ctx.stroke(); }
       // action glyph
@@ -587,6 +609,12 @@ const Renderer={
     else if(res<0.45){ ctx.fillStyle='rgba(80,110,150,'+((0.45-res)*0.22)+')'; ctx.fillRect(0,0,W,H); }
     // dissonance flicker
     if(Mesh.dissonance>0.4 && Math.random()<Mesh.dissonance*0.3){ ctx.fillStyle='rgba(150,120,160,0.05)'; ctx.fillRect(0,0,W,H); }
+
+    // the world's Age as a barely-there colour grade — you notice the light has
+    // changed before you notice why (an Age of Faith glows faintly violet, of
+    // Iron cold, of Silence drained)
+    const at=this.AGE_TINT[World.age];
+    if(at){ ctx.fillStyle='rgba('+at[0]+','+at[1]+','+at[2]+',0.035)'; ctx.fillRect(0,0,W,H); }
 
     // gentle vignette
     const vg=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.4,W/2,H/2,Math.max(W,H)*0.75);
