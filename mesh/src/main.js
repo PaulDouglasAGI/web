@@ -1,7 +1,7 @@
 /* main.js — boot, tick engine, render loop. The world runs itself forever. */
 'use strict';
 
-const Sim={ running:true, speed:0.35 };
+const Sim={ running:true, speed:1.05 };
 
 function boot(){
   World.init();

@@ -361,18 +361,45 @@ function freshWorld(ctx,seed){
   assert(r.built && r.level>=1, 'the monument was raised once all materials were in (level '+r.level+')');
 })();
 
-// ── Test 21: monument + wonder + full economy reaches the BEACON tier ──────
-(function testBeaconTier(){
+// ── Test 21: a LANDLOCKED settlement can reach BEACON (no harbor needed) ────
+(function testInlandBeacon(){
   const ctx=buildContext();
   freshWorld(ctx,72);
   const r=vm.runInContext(`
     const g=World.gathers[0];
-    const req={hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1, monument:1, wonder:1};
+    const req={hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1, loreHall:1, monument:1, wonder:1};
     for(const type in req){ for(let i=0;i<req[type];i++){ const s=mkSite(g.x,g.y,type,0); s.built=true; s.level=1; World.sites.push(s); } }
     const t=World.tierOf(0);
-    ({tier:t, isLast:t===SETTLEMENT_TIERS.length-1, name:SETTLEMENT_TIERS[t].name});
+    ({tier:t, isLast:t===SETTLEMENT_TIERS.length-1, name:SETTLEMENT_TIERS[t].name, hasHarbor:World.sites.some(s=>s.type==='harbor')});
   `, ctx);
-  assert(r.isLast && r.name==='BEACON', 'a settlement crowned by a monument and the Wonder reaches BEACON (tier '+r.tier+' '+r.name+')');
+  assert(r.isLast && r.name==='BEACON' && !r.hasHarbor, 'a landlocked settlement reaches BEACON with no harbor (tier '+r.tier+' '+r.name+')');
+})();
+
+// ── Test 21b: harbor is a coastal BONUS, never a tier gate ─────────────────
+(function testHarborBonus(){
+  const ctx=buildContext();
+  freshWorld(ctx,73);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const req={hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1, loreHall:1, monument:1, harbor:1};
+    for(const type in req){ for(let i=0;i<req[type];i++){ const s=mkSite(g.x,g.y,type,0); s.built=true; s.level=1; World.sites.push(s); } }
+    SETTLEMENT_TIERS[World.tierOf(0)].name;
+  `, ctx);
+  assert(r==='METROPOLIS', 'the inland set reaches METROPOLIS whether or not a harbor is present ('+r+')');
+})();
+
+// ── Test 21c: a built masonry accrues stone into the settlement store ──────
+(function testStoneAccrues(){
+  const ctx=buildContext();
+  freshWorld(ctx,74);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const m=mkSite(g.x,g.y,'masonry',0); m.built=true; m.level=5; m.stoneRate=SITE_DEFS.masonry.levels[4].stoneRate; World.sites.push(m);
+    const before=g.stock.stone;
+    for(let p=0;p<10;p++){ World.dayTick=59; World.update(); }
+    ({before, after:g.stock.stone});
+  `, ctx);
+  assert(r.after-r.before>=3, 'a built masonry accrues stone into the settlement store fast enough to feed builds ('+r.before+' -> '+r.after.toFixed(1)+')');
 })();
 
 // ── Test 22: being robbed drifts a soul toward ORDER ───────────────────────

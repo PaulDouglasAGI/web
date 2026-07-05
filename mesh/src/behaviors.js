@@ -14,7 +14,9 @@ function gotoNode(a,label,glyph,cat,node,collect,pose){
     onArrive(ag){
       if(node.amount>0.2){
         node.amount-=0.34;
-        if(collect) ag.inv[collect]=(ag.inv[collect]||0)+1;
+        // a gather trip brings back more of the bulk build materials (wood/stone),
+        // so construction isn't starved — the main throughput lever for the climb
+        if(collect) ag.inv[collect]=(ag.inv[collect]||0)+((collect==='wood'||collect==='stone')?2:1);
         ag.hunger=Math.max(0,ag.hunger-2);
         ag.remember('gathered '+(collect||cat));
       }
@@ -618,7 +620,9 @@ const Behaviors=[
       return { label:'raising a '+st.type,glyph:'⌗',cat:'creative', pose:'work', target:{x:st.x,y:st.y}, arrive:14, dur:200,
         onTick(ag){
           if(st.level>=st.maxLevel) return;
-          st.progress=Math.min(1,st.progress+1/st.buildDur);
+          // build ~2.5x faster — the intrinsic climb was glacial (a diagnostic run
+          // reached only VILLAGE in 33 sim-days); a settlement should rise in days
+          st.progress=Math.min(1,st.progress+2.5/st.buildDur);
           if(st.progress>=1) applySiteLevel(st,ag);
         } }; } },
   { id:'craftTools', label:'forging tools', glyph:'⚒', cat:'creative',

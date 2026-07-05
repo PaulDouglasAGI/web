@@ -85,12 +85,16 @@ const SITE_DEFS={
   // hold workers; its mere presence unlocks the upgradeToStone behavior for every
   // other built site on the same gather. townHall is similarly passive: it just
   // counts toward a settlement's `govern` total, which suppresses nearby crime.
+  // stoneRate feeds every settlement's g.stock.stone each 60-tick pass — it was
+  // too small to keep high-level builds (and stone-upgrades) supplied, so the
+  // whole climb stalled. Raised ~1.8x here (masonry is passive, so this is the
+  // safest throughput lever).
   masonry:{ levels:[
-              {needWood:14, needStone:20, buildDur:230, stoneRate:0.10},
-              {needWood:16, needStone:24, buildDur:250, stoneRate:0.14},
-              {needWood:15, needStone:28, buildDur:240, stoneRate:0.18},
-              {needWood:18, needStone:32, buildDur:270, stoneRate:0.24},
-              {needWood:20, needStone:38, buildDur:300, stoneRate:0.32}
+              {needWood:14, needStone:20, buildDur:230, stoneRate:0.20},
+              {needWood:16, needStone:24, buildDur:250, stoneRate:0.28},
+              {needWood:15, needStone:28, buildDur:240, stoneRate:0.36},
+              {needWood:18, needStone:32, buildDur:270, stoneRate:0.48},
+              {needWood:20, needStone:38, buildDur:300, stoneRate:0.62}
             ] },
   townHall:{ levels:[
               {needWood:16, needStone:18, buildDur:240, auraR:500},
@@ -262,12 +266,13 @@ const SETTLEMENT_TIERS=[
   {name:'GUILDHOLD',    req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1}},
   {name:'BASTION',      req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1}},
   {name:'DOMINION',     req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1}},
-  {name:'CONFEDERACY',  req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1}},
-  {name:'METROPOLIS',   req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1}},
-  // the true endgame — a settlement that has raised both a monument and the
-  // singular Wonder. Requires the full networked economy behind it (see the
-  // wonder's unlock gate in checkStructureUnlocks).
-  {name:'BEACON',       req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, harbor:1, tavern:1, quarry:1, monument:1, wonder:1}}
+  // the top tiers used to require a harbor, which only builds on a shoreline —
+  // so every landlocked settlement was hard-capped at DOMINION forever. Harbor
+  // is now a coastal BONUS (foodSec + double-cargo sea routes), never a gate;
+  // the climb uses inland-buildable structures so any settlement can reach the top.
+  {name:'CONFEDERACY',  req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1}},
+  {name:'METROPOLIS',   req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1, loreHall:1, monument:1}},
+  {name:'BEACON',       req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1, loreHall:1, monument:1, wonder:1}}
 ];
 
 // the world's Age = the character the majority of its settlements share right
@@ -567,25 +572,21 @@ const World={
       const built=s=>s.built && s.gather===gi;
       const huts=this.sites.filter(s=>s.type==='hut'&&built(s)).length;
       const hutSites=this.sites.filter(s=>s.type==='hut'&&s.gather===gi).length;
-      // once every existing hut plot is filled, a settlement that's clearly thriving
-      // earns the option to expand with another — up to the civilization-tier cap
-      if(hutSites>0 && huts>=hutSites && hutSites<12) this.placeSite(g.x,g.y,55,170,'hut',gi,75);
+      // keep 2 unbuilt hut plots in flight so the settlement can build them in
+      // PARALLEL — the old "all built before the next plot appears" gate made the
+      // whole climb serial and glacially slow.
+      if(hutSites<8 && huts>=hutSites-2) this.placeSite(g.x,g.y,55,170,'hut',gi,72);
 
       const wellSites=this.sites.filter(s=>s.type==='well'&&s.gather===gi).length;
       const wells=this.sites.filter(s=>s.type==='well'&&built(s)).length;
-      // a thriving settlement earns a second well once the first is built — caps at the
-      // civilization-tier requirement of 2 so township/civilization stay reachable
-      if(wellSites<2 && (wellSites===0 ? huts>=2 : wells>=wellSites)) this.placeSite(g.x,g.y,40,90,'well',gi,60);
+      // both well plots as soon as there's a hut, so they build in parallel
+      if(wellSites<2 && huts>=1) this.placeSite(g.x,g.y,40,90,'well',gi,55);
       const farmSites=this.sites.filter(s=>s.type==='farm'&&s.gather===gi).length;
       const farms=this.sites.filter(s=>s.type==='farm'&&built(s)).length;
-      // farms start at 2-3 from world-gen and never grew past that — let a settlement with
-      // every existing farm built and a well add another, up to the civilization-tier cap
-      if(farmSites>0 && farms>=farmSites && wells>=1 && farmSites<5) this.placeSite(g.x,g.y,55,170,'farm',gi,70);
+      // keep a couple of unbuilt farm plots in flight (up to the tier cap of 5)
+      if(farmSites<5 && farms>=farmSites-2) this.placeSite(g.x,g.y,55,170,'farm',gi,66);
       const hasGranarySite=this.sites.some(s=>s.type==='granary'&&s.gather===gi);
-      // by the time a granary unlocks (huts>=6) the inner 40-100 ring is usually packed
-      // with well/workshop/market/shrineHall/loreHall/huntingLodge — push it outward so
-      // it isn't starved for space and civilization tier stays reachable
-      if(!hasGranarySite && huts>=6 && wells>=1 && farms>=2) this.placeSite(g.x,g.y,90,170,'granary',gi,45);
+      if(!hasGranarySite && huts>=4 && wells>=1 && farms>=2) this.placeSite(g.x,g.y,90,170,'granary',gi,45);
       const granaries=this.sites.filter(s=>s.type==='granary'&&built(s)).length;
 
       const hasWorkshopSite=this.sites.some(s=>s.type==='workshop'&&s.gather===gi);
@@ -605,8 +606,11 @@ const World={
       // (huts>=12 here was never reachable in practice — 5 gathering spots split
       // the population thin enough that no single settlement ever filled 12 hut
       // plots; 6 lines up with granary's own prerequisite, the tier just below.)
+      // masonry unlocks EARLIER now — it gates the whole stone-upgrade / signature-
+      // upgrade chain (which a diagnostic showed literally never fired), so getting
+      // it built sooner is what makes those upgrades reachable at all.
       const hasMasonrySite=this.sites.some(s=>s.type==='masonry'&&s.gather===gi);
-      if(!hasMasonrySite && huts>=6 && wells>=2 && farms>=4 && granaries>=1) this.placeSite(g.x,g.y,90,170,'masonry',gi,55);
+      if(!hasMasonrySite && huts>=5 && wells>=1 && farms>=3 && granaries>=1) this.placeSite(g.x,g.y,90,170,'masonry',gi,55);
       const masonryBuilt=this.sites.filter(s=>s.type==='masonry'&&built(s)).length;
       // huts>=8 here was never reachable in practice — same crowding issue as
       // masonry's old huts>=12 gate above; 6 lines up with masonry's own bar and
