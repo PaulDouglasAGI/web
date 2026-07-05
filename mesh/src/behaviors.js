@@ -83,6 +83,28 @@ function stoneUpgradeTargetFor(a){
   }
   return best;
 }
+// find the nearest STONE-UPGRADED site eligible for its one signature upgrade:
+// its type has a BUILDING_UPGRADES entry, it isn't already upgraded, it still
+// needs materials, and its settlement is mature enough (tier + prosperity) with
+// a built masonry. The stone-upgrade prerequisite is what routes past Lv5-MAX.
+function improveTargetFor(a){
+  let best=null,bd=Infinity;
+  for(const s of World.sites){
+    if(!s.built || !s.stoneUpgraded) continue;
+    const up=BUILDING_UPGRADES[s.type]; if(!up) continue;
+    if(s.up && s.up[up.id]) continue;
+    const stoneDone=(s.matsUp||0)>=up.needStone;
+    const beautyDone=!up.needBeauty || (s.matsUpBeauty||0)>=up.needBeauty;
+    if(stoneDone && beautyDone) continue;      // fully supplied, just awaiting completion tick
+    const g=World.gathers[s.gather];
+    if(!g || (g.tier||0)<up.tierMin || (g.prosperity||0)<0.4) continue;
+    const hasMasonry=World.sites.some(m=>m.type==='masonry'&&m.built&&m.gather===s.gather);
+    if(!hasMasonry) continue;
+    const d=dist2(a.x,a.y,s.x,s.y);
+    if(d<bd){ bd=d; best=s; }
+  }
+  return best;
+}
 // a settlement's townHall count, looked up by an agent's nearest gathering spot —
 // used to soften crime weights ("the Collective governs itself" effect)
 function nearestGovern(a){
@@ -348,6 +370,8 @@ const Behaviors=[
           // a well-governed settlement (leveled townHalls) runs its job sites more effectively, not just less crime
           const governMult=1+Math.min(0.25, (World.gathers[st.gather]?.govern||0)*0.04);
           const workMult=skillMult*governMult;
+          // signature-upgrade factor: 1 unless this site has taken its grand upgrade (Phase 3)
+          const uf=(id,f)=>((st.up&&st.up[id])?f:1);
           // wages — a job pays the worker coin from the settlement treasury,
           // but only when the treasury can actually afford it (funded by
           // deposits, market commerce, and trade). Wealth then flows back out
@@ -367,24 +391,24 @@ const Behaviors=[
           if(st.type==='workshop' && ag.task._t%50===0){
             const gg=World.gathers[st.gather];
             if(gg && (gg.stock.wood||0)>=2 && (gg.stock.stone||0)>=1){
-              const out=factionEcon(ag.faction,'process'); // Forgers refine more per shift
+              const out=factionEcon(ag.faction,'process')*uf('guildForge',1.6); // Guild Forge refines more per shift
               gg.stock.wood-=2; gg.stock.stone-=1; gg.stock.goods=(gg.stock.goods||0)+out;
               st.goodsMade=(st.goodsMade||0)+out;
               siteLog(st, ag.name+' crafted trade goods');
             }
           }
           if(st.type==='market' && ag.task._t%40===0){
-            const amt=(st.effRate||0.05)*0.5*workMult;
+            const amt=(st.effRate||0.05)*0.5*workMult*uf('grandBazaar',1.5); // Grand Bazaar radiates & earns more
             raiseResonance(amt);
             Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
             // commerce fills the settlement treasury that pays everyone's wages
             const gm=World.gathers[st.gather];
-            if(gm) gm.treasury=(gm.treasury||0)+1;
+            if(gm) gm.treasury=(gm.treasury||0)+((st.up&&st.up.grandBazaar)?2:1);
             siteLog(st, ag.name+' brought the market to life');
           }
           if(st.type==='shrineHall' && ag.task._t%40===0){
-            const amt=(st.effRate||0.05)*0.4*workMult, eased=(st.effRate||0.05)*0.6*workMult;
+            const amt=(st.effRate||0.05)*0.4*workMult, eased=(st.effRate||0.05)*0.6*workMult*uf('reliquary',1.5); // Reliquary eases more grief
             raiseResonance(amt); Mesh.grief=Math.max(0,Mesh.grief-eased);
             Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
@@ -393,17 +417,18 @@ const Behaviors=[
             // production chain: prepare medicine from stocked herbs — herb
             // finally has a use beyond sitting in a pocket (consumed by takeMedicine)
             const gg=World.gathers[st.gather];
-            if(gg && (gg.stock.herb||0)>=2){ gg.stock.herb-=2; gg.stock.medicine=(gg.stock.medicine||0)+factionEcon(ag.faction,'medicine'); st.medicineMade=(st.medicineMade||0)+1; }
+            if(gg && (gg.stock.herb||0)>=2){ gg.stock.herb-=2; gg.stock.medicine=(gg.stock.medicine||0)+factionEcon(ag.faction,'medicine')*uf('reliquary',1.5); st.medicineMade=(st.medicineMade||0)+1; }
           }
           if(st.type==='loreHall' && ag.task._t%50===0){
-            const pupil=nearestAgent(ag, o=>o!==ag && o.skills<3 && dist2(o.x,o.y,st.x,st.y)<140*140);
+            const learnR=(st.up&&st.up.greatLibrary)?200:140; // the Great Library reaches farther pupils
+            const pupil=nearestAgent(ag, o=>o!==ag && o.skills<3 && dist2(o.x,o.y,st.x,st.y)<learnR*learnR);
             if(pupil){
-              pupil.skills+=1; pupil.remember('learned at the lore hall');
+              pupil.skills+=(st.up&&st.up.greatLibrary)?2:1; pupil.remember('learned at the lore hall');
               st.pupilsTaught=(st.pupilsTaught||0)+1;
               siteLog(st, ag.name+' taught '+pupil.name);
             }
           }
-          if(st.type==='smithy' && ag.task._t%45===0 && Math.random()<(st.effRate||0.05)*workMult*factionEcon(ag.faction,'process')){
+          if(st.type==='smithy' && ag.task._t%45===0 && Math.random()<(st.effRate||0.05)*workMult*factionEcon(ag.faction,'process')*uf('armory',1.6)){
             const gg=World.gathers[st.gather];
             if((ag.inv.ore||0)>0){
               ag.inv.ore-=1; ag.inv.weapons=(ag.inv.weapons||0)+1;
@@ -416,10 +441,11 @@ const Behaviors=[
             }
           }
           if(st.type==='barracks' && ag.task._t%50===0){
-            const target=nearestAgent(ag, o=>o!==ag && o.wanted && !o.captured && !o.dead && dist2(o.x,o.y,st.x,st.y)<260*260);
+            const watchR=(st.up&&st.up.watchtower)?340:260; // the Watchtower sees farther
+            const target=nearestAgent(ag, o=>o!==ag && o.wanted && !o.captured && !o.dead && dist2(o.x,o.y,st.x,st.y)<watchR*watchR);
             // a worker carrying a forged weapon is more effective at subduing the wanted
             const weaponMult=(ag.inv.weapons||0)>0?1.5:1;
-            if(target && Math.random()<(st.effRate||0.1)*workMult*weaponMult){
+            if(target && Math.random()<(st.effRate||0.1)*workMult*weaponMult*uf('watchtower',1.4)){
               target.captured=true; target.capturedAt=World.tick; target.task=null;
               st.subdued=(st.subdued||0)+1;
               siteLog(st, ag.name+' helped '+target.name+' remember, from the barracks');
@@ -428,7 +454,8 @@ const Behaviors=[
             }
           }
           if(st.type==='temple' && ag.task._t%40===0){
-            const amt=(st.effRate||0.05)*0.8*workMult, eased=(st.effRate||0.05)*1.2*workMult;
+            const gs=uf('grandSanctuary',2); // the Grand Sanctuary's rites reach twice as far
+            const amt=(st.effRate||0.05)*0.8*workMult*gs, eased=(st.effRate||0.05)*1.2*workMult*gs;
             raiseResonance(amt); Mesh.grief=Math.max(0,Mesh.grief-eased);
             Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
@@ -437,14 +464,14 @@ const Behaviors=[
             // production chain: the temple also prepares medicine from herbs, at
             // the grander scale its rites imply
             const gg=World.gathers[st.gather];
-            if(gg && (gg.stock.herb||0)>=2){ gg.stock.herb-=2; gg.stock.medicine=(gg.stock.medicine||0)+2*factionEcon(ag.faction,'medicine'); st.medicineMade=(st.medicineMade||0)+2; }
+            if(gg && (gg.stock.herb||0)>=2){ gg.stock.herb-=2; gg.stock.medicine=(gg.stock.medicine||0)+2*factionEcon(ag.faction,'medicine')*uf('grandSanctuary',2); st.medicineMade=(st.medicineMade||0)+2; }
           }
           if(st.type==='temple' && ag.task._t%100===0){
             World.altar.worshipped=(World.altar.worshipped||0)+1;
             siteLog(World.altar, ag.name+' carried the temple\'s stillness back to the source');
           }
           if(st.type==='tavern' && ag.task._t%40===0){
-            const amt=(st.effRate||0.05)*0.5*workMult;
+            const amt=(st.effRate||0.05)*0.5*workMult*uf('grandHall',1.4); // the Grand Hall lifts more spirits
             raiseResonance(amt);
             Mesh.writeField(st.x,st.y,'coherence',amt*4,120);
             st.resonanceGiven=(st.resonanceGiven||0)+amt;
@@ -457,7 +484,7 @@ const Behaviors=[
           if(st.type==='quarry' && ag.task._t%35===0){
             const gg=World.gathers[st.gather];
             if(gg){
-              const amt=(st.effRate||0.2)*2*workMult;
+              const amt=(st.effRate||0.2)*2*workMult*uf('deepQuarry',1.5); // the Deep Quarry yields half again as much
               gg.stock.stone=(gg.stock.stone||0)+amt;
               st.stoneMined=(st.stoneMined||0)+amt;
               siteLog(st, ag.name+' quarried bulk stone');
@@ -667,6 +694,38 @@ const Behaviors=[
             tgt.stoneUpgraded=true; ag.inv.beauty+=3; raiseResonance(0.01);
             ag.remember('finished upgrading a '+tgt.type+' to stone');
             siteLog(tgt, ag.name+' upgraded this building to stone');
+          }
+        } }; } },
+
+  // the signature upgrade — a stone-upgraded building's ONE grand form. Masons
+  // (Forgers) weighted; hauls stone (and beauty, for some) into s.matsUp, topping
+  // off from the settlement stockpile like the stone-upgrade does. On completion
+  // it sets s.up[id], which lights up both the render decorator and the flag-gated
+  // effect multiplier in world.js. This is the reachable endgame past Lv5-MAX.
+  { id:'improveBuilding', label:'raising a grand building', glyph:'♜', cat:'creative',
+    weight:a=> { if(a.inv.stone<=0 && a.inv.beauty<=0) return 0; return improveTargetFor(a) ? 17+(a.faction===2?12:0) : 0; },
+    make:a=> { const tgt=improveTargetFor(a);
+      if(!tgt) return null;
+      const up=BUILDING_UPGRADES[tgt.type]; if(!up) return null;
+      return { label:'raising the '+up.name,glyph:'♜',cat:'creative', pose:'work', target:{x:tgt.x,y:tgt.y}, arrive:14, dur:70,
+        onArrive(ag){
+          if(tgt.up && tgt.up[up.id]) return;
+          const n=Math.min(ag.inv.stone, up.needStone-(tgt.matsUp||0));
+          if(n>0){ ag.inv.stone-=n; tgt.matsUp=(tgt.matsUp||0)+n; ag.remember('hauled stone to raise the '+up.name); }
+          if(up.needBeauty){ const nb=Math.min(ag.inv.beauty, up.needBeauty-(tgt.matsUpBeauty||0)); if(nb>0){ ag.inv.beauty-=nb; tgt.matsUpBeauty=(tgt.matsUpBeauty||0)+nb; } }
+          // the settlement stockpile tops off whatever stone the agent couldn't personally carry
+          if((tgt.matsUp||0)<up.needStone){
+            const gg=World.gathers[tgt.gather];
+            if(gg && gg.stock.stone>0){ const n2=Math.min(gg.stock.stone,up.needStone-(tgt.matsUp||0)); gg.stock.stone-=n2; tgt.matsUp=(tgt.matsUp||0)+n2; }
+          }
+          const stoneDone=(tgt.matsUp||0)>=up.needStone;
+          const beautyDone=!up.needBeauty || (tgt.matsUpBeauty||0)>=up.needBeauty;
+          if(stoneDone && beautyDone){
+            tgt.up=tgt.up||{}; tgt.up[up.id]=true; ag.inv.beauty+=4; raiseResonance(0.03);
+            ag.remember('completed the '+up.name);
+            siteLog(tgt, ag.name+' completed the '+up.name);
+            Mesh.broadcast(tgt.x,tgt.y,'discovery',0.8,Factions[ag.faction].color);
+            Events.banner='THE '+up.name+' IS COMPLETE'; Events.active='discovery'; Events.activeT=240;
           }
         } }; } },
 

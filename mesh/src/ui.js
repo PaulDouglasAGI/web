@@ -272,8 +272,10 @@ const UI={
 
   renderSitePanel(s){
     this.setExtras(false);
-    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY',workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE',masonry:'MASONRY',townHall:'TOWN HALL',smithy:'SMITHY',barracks:'BARRACKS',harbor:'HARBOR',temple:'TEMPLE',tavern:'TAVERN',quarry:'QUARRY',mine:'MINE',monument:'MONUMENT',wonder:'THE WONDER',citadel:'THE CITADEL',sanctum:'THE SANCTUARY',greatTemple:'THE GREAT TEMPLE',caravanserai:'THE CARAVANSERAI'};
-    this.el.pName.textContent=SITE_LABEL[s.type]||s.type.toUpperCase();
+    const SITE_LABEL={hut:'HUT',well:'WELL',farm:'FARM',granary:'GRANARY',workshop:'WORKSHOP',market:'MARKETPLACE',shrineHall:'SHRINE HALL',loreHall:'LORE HALL',huntingLodge:'HUNTING LODGE',masonry:'MASONRY',townHall:'TOWN HALL',smithy:'SMITHY',barracks:'BARRACKS',harbor:'HARBOR',temple:'TEMPLE',tavern:'TAVERN',quarry:'QUARRY',mine:'MINE',monument:'MONUMENT',wonder:'THE WONDER',grandWonder:'THE GRAND WONDER',citadel:'THE CITADEL',sanctum:'THE SANCTUARY',greatTemple:'THE GREAT TEMPLE',caravanserai:'THE CARAVANSERAI'};
+    // if this building has taken its one signature upgrade, its name carries it (e.g. "MARKETPLACE · GRAND BAZAAR")
+    const sig = (s.up && typeof BUILDING_UPGRADES!=='undefined' && BUILDING_UPGRADES[s.type] && s.up[BUILDING_UPGRADES[s.type].id]) ? BUILDING_UPGRADES[s.type].name : null;
+    this.el.pName.textContent=(SITE_LABEL[s.type]||s.type.toUpperCase())+(sig?(' · '+sig):'');
     if(s.faction!=null){ this.el.pFaction.textContent=Factions[s.faction].name; this.el.pFaction.style.color=Factions[s.faction].color; }
     else { this.el.pFaction.textContent='unclaimed'; this.el.pFaction.style.color='#9aa6a2'; }
     this.el.pAge.textContent= s.level>0 ? ('level '+s.level+' / '+s.maxLevel) : 'not yet built';

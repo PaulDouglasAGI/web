@@ -370,9 +370,9 @@ function freshWorld(ctx,seed){
     const req={hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1, loreHall:1, monument:1, wonder:1};
     for(const type in req){ for(let i=0;i<req[type];i++){ const s=mkSite(g.x,g.y,type,0); s.built=true; s.level=1; World.sites.push(s); } }
     const t=World.tierOf(0);
-    ({tier:t, isLast:t===SETTLEMENT_TIERS.length-1, name:SETTLEMENT_TIERS[t].name, hasHarbor:World.sites.some(s=>s.type==='harbor')});
+    ({tier:t, name:SETTLEMENT_TIERS[t].name, hasHarbor:World.sites.some(s=>s.type==='harbor')});
   `, ctx);
-  assert(r.isLast && r.name==='BEACON' && !r.hasHarbor, 'a landlocked settlement reaches BEACON with no harbor (tier '+r.tier+' '+r.name+')');
+  assert(r.name==='BEACON' && !r.hasHarbor, 'a landlocked settlement reaches BEACON with no harbor (tier '+r.tier+' '+r.name+')');
 })();
 
 // ── Test 21b: harbor is a coastal BONUS, never a tier gate ─────────────────
@@ -400,6 +400,85 @@ function freshWorld(ctx,seed){
     ({before, after:g.stock.stone});
   `, ctx);
   assert(r.after-r.before>=3, 'a built masonry accrues stone into the settlement store fast enough to feed builds ('+r.before+' -> '+r.after.toFixed(1)+')');
+})();
+
+// ── Test 21d: signature upgrades require a stone-upgraded building + mature settlement ──
+(function testImproveGating(){
+  const ctx=buildContext();
+  freshWorld(ctx,75);
+  const r=vm.runInContext(`
+    const g=World.gathers[0]; g.tier=6; g.prosperity=0.6;
+    const m=mkSite(g.x,g.y,'masonry',0); m.built=true; m.level=1; World.sites.push(m);
+    const mk=mkSite(g.x,g.y,'market',0); mk.built=true; mk.level=1; World.sites.push(mk);
+    const a={x:g.x,y:g.y};
+    const notStone = improveTargetFor(a);        // market not yet stone-upgraded → ineligible
+    mk.stoneUpgraded=true;
+    const eligible = improveTargetFor(a);         // now eligible
+    g.tier=3;                                     // below GRAND BAZAAR's tierMin (6)
+    const lowTier = improveTargetFor(a);
+    g.tier=6; mk.up={grandBazaar:true};           // already upgraded → no longer a target
+    const done = improveTargetFor(a);
+    ({notStone: notStone?notStone.type:null, eligible: eligible?eligible.type:null, lowTier: lowTier?lowTier.type:null, done: done?done.type:null});
+  `, ctx);
+  assert(r.notStone===null, 'a building that is not stone-upgraded is not eligible for its signature upgrade');
+  assert(r.eligible==='market', 'a stone-upgraded market on a mature settlement becomes a signature-upgrade target');
+  assert(r.lowTier===null, 'a settlement below the upgrade tierMin cannot start the signature upgrade');
+  assert(r.done===null, 'a building that already took its signature upgrade is no longer a target');
+})();
+
+// ── Test 21e: completing improveBuilding sets the flag and applies its effect ──
+(function testImproveEffect(){
+  const ctx=buildContext();
+  freshWorld(ctx,76);
+  const r=vm.runInContext(`
+    const g=World.gathers[0]; g.tier=6; g.prosperity=0.6;
+    const m=mkSite(g.x,g.y,'masonry',0); m.built=true; m.level=1; World.sites.push(m);
+    const th=mkSite(g.x,g.y,'townHall',0); th.built=true; th.level=1; th.stoneUpgraded=true; World.sites.push(th);
+    World.dayTick=59; World.update(); const governBefore=g.govern;
+    // drive the improveBuilding behavior to completion with a mason carrying plenty of stone
+    const a=new Agent(g.x,g.y,2); a.inv.stone=200; Agents.push(a);
+    const w=BehaviorById['improveBuilding'].weight(a);
+    let task=BehaviorById['improveBuilding'].make(a);
+    for(let i=0;i<10 && !(th.up&&th.up.highCourt);i++){ a.inv.stone=200; task.onArrive(a); }
+    World.dayTick=59; World.update(); const governAfter=g.govern;
+    ({weight:w, upped: !!(th.up&&th.up.highCourt), governBefore, governAfter});
+  `, ctx);
+  assert(r.weight>0, 'a mason carrying stone is drawn to raise a stone-upgraded building');
+  assert(r.upped, 'improveBuilding completed and set the HIGH COURT flag on the town hall');
+  assert(r.governAfter===r.governBefore+1, 'the HIGH COURT raised the settlement govern by 1 ('+r.governBefore+' -> '+r.governAfter+')');
+})();
+
+// ── Test 21f: stone-upgrade and signature upgrade stack (additive, no regression) ──
+(function testUpgradeAdditivity(){
+  const ctx=buildContext();
+  freshWorld(ctx,77);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const gr=mkSite(g.x,g.y,'granary',0); gr.built=true; gr.level=1; gr.capacity=1; World.sites.push(gr);
+    World.dayTick=59; World.update(); const base=gr.contrib;
+    gr.stoneUpgraded=true;
+    World.dayTick=59; World.update(); const stone=gr.contrib;
+    gr.up={deepCellars:true};
+    World.dayTick=59; World.update(); const both=gr.contrib;
+    ({base, stone, both});
+  `, ctx);
+  assert(r.stone>r.base, 'stone-reinforcing a granary raises its food contribution ('+r.base.toFixed(3)+' -> '+r.stone.toFixed(3)+')');
+  assert(r.both>r.stone, 'the DEEP CELLARS signature upgrade stacks on top of the stone bonus ('+r.stone.toFixed(3)+' -> '+r.both.toFixed(3)+')');
+  assert(Math.abs(r.both - r.base*1.1*1.35) < 1e-6, 'the two bonuses multiply cleanly (base x1.1 x1.35)');
+})();
+
+// ── Test 21g: a world can climb BEYOND BEACON to THE ETERNAL CITY ───────────
+(function testEternalCity(){
+  const ctx=buildContext();
+  freshWorld(ctx,78);
+  const r=vm.runInContext(`
+    const g=World.gathers[0];
+    const req={hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1, loreHall:1, monument:1, wonder:1, grandWonder:1};
+    for(const type in req){ for(let i=0;i<req[type];i++){ const s=mkSite(g.x,g.y,type,0); s.built=true; s.level=1; World.sites.push(s); } }
+    const t=World.tierOf(0);
+    ({tier:t, isLast:t===SETTLEMENT_TIERS.length-1, name:SETTLEMENT_TIERS[t].name});
+  `, ctx);
+  assert(r.isLast && r.name==='THE ETERNAL CITY', 'a settlement that raises the grand wonder reaches THE ETERNAL CITY, past BEACON (tier '+r.tier+' '+r.name+')');
 })();
 
 // ── Test 22: being robbed drifts a soul toward ORDER ───────────────────────

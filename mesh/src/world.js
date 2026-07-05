@@ -169,6 +169,13 @@ const SITE_DEFS={
   wonder:{ levels:[
               {needWood:40, needStone:60, needBeauty:50, buildDur:600}
             ] },
+  // the world beyond BEACON — a second, grander wonder that only a settlement
+  // which has already raised the Beacon AND perfected several of its buildings
+  // can attempt. Raising it crowns the settlement THE ETERNAL CITY (the new apex
+  // tier), so a thriving world keeps climbing past the old cap.
+  grandWonder:{ levels:[
+              {needWood:60, needStone:90, needBeauty:70, buildDur:820}
+            ] },
   // ── fate-gated destiny capstones (Phase D) — each is the endgame unique to one
   // emergent fate. The Wonder above is Harmony's; these are the others, so the
   // world has MANY destinies, not one. Unlocked only after a settlement has held
@@ -178,6 +185,30 @@ const SITE_DEFS={
   greatTemple:{ levels:[ {needWood:20, needStone:46, needBeauty:22, buildDur:460} ] }, // DEVOTION
   caravanserai:{ levels:[ {needWood:36, needStone:22, buildDur:400} ] }             // DIASPORA
 };
+// ── Signature building upgrades (Phase 3) — ONE named apex form per major
+// structure. The stone-upgrade is the PREREQUISITE gateway: a building must be
+// stoneUpgraded before it can take its signature upgrade (stone → grand form).
+// That makes the (now-reachable) stone-upgrade meaningful and is the way AROUND
+// the old Lv5-MAX soft-lock — a maxed, stone building still has somewhere to go.
+// `id` matches the render flag in Renderer.drawBuilding (s.up[id]); effects are
+// applied as flag-gated multipliers beside the existing s.stoneUpgraded reads,
+// so a world with no upgrades behaves exactly as before (zero regression).
+const BUILDING_UPGRADES={
+  hut:       { id:'hearthstone',    name:'HEARTHSTONE',     needStone:22,               tierMin:4 },
+  granary:   { id:'deepCellars',    name:'DEEP CELLARS',    needStone:26,               tierMin:5 },
+  masonry:   { id:'masterMasons',   name:'MASTER MASONS',   needStone:30,               tierMin:5 },
+  quarry:    { id:'deepQuarry',     name:'DEEP QUARRY',     needStone:28,               tierMin:6 },
+  townHall:  { id:'highCourt',      name:'HIGH COURT',      needStone:34,               tierMin:6 },
+  market:    { id:'grandBazaar',    name:'GRAND BAZAAR',    needStone:28,               tierMin:6 },
+  workshop:  { id:'guildForge',     name:'GUILD FORGE',     needStone:26,               tierMin:6 },
+  tavern:    { id:'grandHall',      name:'GRAND HALL',      needStone:26,               tierMin:6 },
+  shrineHall:{ id:'reliquary',      name:'RELIQUARY',       needStone:26, needBeauty:12, tierMin:6 },
+  smithy:    { id:'armory',         name:'ARMORY',          needStone:32,               tierMin:7 },
+  barracks:  { id:'watchtower',     name:'WATCHTOWER',      needStone:30,               tierMin:7 },
+  loreHall:  { id:'greatLibrary',   name:'GREAT LIBRARY',   needStone:28, needBeauty:12, tierMin:8 },
+  temple:    { id:'grandSanctuary', name:'GRAND SANCTUARY', needStone:38, needBeauty:20, tierMin:8 }
+};
+
 // which capstone a fate earns (Harmony's is the Wonder, handled separately)
 const FATE_CAPSTONE={ DOMINION:'citadel', COMMUNION:'sanctum', DEVOTION:'greatTemple', DIASPORA:'caravanserai' };
 const DESTINY_NAME={ citadel:'THE CITADEL', sanctum:'THE SANCTUARY', greatTemple:'THE GREAT TEMPLE', caravanserai:'THE CARAVANSERAI', wonder:'THE BEACON' };
@@ -190,7 +221,8 @@ function mkSite(x,y,type,gather){
   const s={x,y,type,level:0,maxLevel:SITE_DEFS[type].levels.length,
     needWood:lvl.needWood,needStone:lvl.needStone,buildDur:lvl.buildDur,
     matsWood:0,matsStone:0,progress:0,built:false,faction:null,gather,
-    stoneUpgraded:false,matsStoneUpgrade:0};
+    stoneUpgraded:false,matsStoneUpgrade:0,
+    up:{},matsUp:0,matsUpBeauty:0};   // signature-upgrade flags + material haul (Phase 3)
   if(lvl.needBeauty!=null) Object.assign(s,{needBeauty:lvl.needBeauty,matsBeauty:0});
   if(type==='well') Object.assign(s,{amount:0,max:0,regen:0});
   if(type==='farm') Object.assign(s,{stage:'empty',stageT:0,growTicks:lvl.growTicks,yieldAmt:lvl.yieldAmt});
@@ -224,6 +256,15 @@ function applySiteLevel(s,ag){
     raiseResonance(0.25);
     Mesh.broadcast(s.x,s.y,'discovery',1,'#ffe9b0');
     Events.banner='A WONDER RISES — THE MESH REMEMBERS'; Events.active='wonder'; Events.activeT=320;
+  }
+  else if(s.type==='grandWonder'){
+    // the second, grander wonder — crowns THE ETERNAL CITY. A higher prosperity
+    // floor than the first Wonder, a larger resonance surge, and a bigger housing
+    // draw (see housingCapacity): the apex of a perfected civilization.
+    const g=World.gathers[s.gather]; if(g) g.wonderProsperity=Math.max(g.wonderProsperity||0,0.85);
+    raiseResonance(0.35);
+    Mesh.broadcast(s.x,s.y,'discovery',1,'#ffe9b0');
+    Events.banner='THE ETERNAL CITY IS CROWNED — A GRANDER WONDER STANDS'; Events.active='wonder'; Events.activeT=360;
   }
   else if(s.type==='citadel'||s.type==='sanctum'||s.type==='greatTemple'||s.type==='caravanserai'){
     // a fate-gated destiny capstone — crystallizes one of the plural endgames.
@@ -272,7 +313,12 @@ const SETTLEMENT_TIERS=[
   // the climb uses inland-buildable structures so any settlement can reach the top.
   {name:'CONFEDERACY',  req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1}},
   {name:'METROPOLIS',   req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1, loreHall:1, monument:1}},
-  {name:'BEACON',       req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1, loreHall:1, monument:1, wonder:1}}
+  {name:'BEACON',       req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1, loreHall:1, monument:1, wonder:1}},
+  // beyond BEACON — a settlement that raises the second, grander wonder becomes
+  // THE ETERNAL CITY. The grandWonder is itself gated (in checkStructureUnlocks)
+  // behind BEACON + high prosperity + several completed signature upgrades, so
+  // this apex is earned by perfecting a whole civilization, not just outlasting it.
+  {name:'THE ETERNAL CITY', req:{hut:6, well:2, farm:4, granary:1, masonry:1, townHall:1, smithy:1, barracks:1, temple:1, mine:1, tavern:1, quarry:1, loreHall:1, monument:1, wonder:1, grandWonder:1}}
 ];
 
 // the world's Age = the character the majority of its settlements share right
@@ -659,6 +705,13 @@ const World={
       const hasWonderSite=this.sites.some(s=>s.type==='wonder'&&s.gather===gi);
       const strongRoute=this.routes.some(r=>(r.a===gi||r.b===gi)&&r.strength>5);
       if(!hasWonderSite && g.tier>=10 && (g.prosperity||0)>0.8 && strongRoute) this.placeSite(g.x,g.y,110,220,'wonder',gi,70);
+      // the grander Wonder — beyond BEACON. Demands the Beacon already raised,
+      // very high prosperity, AND several completed signature upgrades: the apex
+      // is earned by perfecting a whole civilization. Raising it → THE ETERNAL CITY.
+      const wonderBuilt=this.sites.some(s=>s.type==='wonder'&&built(s));
+      const sigUpgrades=this.sites.filter(s=>s.gather===gi&&s.built&&s.up&&Object.keys(s.up).length>0).length;
+      const hasGrandWonderSite=this.sites.some(s=>s.type==='grandWonder'&&s.gather===gi);
+      if(!hasGrandWonderSite && wonderBuilt && g.tier>=11 && (g.prosperity||0)>0.85 && sigUpgrades>=3 && strongRoute) this.placeSite(g.x,g.y,120,240,'grandWonder',gi,80);
 
       // fate-gated destiny capstones — a settlement that has HELD its fate long
       // enough earns the endgame structure unique to that fate. The Wonder above
@@ -752,18 +805,19 @@ const World={
         for(const s of this.sites){
           if(s.gather!==gi || !s.built) continue;
           if(s.faction!=null) facCount[s.faction]++;
-          if(s.type==='granary'){ hasGranary=true; s.contrib=(s.capacity||1)*0.4+((s.workers||[]).length>0?0.15*s.workers.length:0); if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
+          if(s.type==='granary'){ hasGranary=true; s.contrib=(s.capacity||1)*0.4+((s.workers||[]).length>0?0.15*s.workers.length:0); if(s.stoneUpgraded) s.contrib*=1.1; if(s.up&&s.up.deepCellars) s.contrib*=1.35; foodSec+=s.contrib; }
           if(s.type==='huntingLodge'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
           if(s.type==='harbor'){ s.contrib=(s.workers||[]).length>0?(s.effRate||0.1)*s.workers.length:0; if(s.stoneUpgraded) s.contrib*=1.1; foodSec+=s.contrib; }
-          if(s.type==='hut' && s.restMult){ const rm=s.stoneUpgraded?s.restMult*1.1:s.restMult; restMult=Math.max(restMult,rm); }
+          if(s.type==='hut' && s.restMult){ let rm=s.stoneUpgraded?s.restMult*1.1:s.restMult; if(s.up&&s.up.hearthstone) rm*=1.12; restMult=Math.max(restMult,rm); }
           // masonry holds no workers, so its stoneRate trickles into the settlement stockpile passively here instead
-          if(s.type==='masonry' && s.stoneRate){ g.stock.stone=(g.stock.stone||0)+s.stoneRate; }
-          if(s.type==='townHall') govern+=s.level;
+          if(s.type==='masonry' && s.stoneRate){ g.stock.stone=(g.stock.stone||0)+s.stoneRate*((s.up&&s.up.masterMasons)?1.5:1); }
+          if(s.type==='townHall') govern+=s.level+((s.up&&s.up.highCourt)?1:0);
           if(s.type==='tavern'){
             // a tavern only lifts spirits while it has ale to pour; an unsupplied
             // one goes flat. (ale is brewed from stocked food — see doJob tavern.)
             const alePour=Math.min(1,(g.stock.ale||0)*0.1);
-            tavernBonus=Math.max(tavernBonus,(s.workers||[]).length>0?(s.effRate||0.1)*(0.3+0.7*alePour):0.03);
+            const tb=((s.workers||[]).length>0?(s.effRate||0.1)*(0.3+0.7*alePour):0.03)*((s.up&&s.up.grandHall)?1.4:1);
+            tavernBonus=Math.max(tavernBonus,tb);
           }
         }
         // deposited food is real food security, not just the granary aura
@@ -794,7 +848,7 @@ const World={
         for(const s of this.sites){
           if(s.gather!==gi || !s.built) continue;
           if(s.type==='granary' || FUNCTIONAL_TYPES.includes(s.type)) staffed+=(s.workers||[]).length;
-          if(s.type==='monument' || s.type==='wonder') monuments++; // beauty made permanent
+          if(s.type==='monument' || s.type==='wonder' || s.type==='grandWonder') monuments++; // beauty made permanent
         }
         for(const k in g.stock) stockTotal+=g.stock[k];
         const routeIncome=g.routeIncome||0; // filled by the caravan system (S3)
@@ -1021,9 +1075,10 @@ const World={
     let cap=26; // base camp capacity, even before any hut is built
     for(const s of this.sites){
       if(!s.built) continue;
-      if(s.type==='hut') cap+=s.capacity||3;
-      if(s.type==='granary') cap+=(s.capacity||1)*4;
+      if(s.type==='hut') cap+=(s.capacity||3)+((s.up&&s.up.hearthstone)?1:0); // Hearthstone huts shelter one more
+      if(s.type==='granary') cap+=(s.capacity||1)*4+((s.up&&s.up.deepCellars)?4:0); // Deep Cellars feed more souls
       if(s.type==='wonder') cap+=10; // a Wonder draws souls from across the world
+      if(s.type==='grandWonder') cap+=20; // the grander wonder draws twice as many
     }
     // a prosperous settlement draws (and can feed) more souls than its huts alone
     for(const g of this.gathers) cap+=Math.floor((g.prosperity||0)*8);

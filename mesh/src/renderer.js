@@ -302,17 +302,20 @@ const Renderer={
           ctx.beginPath();
           ctx.moveTo(sx-hw*0.85, sy-hh*0.15); ctx.lineTo(sx, sy-hh*1.6); ctx.lineTo(sx+hw*0.85, sy-hh*0.15);
           ctx.closePath(); ctx.fill();
-        } else if(s.type==='monument' || s.type==='wonder' || s.type==='citadel' || s.type==='sanctum' || s.type==='greatTemple' || s.type==='caravanserai'){
-          // a glowing spire — the Wonder & destiny capstones taller/brighter
-          const big=(s.type==='wonder'||s.type==='greatTemple'||s.type==='citadel');
-          const h=(big?26:16)*z*lvlScale, w=(big?9:6)*z*lvlScale;
+          if(s.up&&s.up.deepCellars){ ctx.fillStyle='#8a8a80'; ctx.fillRect(sx+hw*0.4, sy-hh*1.2, hw*0.4, hh*0.9); } // silo cap
+        } else if(s.type==='monument' || s.type==='wonder' || s.type==='grandWonder' || s.type==='citadel' || s.type==='sanctum' || s.type==='greatTemple' || s.type==='caravanserai'){
+          // a glowing spire — the Wonders & destiny capstones taller/brighter; the grandWonder is the tallest of all
+          const grand=(s.type==='grandWonder');
+          const big=grand||(s.type==='wonder'||s.type==='greatTemple'||s.type==='citadel');
+          const h=(grand?34:big?26:16)*z*lvlScale, w=(grand?11:big?9:6)*z*lvlScale;
           const gl=ctx.createRadialGradient(sx,sy,0,sx,sy,h*1.4);
-          gl.addColorStop(0,'rgba(255,233,176,'+(big?0.5:0.3)+')'); gl.addColorStop(1,'rgba(255,233,176,0)');
+          gl.addColorStop(0,'rgba(255,233,176,'+(grand?0.6:big?0.5:0.3)+')'); gl.addColorStop(1,'rgba(255,233,176,0)');
           ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(sx,sy,h*1.4,0,7); ctx.fill();
-          ctx.fillStyle='#d8c9a8';
+          ctx.fillStyle= grand?'#f0e4c4':'#d8c9a8';
           ctx.beginPath(); ctx.moveTo(sx-w,sy); ctx.lineTo(sx,sy-h); ctx.lineTo(sx+w,sy); ctx.closePath(); ctx.fill();
           ctx.fillStyle='rgba(255,233,176,0.95)';
           ctx.beginPath(); ctx.arc(sx,sy-h,w*0.5,0,7); ctx.fill();
+          if(grand){ ctx.beginPath(); ctx.arc(sx,sy-h,w*0.9,0,7); ctx.strokeStyle='rgba(255,233,176,0.7)'; ctx.lineWidth=Math.max(0.6,1*z); ctx.stroke(); } // crown ring
         } else {
           this.drawBuilding(ctx, s, sx, sy, z, lvlScale);   // recognizable per-type silhouette; material shows stone-upgrade
         }
