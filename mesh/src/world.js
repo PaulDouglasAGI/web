@@ -506,7 +506,7 @@ const World={
 
   // try to drop a new buildable site of `type` near (cx,cy), respecting tile validity & spacing
   placeSite(cx,cy,rmin,rmax,type,gather,minSpacing){
-    for(let tries=0;tries<20;tries++){
+    for(let tries=0;tries<40;tries++){
       const ang=this.rng()*Math.PI*2, r=rmin+this.rng()*(rmax-rmin);
       const x=cx+Math.cos(ang)*r, y=cy+Math.sin(ang)*r;
       if(x<20||y<20||x>this.w-20||y>this.h-20) continue;
@@ -635,16 +635,26 @@ const World={
       if(!hasGranarySite && huts>=4 && wells>=1 && farms>=2) this.placeSite(g.x,g.y,90,170,'granary',gi,45);
       const granaries=this.sites.filter(s=>s.type==='granary'&&built(s)).length;
 
+      // these five all used to compete for the SAME cramped 40-100 ring at spacing
+      // 60, so whichever unlocked first (workshop) took the spot and the rest —
+      // market, shrineHall, loreHall, huntingLodge — silently failed to place
+      // FOREVER. That's why a thriving BASTION never grew a shrine hall (and so
+      // never the temple DOMINION needs): the true "nothing goes past dominion"
+      // cause. Give each its own progressively wider annulus and a tighter spacing
+      // so they tuck into the gaps instead of colliding.
       const hasWorkshopSite=this.sites.some(s=>s.type==='workshop'&&s.gather===gi);
-      if(!hasWorkshopSite && huts>=4 && wells>=1) this.placeSite(g.x,g.y,40,100,'workshop',gi,60);
+      if(!hasWorkshopSite && huts>=4 && wells>=1) this.placeSite(g.x,g.y,40,120,'workshop',gi,50);
       const hasMarketSite=this.sites.some(s=>s.type==='market'&&s.gather===gi);
-      if(!hasMarketSite && huts>=5 && farms>=1) this.placeSite(g.x,g.y,40,100,'market',gi,60);
+      if(!hasMarketSite && huts>=5 && farms>=1) this.placeSite(g.x,g.y,55,150,'market',gi,48);
       const hasShrineHallSite=this.sites.some(s=>s.type==='shrineHall'&&s.gather===gi);
-      if(!hasShrineHallSite && huts>=6) this.placeSite(g.x,g.y,40,100,'shrineHall',gi,60);
+      if(!hasShrineHallSite && huts>=6) this.placeSite(g.x,g.y,70,175,'shrineHall',gi,48);
+      // loreHall gated at huts>=6 (was 7): settlements reliably plateau at 6 built
+      // huts, so the old 7 gate meant the lore hall — and thus METROPOLIS, which
+      // requires it — was often never reachable even by a thriving town.
       const hasLoreHallSite=this.sites.some(s=>s.type==='loreHall'&&s.gather===gi);
-      if(!hasLoreHallSite && huts>=7 && wells>=1) this.placeSite(g.x,g.y,40,100,'loreHall',gi,60);
+      if(!hasLoreHallSite && huts>=6 && wells>=1) this.placeSite(g.x,g.y,90,205,'loreHall',gi,48);
       const hasHuntingLodgeSite=this.sites.some(s=>s.type==='huntingLodge'&&s.gather===gi);
-      if(!hasHuntingLodgeSite && huts>=5 && farms>=2) this.placeSite(g.x,g.y,40,100,'huntingLodge',gi,60);
+      if(!hasHuntingLodgeSite && huts>=5 && farms>=2) this.placeSite(g.x,g.y,80,195,'huntingLodge',gi,48);
 
       // masonry unlocks once a settlement has fully met civilization's structural
       // requirements — it's the gate for the next tier (STONE TOWN) and for the
