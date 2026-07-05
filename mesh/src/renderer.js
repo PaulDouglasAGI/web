@@ -314,14 +314,7 @@ const Renderer={
           ctx.fillStyle='rgba(255,233,176,0.95)';
           ctx.beginPath(); ctx.arc(sx,sy-h,w*0.5,0,7); ctx.fill();
         } else {
-          const fc=Factions[s.faction!=null?s.faction:0];
-          const hw=10*z*lvlScale, hh=8*z*lvlScale;
-          ctx.fillStyle='#3a2c1e';
-          ctx.fillRect(sx-hw*0.65, sy-hh*0.15, hw*1.3, hh*1.15);
-          ctx.fillStyle=fc.color;
-          ctx.beginPath();
-          ctx.moveTo(sx-hw*0.8, sy-hh*0.2); ctx.lineTo(sx, sy-hh*1.4); ctx.lineTo(sx+hw*0.8, sy-hh*0.2);
-          ctx.closePath(); ctx.fill();
+          this.drawBuilding(ctx, s, sx, sy, z, lvlScale);   // recognizable per-type silhouette; material shows stone-upgrade
         }
         if(z>1.1){
           ctx.fillStyle='rgba(210,225,218,0.8)';
@@ -334,9 +327,11 @@ const Renderer={
           ctx.fillStyle='rgba(230,180,100,0.65)';
           ctx.fillRect(sx-10*z*lvlScale, sy+17*z*lvlScale, 20*z*lvlScale*s.progress, 2*z);
         }
-        if(s.stoneUpgraded){
-          ctx.strokeStyle='rgba(190,190,182,0.9)';
-          ctx.lineWidth=Math.max(0.8,1.2*z);
+        // silhouette buildings now show stone in their own material; farm/well/granary
+        // have no such palette, so keep a faint grey ring there as the "mason improved it" mark
+        if(s.stoneUpgraded && (s.type==='farm'||s.type==='well'||s.type==='granary')){
+          ctx.strokeStyle='rgba(190,190,182,0.7)';
+          ctx.lineWidth=Math.max(0.6,1*z);
           ctx.beginPath(); ctx.arc(sx,sy,12*z*lvlScale,0,7); ctx.stroke();
         }
       } else {
@@ -684,5 +679,145 @@ const Renderer={
   hexA(hex,a){
     const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
     return 'rgba('+r+','+g+','+b+','+a+')';
+  },
+
+  // ── per-building silhouettes ────────────────────────────────────────────--
+  // Each functional structure gets a recognizable shape, and its MATERIAL reads
+  // at a glance: timber (dark brown, faction-colored roof) until the masons
+  // touch it, then STONE (grey walls, slate roof) — the "mason improved it" made
+  // visible. Signature upgrades (s.up[...]) add a cheap decorator on top.
+  drawBuilding(ctx, s, sx, sy, z, lvlScale){
+    const u=z*lvlScale;                                   // base unit
+    const fc=Factions[s.faction!=null?s.faction:0];
+    const stone=s.stoneUpgraded;
+    const wall  = stone ? '#6b6b63' : '#3a2c1e';
+    const wallDk= stone ? '#54544d' : '#2a1f15';
+    const roof  = stone ? '#7d8a90' : fc.color;           // slate when stone, faction banner when timber
+    const acc   = fc.color;                               // faction accent (banners/trim) always shows allegiance
+    const lvl=s.level||1;
+    const up=s.up||{};                                    // signature-upgrade flags (Phase 3)
+    const glow=z>0.9;                                     // gate soft radial glows behind zoom to keep perf
+    const box=(x,y,w,h,c)=>{ ctx.fillStyle=c; ctx.fillRect(sx+x*u, sy+y*u, w*u, h*u); };
+    const tri=(x1,y1,x2,y2,x3,y3,c)=>{ ctx.fillStyle=c; ctx.beginPath();
+      ctx.moveTo(sx+x1*u,sy+y1*u); ctx.lineTo(sx+x2*u,sy+y2*u); ctx.lineTo(sx+x3*u,sy+y3*u); ctx.closePath(); ctx.fill(); };
+    const dot=(x,y,r,c)=>{ ctx.fillStyle=c; ctx.beginPath(); ctx.arc(sx+x*u,sy+y*u,r*u,0,7); ctx.fill(); };
+    const halo=(x,y,r,rgb)=>{ if(!glow) return; const g=ctx.createRadialGradient(sx+x*u,sy+y*u,0,sx+x*u,sy+y*u,r*u);
+      g.addColorStop(0,'rgba('+rgb+',0.5)'); g.addColorStop(1,'rgba('+rgb+',0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx+x*u,sy+y*u,r*u,0,7); ctx.fill(); };
+
+    switch(s.type){
+      case 'workshop': {          // low body + shed roof + chimney + gear
+        box(-7,-4,14,8,wall);
+        tri(-8,-4, -8,-8, 8,-4, roof);           // slanted shed roof
+        box(4,-11,2,5,wallDk);                    // chimney
+        dot(0,0,2.2,stone?'#8a8a80':'#5a4632'); dot(0,0,1,wallDk); // gear hub
+        if(up.guildForge){ dot(0,0,3.2,'rgba(224,160,96,0.5)'); }
+        break; }
+      case 'market': {            // stall + striped awning
+        box(-8,-3,16,7,wall);
+        for(let i=0;i<5;i++){ box(-8+i*3.2,-7,3.2,4, i%2? acc : '#e8dcc0'); }  // candy-stripe awning
+        if(up.grandBazaar){ tri(0,-14,-4,-9,4,-9,acc); dot(0,-14,1,'#ffe9b0'); } // pennant
+        break; }
+      case 'shrineHall': {        // walls + dome + halo
+        halo(0,-9,13,'201,184,232');
+        box(-6,-4,12,8,wall);
+        ctx.fillStyle=roof; ctx.beginPath(); ctx.arc(sx,sy-4*u,6*u,3.14,0); ctx.fill(); // dome
+        dot(0,-11,1.3,'#f0e6ff');
+        if(up.reliquary){ dot(0,-11,2.6,'rgba(201,184,232,0.6)'); }
+        break; }
+      case 'loreHall': {          // two-story shelved hall
+        box(-8,-10,16,14,wall);
+        box(-8,-3,16,0.6,wallDk); box(-8,-6,16,0.6,wallDk); // floor lines
+        for(let i=0;i<4;i++) box(-7+i*3.6,-9,0.7,5,acc);    // shelf spines
+        tri(-9,-10, 0,-15, 9,-10, roof);
+        if(up.greatLibrary){ box(-9,-16,18,1.4,acc); }      // gilt cornice
+        break; }
+      case 'huntingLodge': {      // A-frame + antlers
+        tri(-8,4, 0,-11, 8,4, roof);
+        box(-6,-1,12,5,wall);
+        ctx.strokeStyle=stone?'#9a9a90':'#b9a074'; ctx.lineWidth=Math.max(0.5,0.8*u);
+        ctx.beginPath();
+        ctx.moveTo(sx-2*u,sy-11*u); ctx.lineTo(sx-4*u,sy-15*u); ctx.moveTo(sx-2*u,sy-12*u); ctx.lineTo(sx-5*u,sy-13*u);
+        ctx.moveTo(sx+2*u,sy-11*u); ctx.lineTo(sx+4*u,sy-15*u); ctx.moveTo(sx+2*u,sy-12*u); ctx.lineTo(sx+5*u,sy-13*u);
+        ctx.stroke();
+        break; }
+      case 'smithy': {            // forge: body + tall chimney + ember glow + anvil
+        halo(5,-9,7,'255,150,60');
+        box(-7,-4,14,8,wall);
+        tri(-8,-4,-8,-8,8,-4,roof);
+        box(4,-13,3,7,wallDk);                    // forge chimney
+        dot(5,-13,1.3,'#ff9a3a');                  // ember at the stack
+        box(-6,3,5,2,stone?'#3a3a36':'#20160e');   // anvil block
+        if(up.armory){ box(-8,-6,3,3,acc); }        // shield on the wall
+        break; }
+      case 'masonry': {           // stone-block body + scaffold
+        box(-7,-6,14,10, stone?'#78786e':'#5a5148');   // masonry always reads stony
+        for(let i=0;i<3;i++) box(-7,-6+i*3.3,14,0.6,'#3a3a34'); // course lines
+        ctx.strokeStyle='rgba(150,130,90,0.8)'; ctx.lineWidth=Math.max(0.5,0.7*u);
+        ctx.beginPath(); ctx.moveTo(sx-8*u,sy-10*u); ctx.lineTo(sx-8*u,sy+4*u);
+        ctx.moveTo(sx-8*u,sy-6*u); ctx.lineTo(sx+2*u,sy-11*u); ctx.stroke();  // scaffold pole + plank
+        if(up.masterMasons){ tri(-8,-10,0,-14,8,-10,'#9aa0a0'); }              // capping pediment
+        break; }
+      case 'townHall': {          // civic hall: wide body + dome + banner
+        box(-9,-5,18,9,wall);
+        ctx.fillStyle=roof; ctx.beginPath(); ctx.arc(sx,sy-5*u,5*u,3.14,0); ctx.fill(); // dome
+        box(0,-16,0.8,5,wallDk); tri(0.8,-16,0.8,-13,5,-14.5,acc);  // flag
+        for(let i=0;i<4;i++) box(-8+i*4.5,-4,1.4,7,wallDk);         // pilasters
+        if(up.highCourt){ dot(0,-16,1.4,'#ffe9b0'); }               // gilt finial
+        break; }
+      case 'barracks': {          // crenellated fort + tower + banner
+        box(-8,-4,16,9,wall);
+        for(let i=0;i<5;i++) box(-8+i*3.4,-6,1.8,2,wall);   // battlements
+        box(5,-12,4,8,wallDk);                               // corner tower
+        for(let i=0;i<2;i++) box(5+i*2.2,-13,1.4,1.6,wallDk);
+        box(7,-18,0.8,6,'#20160e'); tri(7.8,-18,7.8,-15,11,-16.5,acc); // banner
+        if(up.watchtower){ box(5,-16,4,4,wall); dot(7,-16,1,'#ffd27a'); } // raised watch light
+        break; }
+      case 'harbor': {            // dock + moored boat
+        box(-9,2,18,2,'#4a3a28');                            // pier planks
+        for(let i=0;i<4;i++) box(-8+i*5,4,1,3,wallDk);       // pilings
+        ctx.fillStyle=wall; ctx.beginPath();                 // hull
+        ctx.moveTo(sx-6*u,sy-2*u); ctx.lineTo(sx+6*u,sy-2*u); ctx.lineTo(sx+4*u,sy+2*u); ctx.lineTo(sx-4*u,sy+2*u); ctx.closePath(); ctx.fill();
+        box(-0.4,-11,0.8,9,wallDk); tri(0.4,-11,0.4,-4,5,-7,acc); // mast + sail
+        break; }
+      case 'temple': {            // columned temple + pediment + halo
+        halo(0,-8,14,'255,233,176');
+        box(-9,-2,18,6,wall);
+        for(let i=0;i<5;i++) box(-8+i*4,-2,1.6,6,stone?'#8a8a80':'#5a4a34'); // columns
+        tri(-10,-2, 0,-11, 10,-2, roof);                    // pediment
+        dot(0,-13,1.4,'#fff2c8');
+        if(up.grandSanctuary){ dot(0,-13,3,'rgba(255,233,176,0.65)'); box(-11,-2,22,1,'#d8c9a8'); }
+        break; }
+      case 'tavern': {            // body + hearth glow + hanging sign
+        halo(-2,0,9,'255,170,70');
+        box(-7,-5,14,9,wall);
+        tri(-8,-5,-8,-9,8,-5,roof);
+        box(6,-6,0.7,4,wallDk); box(5,-3,3,2.4,'#6a4a2a'); dot(6.5,-1.8,0.5,acc); // swinging sign
+        dot(-2,1,1.3,'rgba(255,170,70,0.9)');               // hearth
+        if(up.grandHall){ box(-8,-11,16,1.4,acc); }
+        break; }
+      case 'quarry': {            // stepped pit + crane
+        box(-8,-2,16,6,'#4a443a');
+        box(-6,0,12,4,'#5a5248'); box(-4,2,8,3,'#6a6258'); // descending stone steps
+        ctx.strokeStyle='#6a5a3a'; ctx.lineWidth=Math.max(0.5,0.9*u);
+        ctx.beginPath(); ctx.moveTo(sx-6*u,sy+4*u); ctx.lineTo(sx-6*u,sy-9*u); ctx.lineTo(sx+3*u,sy-11*u); ctx.stroke(); // crane
+        dot(3,-11,0.8,'#3a3a34');
+        if(up.deepQuarry){ box(-9,-4,18,1,'#8a8a80'); }
+        break; }
+      case 'mine': {              // headframe over a dark shaft
+        box(-4,-1,8,6,'#1a140c');                            // shaft mouth
+        tri(-7,4, 0,-12, 7,4, wallDk);                       // A-frame headframe
+        box(-0.5,-12,1,4,wallDk); dot(0,-12,1,acc);          // pulley wheel
+        ctx.strokeStyle=wallDk; ctx.lineWidth=Math.max(0.5,0.8*u);
+        ctx.beginPath(); ctx.moveTo(sx,sy-12*u); ctx.lineTo(sx,sy-1*u); ctx.stroke(); // cable
+        break; }
+      default: {                  // hut / cottage — the common dwelling
+        box(-6.5,-1,13,6,wall);
+        tri(-8,-1, 0,-9, 8,-1, roof);
+        box(-4,1,3,4,wallDk);                                // door
+        if(lvl>=3){ box(3,-8,2,5,wallDk); dot(4,-8,0.8,'rgba(200,200,190,0.6)'); } // chimney + smoke
+        if(up.hearthstone){ dot(-2.5,3,0.7,'rgba(255,170,70,0.8)'); }              // lit hearth
+        break; }
+    }
   }
 };
